@@ -158,7 +158,7 @@ let rec evaluate
     env
     lastvar
     cls =
-  lazy_logger `debug (fun () ->
+  lazy_logger `trace (fun () ->
       Format.asprintf
         "\nEnvironment: @[%a@]\nLast var:    @[%a@]\nClauses:     @[%a@]\n"
         pp_evaluation_environment env
