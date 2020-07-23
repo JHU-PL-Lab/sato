@@ -1,5 +1,6 @@
 open Batteries;;
 open Jhupllib;;
+open Logger_utils;;
 
 open Odefa_ast;;
 
@@ -8,6 +9,8 @@ open Constraint;;
 open Error;;
 open Interpreter_types;;
 open Symbol_cache;;
+
+let lazy_logger = make_lazy_logger "Solver";;
 
 type contradiction =
   | StackContradiction of
@@ -39,9 +42,11 @@ module Symbol_to_symbol_and_ident_multimap =
   Jhupllib.Multimap.Make(Symbol)(Symbol_and_ident)
 ;;
 
-type symbol_and_pattern = (symbol * pattern);;
+type symbol_and_pattern = (symbol * pattern)
+;;
 
-type binop = (symbol * binary_operator * symbol);;
+type binop = (symbol * binary_operator * symbol)
+;;
 
 type t =
   { (** The set of all constraints in the solver. *)
@@ -775,15 +780,17 @@ let rec _find_errors solver symbol =
   match (binop_opt, match_opt) with
   | (Some b, None) ->
     begin
+      lazy_logger `trace (fun () ->
+        Printf.sprintf "Binary operation on symbol %s" (show_symbol symbol));
       let (s1, op, s2) = b in
-      let et1_opt = _find_errors solver s1 in
-      let et2_opt = _find_errors solver s2  in
+      let et1 = _find_errors solver s1 in
+      let et2 = _find_errors solver s2  in
       match op with
       (* TODO: If a symbol is another and/or or a pattern, recurse on find_error. Otherwise treat this as a leaf node. *)
       | Binary_operator_and ->
-        Error_tree.add_and et1_opt et2_opt
+        Error_tree.add_and et1 et2
       | Binary_operator_or ->
-        Error_tree.add_or et1_opt et2_opt
+        Error_tree.add_or et1 et2
       | Binary_operator_xor
       | Binary_operator_plus
       | Binary_operator_minus
@@ -797,7 +804,9 @@ let rec _find_errors solver symbol =
           try
             Symbol_map.find symbol solver.value_constraints_by_symbol
           with Not_found ->
-            raise @@ Utils.Invariant_failure ("Binop at " ^ (show_symbol symbol) ^ " did not produce a value")
+            raise @@ Utils.Invariant_failure
+              (Printf.sprintf "Binop at %s did not produce a value"
+                (show_symbol symbol))
         in
         match binop_value with
         | Constraint.Bool false ->
@@ -808,20 +817,26 @@ let rec _find_errors solver symbol =
             err_binop_right_val = _get_val_source solver s2;
           }
           in
-          Some (Error_tree.singleton (Error_binop binop_error))
+          lazy_logger `trace (fun () -> (show_error_binop binop_error));
+          Error_tree.singleton (Error_binop binop_error)
         | Constraint.Bool true ->
-          None
+          Error_tree.empty
         | _ ->
-          raise @@ Utils.Invariant_failure ((show_symbol symbol) ^ " is not a boolean binop")
+          raise @@ Utils.Invariant_failure
+            (Printf.sprintf "%s is not a boolean binop" (show_symbol symbol))
     end
   | (None, Some m) ->
     begin
+      lazy_logger `trace (fun () ->
+        Printf.sprintf "Pattern match on symbol %s" (show_symbol symbol));
       let (match_symb, pattern) = m in
       let match_value =
         try
           Symbol_map.find symbol solver.value_constraints_by_symbol
         with Not_found ->
-          raise @@ Utils.Invariant_failure ("Pattern match at " ^ (show_symbol symbol) ^ " did not produce a value")
+          raise @@ Utils.Invariant_failure
+            (Printf.sprintf "Pattern match at %s did not produce a value"
+            (show_symbol symbol))
       in
       match match_value with
       | Constraint.Bool false ->
@@ -834,7 +849,7 @@ let rec _find_errors solver symbol =
           | Any_pattern -> Top_type
         in
         let actual_type = _find_type solver match_symb in
-        if Ast.Type_signature.subtype actual_type expected_type then
+        if not (Ast.Type_signature.subtype actual_type expected_type) then
           let match_error = {
             err_match_ident = (fun (Symbol (x, _)) -> x) symbol;
             err_match_value = _get_val_source solver match_symb;
@@ -842,27 +857,34 @@ let rec _find_errors solver symbol =
             err_match_actual_type = actual_type;
           }
           in
-          Some (Error_tree.singleton (Error_match match_error))
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Match error:\n%s" (show_error_match match_error));
+          Error_tree.singleton (Error_match match_error)
         else
-          None
+          Error_tree.empty
       | Constraint.Bool true ->
-        None
+        Error_tree.empty
       | _ ->
-        raise @@ Utils.Invariant_failure ((show_symbol symbol) ^ " is not a boolean value")
+        raise @@ Utils.Invariant_failure
+          (Printf.sprintf "%s is not a boolean value" (show_symbol symbol))
     end
   | (None, None) ->
-    begin
-      raise @@ Utils.Invariant_failure "Error tree cannot include unwrapped values"
-    end
+    raise @@ Utils.Invariant_failure "Error tree cannot include unwrapped values"
   | (_, _) ->
     raise @@ Utils.Invariant_failure ("Multiple definitions for symbol " ^ (show_symbol symbol))
 ;;
 
+(*
 let find_errors solver symbol =
   match _find_errors solver symbol with
   | Some error_tree -> error_tree
-  | None -> raise @@ Utils.Invariant_failure ("Error tree cannot be produced")
+  | None -> raise @@ Utils.Invariant_failure
+    (Printf.sprintf "Error tree cannot be produced for symbol %s"
+      (show_symbol symbol))
 ;;
+*)
+
+let find_errors solver symbol = _find_errors solver symbol;;
 
 let enum solver = Constraint.Set.enum solver.constraints;;
 

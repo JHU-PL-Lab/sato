@@ -8,6 +8,7 @@ open Ast_pp;;
 open Ddpa_abstract_ast;;
 open Ddpa_graph;;
 open Ddpa_utils;;
+open Error;;
 open Interpreter_types;;
 open Logger_utils;;
 
@@ -925,18 +926,19 @@ struct
               |> Symbol_map.enum
               |> Enum.map
                 (fun (Symbol (_, relstack), e) ->
-                  List.map
-                    (fun id -> Symbol (id, relstack))
-                    e.abort_predicate_idents)
+                  let pred_ids = e.abort_predicate_idents in
+                  List.map (fun id -> Symbol (id, relstack)) pred_ids
+                )
               |> Enum.map (List.map (Solver.find_errors solver))
-              |> Enum.map Error.Error_tree.tree_from_error_list
+              |> Enum.map Error_tree.tree_from_error_list
+              |> Enum.filter (fun et -> not @@ Error_tree.is_empty et)
               |> List.of_enum
              in
              Some {
-                er_solver = evaluation_result.M.er_solver;
+                er_solver = solver;
                 er_stack = stack;
                 er_solution = get_value;
-                er_abort_points = evaluation_result.M.er_abort_points;
+                er_abort_points = errors;
                 er_errors = error_trees;
               }
            | None ->

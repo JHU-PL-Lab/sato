@@ -36,8 +36,9 @@ let get_ast (args : Type_checker_parser.type_checker_args)
       (odefa_ast, odefa_aborts)
     end else if is_odefa then begin
       let odefa_ast = File.with_file_in filename Parser.parse_program in
-      let () = Ast_wellformedness.check_wellformed_expr odefa_ast in
-      Type_instrumentation.instrument_odefa odefa_ast
+      let (odefa_ast', odefa_aborts) = Type_instrumentation.instrument_odefa odefa_ast in
+      let () = Ast_wellformedness.check_wellformed_expr odefa_ast' in
+      (odefa_ast', odefa_aborts)
     end else begin
       raise @@ Invalid_argument "Filetype not supported"
     end

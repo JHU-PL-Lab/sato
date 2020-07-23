@@ -351,7 +351,7 @@ module Type_errors : Answer = struct
     if not @@ List.is_empty error_seq.err_errors then begin
       "Type errors for input sequence " ^
       (show_input_seq error_seq.err_input_seq) ^ ":\n" ^
-      (String.join ", " @@ List.map Error_tree.to_string error_seq.err_errors)
+      (String.join "\n-----------------\n" @@ List.map Error_tree.to_string error_seq.err_errors)
     end else begin
       ""
     end
