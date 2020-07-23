@@ -18,7 +18,7 @@ let () =
   (* Parse CLI args *)
   let args = Generator_configuration_parser.parse_args () in
   (* Read the AST *)
-  let (ast, aborts) =
+  let ast =
     let is_natodefa =
       Filename.extension args.ga_filename = ".natodefa"
     in
@@ -68,7 +68,6 @@ let () =
     let generator = Input_generator.create
         ~exploration_policy:args.ga_exploration_policy
         args.ga_generator_configuration
-        aborts
         ast
         args.ga_target_point
     in

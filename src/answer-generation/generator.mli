@@ -10,7 +10,6 @@ open Generator_configuration;;
 
 open Odefa_symbolic_interpreter;;
 open Interpreter;;
-open Interpreter_types;;
 
 (** The interface of a generic answer generator. *)
 module type Generator = sig
@@ -70,7 +69,7 @@ module type Generator = sig
       [Odefa_symbolic_interpreter.Interpreter.Invalid_query]. *)
   val create :
     ?exploration_policy:exploration_policy ->
-    configuration -> abort_info Ident_map.t -> expr -> ident -> generator;;
+    configuration -> expr -> ident -> generator;;
   
   (** A convenience routine for running generation with a generator.  The
       given optional integer is the maximum number of steps to take.  This

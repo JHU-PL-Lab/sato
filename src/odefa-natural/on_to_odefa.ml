@@ -2,12 +2,10 @@ open Batteries;;
 open Jhupllib;;
 
 open Odefa_ast;;
-open Odefa_symbolic_interpreter;;
 
 open Ast_tools;;
 
 (* open On_to_odefa_types;; *)
-open Interpreter_types;;
 open Preliminary_conversion;;
 (* open Simplification;; *)
 open Translator_utils;;
@@ -598,10 +596,9 @@ let get_abort_expr_2 (op : Ast.clause) (match_lst : Ast.clause list) : (Ast.expr
 ;;
 *)
 
-let add_match_ab match_clauses =
+let add_match_ab =
   let%bind abort_var = fresh_var "ab" in
   let abort_clause = Ast.Clause(abort_var, Ast.Abort_body []) in
-  let%bind () = add_match_abort abort_var match_clauses in
   return @@ Ast.Expr([abort_clause]);
 ;;
 
@@ -998,8 +995,8 @@ let translate
     ?translation_context:(translation_context=None)
     ?is_instrumented:(is_instrumented=false)
     (e : On_ast.expr)
-  : (Odefa_ast.Ast.expr * abort_info Ast.Ident_map.t) =
-  let (e_m_with_info : (Ast.expr * abort_info Ast.Ident_map.t) m) =
+  : Odefa_ast.Ast.expr =
+  let (e_m_with_info : Ast.expr m) =
     let%bind transformed_e =
       return e
       >>= debug_transform "pre-alphatize" alphatize
@@ -1018,8 +1015,7 @@ let translate
     let res_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
     let res_clause = Ast.Clause(res_var, Ast.Var_body(last_var)) in
     (* let%bind odefa_on_info = get_odefa_natodefa_info in *)
-    let%bind odefa_aborts  = get_aborts in
-    return @@ (Ast.Expr(c_list @ [res_clause]), odefa_aborts)
+    return @@ Ast.Expr(c_list @ [res_clause])
   in
   let context =
     match translation_context with

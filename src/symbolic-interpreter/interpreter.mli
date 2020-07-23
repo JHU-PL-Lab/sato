@@ -31,11 +31,9 @@ type evaluation_result = {
   er_solution : (symbol -> value option);
   (** The solution to the formulae found by this evaluation. *)
 
-  er_abort_points : abort_value Symbol_map.t;
-  (** Any abort points encountered during this evaluation. *)
-
   er_errors : Error.Error_tree.t list;
-  (** The set of errors accumulated via visiting aborts *)
+  (** The list of errors accumulated via visiting aborts *)
+  (* TODO: Make this an abort_ident -> error_tree map *)
 };;
 
 (** Raised if a query is invalid (e.g. a variable is requested for an expression
@@ -47,7 +45,7 @@ exception Invalid_query of string;;
     point (described by a variable).  The provided CFG must be complete with
     respect to the expression. *)
 val start :
-  ?exploration_policy:exploration_policy -> abort_info Ident_map.t -> ddpa_graph -> expr ->
+  ?exploration_policy:exploration_policy -> ddpa_graph -> expr ->
   Ident.t -> evaluation;;
 
 (** Takes a step of demand-driven evaluation.  This routine returns any

@@ -963,22 +963,10 @@ struct
       completed
       |> Enum.map
         (fun (value, log) ->
-            (*
-            let match_symb_list =
-              log.log_abort_points
-              |> Symbol_map.values
-              |> List.of_enum
-              |> List.flatten
-            in
-            let type_errors =
-              let find_err_fn = Solver.find_type_error log.log_solver in
-              List.filter_map find_err_fn match_symb_list
-            in
-            *)
+
             _debug_log_step_output ~show_value:show_value final_ev value log;
             { er_value = value;
               er_solver = log.log_solver;
-              (* er_type_errors = type_errors; *)
               er_abort_points = log.log_abort_points;
               er_evaluation_steps = final_ev.ev_evaluation_steps;
               er_result_steps = log.log_steps + 1;

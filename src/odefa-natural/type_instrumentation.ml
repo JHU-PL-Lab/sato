@@ -1,18 +1,13 @@
 open Batteries;;
 
 open Odefa_ast;;
-open Odefa_symbolic_interpreter;;
-
 open Ast;;
-
-open Interpreter_types;;
 
 open Translator_utils.TranslationMonad;;
 
-let add_type_ab match_clauses op_clause cond_var =
+let add_abort_expr cond_var =
   let%bind abort_var = fresh_var "ab" in
   let abort_clause = Clause(abort_var, Abort_body [cond_var]) in
-  let%bind () = add_type_abort abort_var match_clauses op_clause in
   return @@ Expr([abort_clause]);
 ;;
 
@@ -70,7 +65,7 @@ let rec instrument_clauses
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
-              let%bind f_path = add_type_ab [m1_cls; m2_cls] clause v in
+              let%bind f_path = add_abort_expr v in
               let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
               let%bind cont = instrument_clauses clauses' in
               return @@ [m1_cls; m2_cls; m_cls; c_cls] @ cont
@@ -91,7 +86,7 @@ let rec instrument_clauses
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
-              let%bind f_path = add_type_ab [m1_cls; m2_cls] clause v in
+              let%bind f_path = add_abort_expr v in
               let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
               let%bind cont = instrument_clauses clauses' in
               return @@ [m1_cls; m2_cls; m_cls; c_cls] @ cont
@@ -112,7 +107,7 @@ let rec instrument_clauses
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
-              let%bind f_path = add_type_ab [m1_cls; m2_cls] clause v in
+              let%bind f_path = add_abort_expr v in
               let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
               let%bind cont = instrument_clauses clauses' in
               return @@ [m1_cls; m2_cls; m_cls; c_cls] @ cont
@@ -132,7 +127,7 @@ let rec instrument_clauses
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
-              let%bind f_path = add_type_ab [m1_cls; m2_cls] clause v in
+              let%bind f_path = add_abort_expr v in
               let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
               let%bind cont = instrument_clauses clauses' in
               return @@ [m1_cls; m2_cls; m_cls; c_cls] @ cont
@@ -157,7 +152,7 @@ let rec instrument_clauses
           (* Conditional *)
           let%bind c_proj = fresh_var "c_proj" in
           let%bind t_path = return @@ Expr([Clause(c_proj, body)]) in
-          let%bind f_path = add_type_ab [m_clause] clause v in
+          let%bind f_path = add_abort_expr v in
           let cond_clause = Clause(v, Conditional_body(m, t_path, f_path)) in
           let%bind cont = instrument_clauses clauses' in
           return @@ [m_clause; cond_clause] @ cont
@@ -179,7 +174,7 @@ let rec instrument_clauses
           (* Conditional *)
           let%bind c_appl = fresh_var "c_appl" in
           let%bind t_path = return @@ Expr([Clause(c_appl, body)]) in
-          let%bind f_path = add_type_ab [m_clause] clause v in
+          let%bind f_path = add_abort_expr v in
           let cond_clause = Clause(v, Conditional_body(m, t_path, f_path)) in
           let%bind cont = instrument_clauses clauses' in
           return @@ [m_clause; cond_clause] @ cont
@@ -207,7 +202,7 @@ let rec instrument_clauses
           (* Constrain conditional *)
           let%bind c_cond = fresh_var "c_cond" in
           let%bind t_path = return @@ Expr([Clause(c_cond, body')]) in
-          let%bind f_path = add_type_ab [m_clause] clause v in
+          let%bind f_path = add_abort_expr v in
           let cond_clause = Clause(v, Conditional_body(m, t_path, f_path)) in
           let%bind cont = instrument_clauses clauses' in
           return @@ [m_clause; cond_clause] @ cont
@@ -216,19 +211,17 @@ let rec instrument_clauses
   | [] -> return []
 ;;
 
-let instrument_odefa (odefa_ast : expr)
-  : (expr * abort_info Ident_map.t) =
-  let (monad_val : (expr * abort_info Ident_map.t) m) =
+let instrument_odefa (odefa_ast : expr) : expr =
+  let (monad_val : expr m) =
     (* Transform odefa program *)
     let Expr(odefa_clist) = odefa_ast in
     let%bind trans_clist = instrument_clauses odefa_clist in
-    let%bind odefa_aborts = get_aborts in
     (* Add "~result" to the end of the program *)
     let Clause(last_var, _) = List.last trans_clist in
     let%bind fresh_str = freshness_string in
     let result_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
     let result_clause = Ast.Clause(result_var, Ast.Var_body(last_var)) in
-    return (Expr(trans_clist @ [result_clause]), odefa_aborts)
+    return @@ Expr(trans_clist @ [result_clause])
   in
   let context = Translator_utils.new_translation_context () in
   run context monad_val

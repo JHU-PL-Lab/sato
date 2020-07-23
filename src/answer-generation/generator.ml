@@ -37,7 +37,7 @@ module type Generator = sig
 
   val create :
     ?exploration_policy:Interpreter.exploration_policy ->
-    configuration -> Interpreter_types.abort_info Ident_map.t -> expr -> ident -> generator;;
+    configuration -> expr -> ident -> generator;;
   val generate_answers :
     ?generation_callback:(Answer.t -> int -> unit) ->
     int option -> generator ->
@@ -134,7 +134,6 @@ module Make(Answer : Answer) : Generator = struct
   let create
       ?exploration_policy:(exploration_policy=Interpreter.Explore_breadth_first)
       (conf : configuration)
-      (aborts : Interpreter_types.abort_info Ident_map.t)
       (e : expr)
       (x : ident)
     : generator =
@@ -149,7 +148,7 @@ module Make(Answer : Answer) : Generator = struct
     let evaluation =
       Interpreter.start
       ~exploration_policy:exploration_policy
-      aborts cfg e x
+      cfg e x
     in
     { gen_program = e;
       gen_target = x;
