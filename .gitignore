@@ -19,6 +19,9 @@
 # Custom build configuration files
 /.local_*
 
+# Z3-related file
+/libz3.dylib
+
 # Dune creates its own .merlin files
 .merlin
 
