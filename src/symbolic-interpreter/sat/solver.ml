@@ -54,11 +54,17 @@ type t =
 
     (** An index of all alias constraints for a particular symbol.  As a given
         symbol may be aliased to many other symbols, this is a multimap. *)
-    alias_constraints_by_symbol : Symbol_to_symbol_multimap.t;
+    (* alias_constraints_by_symbol : Symbol_to_symbol_multimap.t; *)
+
+    (** An index of alias constraints, from symbols that identify an alias
+        clause to the predecessor symbols they are aliasing.  Since a symbol
+        cannot alias multiple predecessor symbols (as that will cause a
+        duplicate variable binding), this is a map. *)
+    alias_constraints_by_symbol : symbol Symbol_map.t;
 
     (** An index of all value constraints by symbol.  As values are unique and
-        no symbol may be constrained to multiple different values, this is just
-        a normal dictionary. *)
+        no symbol may be constrained to multiple different values, this is a
+        map. *)
     value_constraints_by_symbol : value Symbol_map.t;
 
     (** An index of all input constraints by symbol.  As all inputs clause
@@ -66,7 +72,7 @@ type t =
     input_constraints_by_symbol : Symbol_set.t;
 
     (** An index of all binary operator constraints by symbol.  As a symbol can
-        only assign one binary operator, this is a normal dictionary. *)
+        only assign one binary operator, this is a map. *)
     binop_constraints_by_symbol : binop Symbol_map.t;
 
     (** An index of all record projection constraints over the record symbol.
@@ -82,7 +88,7 @@ type t =
     match_constraints_by_symbol : symbol_and_pattern Symbol_map.t;
 
     (** An index of all symbol type constraints.  Because each symbol must have
-        exactly one type, this is a normal dictionary. *)
+        exactly one type, this is a map. *)
     type_constraints_by_symbol : symbol_type Symbol_map.t;
 
     (** An index of all abort constraints by symbol.  Because a symbol can only
@@ -103,7 +109,7 @@ type solution =
 
 let empty =
   { constraints = Constraint.Set.empty;
-    alias_constraints_by_symbol = Symbol_to_symbol_multimap.empty;
+    alias_constraints_by_symbol = Symbol_map.empty;
     value_constraints_by_symbol = Symbol_map.empty;
     input_constraints_by_symbol = Symbol_set.empty;
     binop_constraints_by_symbol = Symbol_map.empty;
@@ -172,8 +178,9 @@ let rec _add_constraints_and_close
           { solver with
             constraints = Constraint.Set.add c solver.constraints;
             alias_constraints_by_symbol =
-              Symbol_to_symbol_multimap.add x1 x2
-                solver.alias_constraints_by_symbol
+              (* Symbol_to_symbol_multimap.add x1 x2
+                solver.alias_constraints_by_symbol *)
+              Symbol_map.add x1 x2 solver.alias_constraints_by_symbol
           }
         | Constraint_binop (x1, x2, op, x3) ->
           { solver with
@@ -242,10 +249,10 @@ let rec _add_constraints_and_close
           (* TODO: Maybe add a second check for pattern match contradictions, 
              just like with record projection. *)
           begin
-            let transitivity_constraints =
+            (* let transitivity_constraints =
               Symbol_to_symbol_multimap.find x solver.alias_constraints_by_symbol
               |> Enum.map (fun x' -> Constraint_value(x',v))
-            in
+            in *)
             let projection_constraints =
               match v with
               | Record m ->
@@ -277,30 +284,30 @@ let rec _add_constraints_and_close
               Enum.singleton (Constraint_type(x,t))
             in
             Constraint.Set.of_enum @@
-            Enum.append transitivity_constraints @@
+            (* Enum.append transitivity_constraints @@ *)
             Enum.append projection_constraints type_constraints
           end
         | Constraint_input(x) ->
           Constraint.Set.singleton @@ Constraint_type(x, IntSymbol)
         | Constraint_alias(x,x') ->
           begin
-            let symmetry_constraint =
+            (* let symmetry_constraint =
               Enum.singleton(Constraint_alias(x',x))
-            in
+            in *)
             let value_constraints =
-              match Symbol_map.Exceptionless.find x
+              match Symbol_map.Exceptionless.find x'
                       solver.value_constraints_by_symbol with
               | None -> Enum.empty ()
-              | Some v -> Enum.singleton(Constraint_value(x',v))
+              | Some v -> Enum.singleton(Constraint_value(x,v))
             in
             let type_constraints =
-              match Symbol_map.Exceptionless.find x
+              match Symbol_map.Exceptionless.find x'
                       solver.type_constraints_by_symbol with
               | None -> Enum.empty ()
-              | Some t -> Enum.singleton(Constraint_type(x',t))
+              | Some t -> Enum.singleton(Constraint_type(x,t))
             in
             Constraint.Set.of_enum @@
-            Enum.append symmetry_constraint @@
+            (* Enum.append symmetry_constraint @@ *)
             Enum.append value_constraints type_constraints
           end
         | Constraint_binop(x,x',op,x'') ->
@@ -403,10 +410,11 @@ let rec _add_constraints_and_close
                   nc
               end
           end
-        | Constraint_type(x,t) ->
-          Symbol_to_symbol_multimap.find x solver.alias_constraints_by_symbol
+        | Constraint_type(_,_) ->
+          (* Symbol_to_symbol_multimap.find x solver.alias_constraints_by_symbol
           |> Enum.map (fun x' -> Constraint_type(x',t))
-          |> Constraint.Set.of_enum
+          |> Constraint.Set.of_enum *)
+          Constraint.Set.empty
         | Constraint_stack _ ->
           Constraint.Set.empty
         | Constraint_abort(ab) ->

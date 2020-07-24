@@ -565,7 +565,16 @@ struct
         in
         [%guard equal_ident x lookup_var];
         (* Look for the alias now. *)
-        recurse (x' :: lookup_stack') acl1 relstack
+        let%bind original_symbol =
+          recurse (x' :: lookup_stack') acl1 relstack
+        in
+        (* Add the alias constraint *)
+        let alias_symbol = Symbol (x, relstack) in
+        let%bind () = record_constraint @@
+          Constraint.Constraint_alias (alias_symbol, original_symbol)
+        in
+        (* Return the alias. *)
+        return alias_symbol
       end;
 
       (* ### Binop rule ### *)
@@ -893,69 +902,74 @@ struct
     Evaluation(m_eval)
   ;;
 
+  (* Helper function that returns Some (evaluation_result) if we have a valid
+     value and stack constraint, None otherwise. *)
+  let _process_eval_result eval_result =
+    match Solver.solve eval_result.M.er_solver with
+    | Some (_, None) ->
+      raise @@ Jhupllib.Utils.Invariant_failure
+        "no stack constraint in solution!"
+    | Some (get_value, Some stack) ->
+      begin
+        lazy_logger `debug (fun () ->
+            Printf.sprintf
+              "Discovered answer of stack %s and formulae:\n%s"
+              (Relative_stack.show_concrete_stack stack)
+              (Solver.show eval_result.M.er_solver)
+          )
+      end;
+      let solver = eval_result.M.er_solver in
+      let errors = eval_result.M.er_abort_points in
+      let error_tree_map =
+      errors
+      |> Symbol_map.enum
+      |> Enum.map
+        (fun (Symbol (symb_id, rstack), e) ->
+          let pr_ids = e.abort_predicate_idents in
+          let preds = List.map (fun id -> Symbol(id, rstack)) pr_ids in
+          ((Symbol (symb_id, rstack)), preds)
+        )
+      |> Enum.map
+        (fun (symb, preds) ->
+          (symb, (List.map (Solver.find_errors solver) preds))
+        )
+      |> Enum.map
+        (fun (symb, err_list) ->
+          (symb, Error_tree.tree_from_error_list err_list)
+        )
+      |> Enum.filter
+        (fun (_, err_tree) -> not @@ Error_tree.is_empty err_tree)
+      |> Symbol_map.of_enum
+      in
+      Some {
+        er_solver = solver;
+        er_stack = stack;
+        er_solution = get_value;
+        er_errors = error_tree_map;
+      }
+    | None ->
+      begin
+        lazy_logger `debug (fun () ->
+            Printf.sprintf
+              "Dismissed answer with unsolvable formulae:\n%s"
+              (Solver.show eval_result.M.er_solver)
+          )
+      end;
+      None
+  ;;
+
   let step (x : evaluation) : evaluation_result list * evaluation option =
     let Evaluation(evaluation) = x in
-    let results, evaluation' = M.step ?show_value:(Some(fun _ -> "unit")) evaluation in
-    let results' =
-      results
-      |> Enum.filter_map
-        (fun evaluation_result ->
-           match Solver.solve evaluation_result.M.er_solver with
-           | Some (_, None) ->
-             raise @@ Jhupllib.Utils.Invariant_failure
-               "no stack constraint in solution!"
-           | Some (get_value, Some stack) ->
-             begin
-               lazy_logger `debug (fun () ->
-                   Printf.sprintf
-                     "Discovered answer of stack %s and formulae:\n%s"
-                     (Relative_stack.show_concrete_stack stack)
-                     (Solver.show evaluation_result.M.er_solver)
-                 )
-             end;
-             let solver = evaluation_result.M.er_solver in
-             let errors = evaluation_result.M.er_abort_points in
-             let error_tree_map =
-              errors
-              |> Symbol_map.enum
-              |> Enum.map
-                (fun (Symbol (symb_id, rstack), e) ->
-                  let pr_ids = e.abort_predicate_idents in
-                  let preds = List.map (fun id -> Symbol(id, rstack)) pr_ids in
-                  ((Symbol (symb_id, rstack)), preds)
-                )
-              |> Enum.map
-                (fun (symb, preds) ->
-                  (symb, (List.map (Solver.find_errors solver) preds))
-                )
-              |> Enum.map
-                (fun (symb, err_list) ->
-                  (symb, Error_tree.tree_from_error_list err_list)
-                )
-              |> Enum.filter
-                (fun (_, err_tree) -> not @@ Error_tree.is_empty err_tree)
-              |> Symbol_map.of_enum
-             in
-             Some {
-                er_solver = solver;
-                er_stack = stack;
-                er_solution = get_value;
-                er_errors = error_tree_map;
-              }
-           | None ->
-             begin
-               lazy_logger `debug (fun () ->
-                   Printf.sprintf
-                     "Dismissed answer with unsolvable formulae:\n%s"
-                     (Solver.show evaluation_result.M.er_solver)
-                 )
-             end;
-             None
-        )
+    let results, evaluation' =
+      M.step ?show_value:(Some(fun _ -> "unit")) evaluation
     in
-    (List.of_enum results',
-     if M.is_complete evaluation' then None else Some(Evaluation(evaluation'))
-    )
+    let results' =
+      Enum.filter_map _process_eval_result results
+    in
+    let eval_opt =
+      if M.is_complete evaluation' then None else Some(Evaluation(evaluation'))
+    in
+    (List.of_enum results', eval_opt)
   ;;
 end;;
 
