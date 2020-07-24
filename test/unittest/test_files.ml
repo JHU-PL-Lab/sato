@@ -63,7 +63,6 @@ open Odefa_toploop;;
 open Odefa_natural;;
 
 open Odefa_symbolic_interpreter.Interpreter;;
-open Odefa_symbolic_interpreter.Interpreter_types;;
 
 open Ast;;
 open Ast_pp;;
@@ -782,7 +781,6 @@ let test_ddse
       Input_generator.create
       ?exploration_policy:(Some (Explore_least_relative_stack_repetition))
       configuration
-      (Ident_map.empty) (* TODO: Use actual abort clause map *)
       expr
       (Ident x)
     in
@@ -884,7 +882,6 @@ let test_sato
     (expect_left : test_expectation list ref)
     (stack_module_choice : expectation_stack_decision)
     (expr : expr)
-    (abort_map : abort_info Ident_map.t)
   : unit =
   let observation = _observation filename in
   (* Configure Sato options. *)
@@ -951,7 +948,6 @@ let test_sato
       Type_error_generator.create
         ?exploration_policy:(Some (Explore_least_relative_stack_repetition))
         configuration
-        abort_map
         expr
         (Ident x)
     in
@@ -1045,16 +1041,16 @@ let make_test filename expectations =
     let expectations_left = ref expectations in
     (* Translate code if it's natodefa *)
     let is_nato = String.ends_with filename "natodefa" in
-    let (expr, instrumented_expr, abort_map) =
+    let (expr, instrumented_expr) =
       if is_nato then
         let on_expr = File.with_file_in filename On_parse.parse_program in
-        let (e, _) = On_to_odefa.translate on_expr in
-        let (ins_e, ab_map) = Type_instrumentation.instrument_odefa e in
-        (e, ins_e, ab_map)
+        let e = On_to_odefa.translate on_expr in
+        let ins_e = Type_instrumentation.instrument_odefa e in
+        (e, ins_e)
       else
         let e = File.with_file_in filename Parser.parse_program in
-        let (ins_e, ab_map) = Type_instrumentation.instrument_odefa e in
-        (e, ins_e, ab_map)
+        let ins_e = Type_instrumentation.instrument_odefa e in
+        (e, ins_e)
     in
     (* Decide what kind of analysis to perform. *)
     let module_choice = ref Default_stack in
@@ -1065,7 +1061,7 @@ let make_test filename expectations =
     (* TODO: If no tests for a certain program exist, don't run said program. *)
     test_ddpa filename expectations_left !module_choice expr;
     test_ddse filename expectations_left !module_choice expr;
-    test_sato filename expectations_left !module_choice instrumented_expr abort_map;
+    test_sato filename expectations_left !module_choice instrumented_expr;
     (* Now assert that every expectation has been addressed. *)
     match !expectations_left with
     | [] -> ()
@@ -1165,12 +1161,12 @@ let make_tests_from_dir pathname =
 
 let tests =
   "Test_source_files" >::: (
-    make_tests_from_dir "test-sources" @
-    make_tests_from_dir "test-sources/odefa-basic" @
-    make_tests_from_dir "test-sources/odefa-fails" @
-    make_tests_from_dir "test-sources/odefa-input" @ 
-    make_tests_from_dir "test-sources/odefa-stack" @
-    make_tests_from_dir "test-sources/odefa-types"
+    make_tests_from_dir "test-sources"
+    @ make_tests_from_dir "test-sources/odefa-basic"
+    @ make_tests_from_dir "test-sources/odefa-fails"
+    @ make_tests_from_dir "test-sources/odefa-input"
+    @ make_tests_from_dir "test-sources/odefa-stack"
+    (* @ make_tests_from_dir "test-sources/odefa-types" *)
     (*
     make_tests_from_dir "test-sources/natodefa-basic" @
     make_tests_from_dir "test-sources/natodefa-input" *)
