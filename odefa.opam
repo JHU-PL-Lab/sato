@@ -1,13 +1,13 @@
 opam-version: "2.0"
-name: "odefa"
+name: "sato"
 version: "0.4.1+dev"
-synopsis: "Artifact for Higher-Order Demand-Driven Program Analysis"
+synopsis: "Symbolic Analysis Typechecker for Odefa"
 maintainer: "JHU PL Lab <pl.cs@jhu.edu>"
 authors: [ "JHU PL Lab <pl.cs@jhu.edu>" ]
 license: "Apache"
-homepage: "https://github.com/JHU-PL-Lab/odefa"
-dev-repo: "git+https://github.com/JHU-PL-Lab/odefa.git"
-bug-reports: "https://github.com/JHU-PL-Lab/odefa/issues"
+homepage: "https://github.com/JHU-PL-Lab/sato"
+dev-repo: "git+https://github.com/JHU-PL-Lab/sato.git"
+bug-reports: "https://github.com/JHU-PL-Lab/sato/issues"
 build: [ "dune" "build" "-p" name "-j" jobs ]
 run-test: [ "dune" "runtest" "-p" name "-j" jobs ]
 depends: [
