@@ -7,8 +7,7 @@ open Ast;;
 
 (* open Odefa_symbolic_interpreter;; *)
 open Odefa_symbolic_interpreter.Error;;
-(*
-open Odefa_symbolic_interpreter.Interpreter_types;; *)
+open Odefa_symbolic_interpreter.Interpreter_types;;
 open Odefa_symbolic_interpreter.Interpreter;;
 (* open Odefa_symbolic_interpreter.Solver;; *)
 
@@ -166,13 +165,22 @@ module Type_errors : Answer = struct
   *)
 
   let answer_from_result e x result =
-    let error_trees = result.er_errors in
-    let (input_seq, _) =
+    let error_tree_map = result.er_errors in
+    let (input_seq, abort_list) =
       Generator_utils.input_sequence_from_result e x result
+    in
+    let error_tree_list =
+      List.fold_right
+        (fun abort_symb et_list ->
+          let et = Symbol_map.find abort_symb error_tree_map in
+          et :: et_list
+        )
+        abort_list
+        []
     in
     {
       err_input_seq = input_seq;
-      err_errors = error_trees;
+      err_errors = error_tree_list;
     }
   ;;
 

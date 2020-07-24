@@ -343,7 +343,7 @@ type evaluation_result = {
   er_solver : Solver.t;
   er_stack : Relative_stack.concrete_stack;
   er_solution : (symbol -> value option);
-  er_errors : Error.Error_tree.t list;
+  er_errors : Error.Error_tree.t Symbol_map.t;
 };;
 
 exception Invalid_query of string;;
@@ -915,7 +915,8 @@ struct
              end;
              let solver = evaluation_result.M.er_solver in
              let errors = evaluation_result.M.er_abort_points in
-             let error_trees =
+             let abort_symbol_enum = Symbol_map.keys errors in
+             let error_trees_enum =
               errors
               |> Symbol_map.enum
               |> Enum.map
@@ -926,13 +927,15 @@ struct
               |> Enum.map (List.map (Solver.find_errors solver))
               |> Enum.map Error_tree.tree_from_error_list
               |> Enum.filter (fun et -> not @@ Error_tree.is_empty et)
-              |> List.of_enum
+             in
+             let error_tree_map =
+              Symbol_map.of_enum @@ Enum.combine (abort_symbol_enum, error_trees_enum)
              in
              Some {
                 er_solver = solver;
                 er_stack = stack;
                 er_solution = get_value;
-                er_errors = error_trees;
+                er_errors = error_tree_map;
               }
            | None ->
              begin
