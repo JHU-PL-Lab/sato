@@ -915,21 +915,26 @@ struct
              end;
              let solver = evaluation_result.M.er_solver in
              let errors = evaluation_result.M.er_abort_points in
-             let abort_symbol_enum = Symbol_map.keys errors in
-             let error_trees_enum =
+             let error_tree_map =
               errors
               |> Symbol_map.enum
               |> Enum.map
-                (fun (Symbol (_, relstack), e) ->
-                  let pred_ids = e.abort_predicate_idents in
-                  List.map (fun id -> Symbol (id, relstack)) pred_ids
+                (fun (Symbol (symb_id, rstack), e) ->
+                  let pr_ids = e.abort_predicate_idents in
+                  let preds = List.map (fun id -> Symbol(id, rstack)) pr_ids in
+                  ((Symbol (symb_id, rstack)), preds)
                 )
-              |> Enum.map (List.map (Solver.find_errors solver))
-              |> Enum.map Error_tree.tree_from_error_list
-              |> Enum.filter (fun et -> not @@ Error_tree.is_empty et)
-             in
-             let error_tree_map =
-              Symbol_map.of_enum @@ Enum.combine (abort_symbol_enum, error_trees_enum)
+              |> Enum.map
+                (fun (symb, preds) ->
+                  (symb, (List.map (Solver.find_errors solver) preds))
+                )
+              |> Enum.map
+                (fun (symb, err_list) ->
+                  (symb, Error_tree.tree_from_error_list err_list)
+                )
+              |> Enum.filter
+                (fun (_, err_tree) -> not @@ Error_tree.is_empty err_tree)
+              |> Symbol_map.of_enum
              in
              Some {
                 er_solver = solver;
