@@ -648,7 +648,6 @@ struct
         let%bind () = record_constraint @@
           Constraint.Constraint_value (function_symbol, Constraint.Function fv)
         in
-        (* recurse (x' :: lookup_stack') acl1 relstack' *)
         (* Proceed to look up the argument in the calling context. *)
         let%bind arg_symbol = recurse (x' :: lookup_stack') acl1 relstack' in
         (* Alias the function parameter to the application argument *)
@@ -660,10 +659,12 @@ struct
            value we don't actually care about (as part of the Function Enter
            Non-Local rule), so we cannot alias the look and argument var. *)
         if List.is_empty lookup_stack' then begin
-          let%bind () = record_constraint @@ Constraint.Constraint_alias (lookup_symbol, arg_symbol) in
           lazy_logger `trace (fun () ->
             Printf.sprintf "Function Enter Parameter rule discovers %s = %s"
               (show_symbol lookup_symbol) (show_symbol arg_symbol));
+          let%bind () = record_constraint @@
+            Constraint.Constraint_alias (lookup_symbol, arg_symbol)
+          in
           return lookup_symbol
         end else begin
           lazy_logger `trace (fun () ->
@@ -697,6 +698,7 @@ struct
         (* Proceed to look up the variable in the context of the function's
             definition. *)
         let%bind ret_symbol = recurse (xf :: x :: lookup_stack') acl1 relstack' in
+        (* And we are done. *)
         lazy_logger `trace (fun () ->
           Printf.sprintf "Function Enter Non-Local rule looks up %s, returns %s"
             (show_ident x) (show_symbol ret_symbol));
@@ -724,7 +726,6 @@ struct
         in
         (* Proceed to look up the value returned by the function. *)
         let%orzero Some relstack' = Relative_stack.push relstack xr in
-        (* recurse (x' :: lookup_stack') acl1 relstack' *)
         let%bind ret_symbol = recurse (x' :: lookup_stack') acl1 relstack' in
         (* Alias the call site with the return symbol *)
         let lookup_symbol = Symbol (x, relstack) in
@@ -735,10 +736,12 @@ struct
            value we don't actually care about (as part of the Function Enter
            Non-Local rule), so we cannot alias the look and return var. *)
         if List.is_empty lookup_stack' then begin
-          let%bind () = record_constraint @@ Constraint.Constraint_alias (lookup_symbol, ret_symbol) in
           lazy_logger `trace (fun () ->
             Printf.sprintf "Function Exit rule discovers %s = %s"
               (show_symbol lookup_symbol) (show_symbol ret_symbol));
+          let%bind () = record_constraint @@
+            Constraint.Constraint_alias (lookup_symbol, ret_symbol)
+          in
           return lookup_symbol
         end else begin
           lazy_logger `trace (fun () ->
@@ -807,7 +810,6 @@ struct
         let%bind () = record_constraint @@
           Constraint.Constraint_value (subject_symbol, Constraint.Bool true)
         in
-        (* recurse (x' :: lookup_stack') acl1 relstack *)
         (* Proceed to look up the value returned by this branch. *)
         let%bind ret_symbol = recurse (x' :: lookup_stack') acl1 relstack in
         (* Alias the call site with the return symbol *)
@@ -816,7 +818,8 @@ struct
           Printf.sprintf "Conditional Bottom - True rule returns %s = %s"
             (show_symbol lookup_symbol) (show_symbol ret_symbol));
         let%bind () = record_constraint @@
-          Constraint.Constraint_alias (lookup_symbol, ret_symbol) in
+          Constraint.Constraint_alias (lookup_symbol, ret_symbol)
+        in
         return lookup_symbol
       end;
 
@@ -840,7 +843,6 @@ struct
         let%bind () = record_constraint @@
           Constraint.Constraint_value(subject_symbol, Constraint.Bool false)
         in
-        (* recurse (x' :: lookup_stack') acl1 relstack *)
         (* Proceed to look up the value returned by this branch. *)
         let%bind ret_symbol = recurse (x' :: lookup_stack') acl1 relstack in
         (* Alias the call site with the return symbol *)
@@ -849,7 +851,8 @@ struct
           Printf.sprintf "Conditional Bottom - False rule returns %s = %s"
             (show_symbol lookup_symbol) (show_symbol ret_symbol));
         let%bind () = record_constraint @@
-          Constraint.Constraint_alias (lookup_symbol, ret_symbol) in
+          Constraint.Constraint_alias (lookup_symbol, ret_symbol)
+        in
         return lookup_symbol
       end;
 

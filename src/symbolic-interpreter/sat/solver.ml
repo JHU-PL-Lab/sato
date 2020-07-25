@@ -300,15 +300,39 @@ let rec _add_constraints_and_close
               | None -> Enum.empty ()
               | Some v -> Enum.singleton(Constraint_value(x,v))
             in
+            let binop_constraints =
+              match Symbol_map.Exceptionless.find x'
+                      solver.binop_constraints_by_symbol with
+              | None -> Enum.empty ()
+              | Some (s1, op, s2) -> Enum.singleton(Constraint_binop(x, s1, op, s2))
+            in
+            let input_constraints =
+              match Symbol_set.Exceptionless.find x'
+                      solver.input_constraints_by_symbol with
+              | None -> Enum.empty ()
+              | Some _ -> Enum.singleton(Constraint_input x)
+            in
+            let abort_constraints =
+              match Symbol_set.Exceptionless.find x'
+                      solver.abort_constraints_by_symbol with
+              | None -> Enum.empty ()
+              | Some _ -> Enum.singleton(Constraint_abort x)
+            in
             let type_constraints =
               match Symbol_map.Exceptionless.find x'
                       solver.type_constraints_by_symbol with
               | None -> Enum.empty ()
               | Some t -> Enum.singleton(Constraint_type(x,t))
             in
-            Constraint.Set.of_enum @@
-            (* Enum.append symmetry_constraint @@ *)
-            Enum.append value_constraints type_constraints
+            let constraint_enum =
+              (Enum.empty ())
+              |> Enum.append value_constraints
+              |> Enum.append binop_constraints
+              |> Enum.append input_constraints
+              |> Enum.append abort_constraints
+              |> Enum.append type_constraints
+            in
+            Constraint.Set.of_enum constraint_enum
           end
         | Constraint_binop(x,x',op,x'') ->
           begin
