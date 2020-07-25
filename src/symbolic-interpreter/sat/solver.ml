@@ -703,6 +703,15 @@ let find_type_error solver match_symbol =
     None
 ;;
 
+let rec _construct_alias_chain solver symbol =
+  let alias_opt =
+    Symbol_map.Exceptionless.find symbol solver.alias_constraints_by_symbol
+  in
+  match alias_opt with
+  | Some aliased_symb -> symbol :: (_construct_alias_chain solver aliased_symb)
+  | None -> [symbol]
+;;
+
 let _get_val_source solver symbol =
   let value_opt =
     Symbol_map.Exceptionless.find symbol solver.value_constraints_by_symbol
@@ -838,6 +847,7 @@ let rec _find_errors solver symbol =
       lazy_logger `trace (fun () ->
         Printf.sprintf "Pattern match on symbol %s" (show_symbol symbol));
       let (match_symb, pattern) = m in
+      let alias_chain = _construct_alias_chain solver match_symb in
       let match_value =
         try
           Symbol_map.find symbol solver.value_constraints_by_symbol
@@ -859,7 +869,8 @@ let rec _find_errors solver symbol =
         let actual_type = _find_type solver match_symb in
         if not (Ast.Type_signature.subtype actual_type expected_type) then
           let match_error = {
-            err_match_ident = (fun (Symbol (x, _)) -> x) symbol;
+            err_match_ident = (fun (Symbol(x, _)) -> x) symbol;
+            err_match_aliases = List.map (fun (Symbol(x, _)) -> x) alias_chain;
             err_match_value = _get_val_source solver match_symb;
             err_match_expected_type = expected_type;
             err_match_actual_type = actual_type;

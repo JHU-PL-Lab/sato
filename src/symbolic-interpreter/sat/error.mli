@@ -23,7 +23,10 @@ type error_match = {
   (** The identifier of the pattern match clause. *)
   err_match_ident : ident;
 
-  (** The value of the symbol that is being matched. *)
+  (** The alias chain of the ident begin matched upon. *)
+  err_match_aliases : ident list;
+
+  (** The value of the ident that is being matched. *)
   err_match_value : value_source;
 
   (** The expected type, according to the pattern. *)
@@ -63,8 +66,10 @@ module type Error_tree = sig
   (** String representation of the error tree. *)
   val to_string : t -> string;;
 
+  (** Create a new, empty error tree (i.e. has no errors at all). *)
   val empty : t;;
 
+  (** Returns true if the error tree is empty, false otherwise. *)
   val is_empty : t -> bool;;
 end;;
 

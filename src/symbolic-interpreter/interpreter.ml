@@ -477,27 +477,29 @@ struct
         let%orzero [lookup_var] = lookup_stack in
         (* This must be a value assignment clause defining that variable. *)
         let%orzero Unannotated_clause(
-            Abs_clause(Abs_var x,Abs_value_body _)) = acl1
+            Abs_clause (Abs_var x, Abs_value_body _)) = acl1
         in
         [%guard equal_ident x lookup_var];
         (* Get the value v assigned here. *)
-        let%orzero (Clause(_,Value_body(v))) =
+        let%orzero (Clause (_, Value_body(v))) =
           Ident_map.find x env.le_clause_mapping
         in
         (* Induce the resulting formula *)
-        let lookup_symbol = Symbol(lookup_var, relstack) in
+        let lookup_symbol = Symbol (lookup_var, relstack) in
         let%bind constraint_value =
           match v with
-          | Value_record(Record_value m) ->
+          | Value_record (Record_value m) ->
             (* The variables in m are unfreshened and local to this context.
                 We can look up each of their corresponding symbols and then
                 put them in a new dictionary for the constraint. *)
             let mappings =
               m
               |> Ident_map.enum
-              |> Enum.map (fun (lbl, Var(x,_)) ->
-                            let%bind symbol = recurse [x] acl1 relstack in
-                            return (lbl, symbol))
+              |> Enum.map
+                (fun (lbl, Var(x,_)) ->
+                  let%bind symbol = recurse [x] acl1 relstack in
+                  return (lbl, symbol)
+                )
               |> List.of_enum
             in
             let%bind record_map = loop mappings Ident_map.empty in
@@ -511,8 +513,12 @@ struct
         in
         (* If we're at the top of the program, we should record a stack
             constraint. *)
-        let%bind () = record_stack_constraint env lookup_var relstack
+        let%bind () =
+          record_stack_constraint env lookup_var relstack
         in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Value Discovery rule discovered that %s = %s"
+            (show_symbol lookup_symbol) (show_value v));
         return lookup_symbol
       end;
 
@@ -522,18 +528,21 @@ struct
         let%orzero [lookup_var] = lookup_stack in
         (* This must be an input clause defining that variable. *)
         let%orzero Unannotated_clause(
-            Abs_clause(Abs_var x,Abs_input_body)) = acl1
+            Abs_clause (Abs_var x, Abs_input_body)) = acl1
         in
         [%guard equal_ident x lookup_var];
         (* Induce the resulting formula *)
-        let lookup_symbol = Symbol(lookup_var, relstack) in
+        let lookup_symbol = Symbol (lookup_var, relstack) in
         let%bind () = record_constraint @@
-          Constraint.Constraint_input(lookup_symbol)
+          Constraint.Constraint_input lookup_symbol
         in
         (* If we're at the top of the program, we should record a stack
             constraint. *)
         let%bind () = record_stack_constraint env lookup_var relstack
         in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Input rule discovered that %s = input"
+            (show_symbol lookup_symbol));
         return lookup_symbol
       end;
 
@@ -547,11 +556,15 @@ struct
         in
         (* This must be a value assignment clause defining that variable. *)
         let%orzero Unannotated_clause(
-            Abs_clause(Abs_var x,Abs_value_body _)) = acl1
+            Abs_clause (Abs_var x, Abs_value_body _)) = acl1
         in
         [%guard equal_ident x lookup_var];
         (* We found the variable, so toss it and keep going. *)
-        recurse (query_element :: lookup_stack') acl1 relstack
+        let%bind ret_symbol = recurse (query_element :: lookup_stack') acl1 relstack in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Value Discard rule returns %s, discards %s"
+            (show_symbol ret_symbol) (show_ident lookup_var));
+        return ret_symbol
       end;
 
       (* ### Alias rule ### *)
@@ -560,21 +573,22 @@ struct
         let%orzero lookup_var :: lookup_stack' = lookup_stack in
         (* This must be an alias clause defining that variable. *)
         let%orzero Unannotated_clause(
-            Abs_clause(Abs_var x,Abs_var_body(Abs_var x'))) =
+            Abs_clause (Abs_var x, Abs_var_body(Abs_var x'))) =
           acl1
         in
         [%guard equal_ident x lookup_var];
         (* Look for the alias now. *)
-        let%bind original_symbol =
-          recurse (x' :: lookup_stack') acl1 relstack
-        in
+        let%bind aliased_symbol = recurse (x' :: lookup_stack') acl1 relstack in
         (* Add the alias constraint *)
-        let alias_symbol = Symbol (x, relstack) in
+        let lookup_symbol = Symbol (x, relstack) in
         let%bind () = record_constraint @@
-          Constraint.Constraint_alias (alias_symbol, original_symbol)
+          Constraint.Constraint_alias (lookup_symbol, aliased_symbol)
         in
         (* Return the alias. *)
-        return alias_symbol
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Alias rule discovered %s = %s"
+            (show_symbol lookup_symbol) (show_symbol aliased_symbol));
+        return lookup_symbol
       end;
 
       (* ### Binop rule ### *)
@@ -583,8 +597,8 @@ struct
         let%orzero lookup_var :: lookup_stack' = lookup_stack in
         (* This must be a binary operator clause assigning to that variable. *)
         let%orzero Unannotated_clause(
-            Abs_clause(Abs_var x, Abs_binary_operation_body(
-                Abs_var x', op, Abs_var x''))) =
+            Abs_clause (Abs_var x,
+              Abs_binary_operation_body (Abs_var x', op, Abs_var x''))) =
           acl1
         in
         [%guard equal_ident x lookup_var];
@@ -592,7 +606,7 @@ struct
         let%bind symbol2 = recurse [x''] acl1 relstack in
         let lookup_symbol = Symbol(lookup_var, relstack) in
         let%bind () = record_constraint @@
-          Constraint.Constraint_binop(lookup_symbol, symbol1, op, symbol2)
+          Constraint.Constraint_binop (lookup_symbol, symbol1, op, symbol2)
         in
         (* The "further" clause in the Binop rule says that, if the lookup
             stack is non-empty, we have to look that stuff up too.  That
@@ -604,6 +618,12 @@ struct
           raise @@ Jhupllib.Utils.Not_yet_implemented
             "Non-singleton lookup stack in Binop rule!"
         end;
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Binop rule discovers %s = %s %s %s"
+            (show_symbol lookup_symbol)
+            (show_symbol symbol1)
+            (show_binary_operator op)
+            (show_symbol symbol2));
         return lookup_symbol
       end;
 
@@ -613,10 +633,10 @@ struct
         let%orzero lookup_var :: lookup_stack' = lookup_stack in
         (* This must be a binding enter clause which defines our lookup
             variable. *)
-        let%orzero Binding_enter_clause(Abs_var x,Abs_var x',c) = acl1 in
+        let%orzero Binding_enter_clause(Abs_var x, Abs_var x', c) = acl1 in
         [%guard equal_ident lookup_var x];
         (* Build the popped relative stack. *)
-        let%orzero Abs_clause(Abs_var xr,Abs_appl_body(Abs_var xf,_)) = c in
+        let%orzero Abs_clause (Abs_var xr, Abs_appl_body (Abs_var xf,_)) = c in
         let%orzero Some relstack' = Relative_stack.pop relstack xr in
         (* Record this wiring decision. *)
         let cc = Ident_map.find xr env.le_clause_mapping in
@@ -626,10 +646,31 @@ struct
         (* Require this function be assigned to that variable. *)
         let fv = Ident_map.find x env.le_function_parameter_mapping in
         let%bind () = record_constraint @@
-          Constraint.Constraint_value(function_symbol, Constraint.Function fv)
+          Constraint.Constraint_value (function_symbol, Constraint.Function fv)
         in
+        (* recurse (x' :: lookup_stack') acl1 relstack' *)
         (* Proceed to look up the argument in the calling context. *)
-        recurse (x' :: lookup_stack') acl1 relstack'
+        let%bind arg_symbol = recurse (x' :: lookup_stack') acl1 relstack' in
+        (* Alias the function parameter to the application argument *)
+        let lookup_symbol = Symbol (lookup_var, relstack) in
+        (* What symbol should be returned depends on the length of the
+           lookup stack. If the lookup stack is a singleton, then the only
+           element it contains the immediate lookup variable, which we return.
+           Otherwise, we know that the first element is some function whose
+           value we don't actually care about (as part of the Function Enter
+           Non-Local rule), so we cannot alias the look and argument var. *)
+        if List.is_empty lookup_stack' then begin
+          let%bind () = record_constraint @@ Constraint.Constraint_alias (lookup_symbol, arg_symbol) in
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Function Enter Parameter rule discovers %s = %s"
+              (show_symbol lookup_symbol) (show_symbol arg_symbol));
+          return lookup_symbol
+        end else begin
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Function Enter Parameter rule on %s returns %s"
+              (show_symbol lookup_symbol) (show_symbol arg_symbol));
+          return arg_symbol
+        end
       end;
 
       (* ### Function Enter Non-Local rule ### *)
@@ -638,10 +679,10 @@ struct
         let%orzero x :: lookup_stack' = lookup_stack in
         (* This must be a binding enter clause which DOES NOT define our
             lookup variable. *)
-        let%orzero Binding_enter_clause(Abs_var x'',Abs_var x',c) = acl1 in
+        let%orzero Binding_enter_clause (Abs_var x'', Abs_var x', c) = acl1 in
         [%guard not @@ equal_ident x x''];
         (* Build the popped relative stack. *)
-        let%orzero Abs_clause(Abs_var xr,Abs_appl_body(Abs_var xf,_)) = c in
+        let%orzero Abs_clause(Abs_var xr, Abs_appl_body (Abs_var xf, _)) = c in
         let%orzero Some relstack' = Relative_stack.pop relstack xr in
         (* Record this wiring decision. *)
         let cc = Ident_map.find xr env.le_clause_mapping in
@@ -651,11 +692,15 @@ struct
         (* Require this function be assigned to that variable. *)
         let fv = Ident_map.find x'' env.le_function_parameter_mapping in
         let%bind () = record_constraint @@
-          Constraint.Constraint_value(function_symbol, Constraint.Function fv)
+          Constraint.Constraint_value (function_symbol, Constraint.Function fv)
         in
         (* Proceed to look up the variable in the context of the function's
             definition. *)
-        recurse (xf :: x :: lookup_stack') acl1 relstack'
+        let%bind ret_symbol = recurse (xf :: x :: lookup_stack') acl1 relstack' in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Function Enter Non-Local rule looks up %s, returns %s"
+            (show_ident x) (show_symbol ret_symbol));
+        return ret_symbol
       end;
 
       (* ### Function Exit rule ### *)
@@ -664,21 +709,43 @@ struct
         let%orzero lookup_var :: lookup_stack' = lookup_stack in
         (* This must be a binding exit clause which defines our lookup
             variable. *)
-        let%orzero Binding_exit_clause(Abs_var x, Abs_var x', c) = acl1 in
+        (* x = function ident, x' = return variable *)
+        let%orzero Binding_exit_clause (Abs_var x, Abs_var x', c) = acl1 in
         [%guard equal_ident x lookup_var];
         (* Look up the definition point of the function. *)
-        let%orzero Abs_clause(Abs_var xr, Abs_appl_body(Abs_var xf, _)) = c in
+        let%orzero Abs_clause (Abs_var xr, Abs_appl_body(Abs_var xf, _)) = c in
         let%bind function_symbol =
           recurse [xf] (Unannotated_clause(c)) relstack
         in
         (* Require this function be assigned to that variable. *)
         let fv = Ident_map.find x' env.le_function_return_mapping in
         let%bind () = record_constraint @@
-          Constraint.Constraint_value(function_symbol, Constraint.Function fv)
+          Constraint.Constraint_value (function_symbol, Constraint.Function fv)
         in
         (* Proceed to look up the value returned by the function. *)
         let%orzero Some relstack' = Relative_stack.push relstack xr in
-        recurse (x' :: lookup_stack') acl1 relstack'
+        (* recurse (x' :: lookup_stack') acl1 relstack' *)
+        let%bind ret_symbol = recurse (x' :: lookup_stack') acl1 relstack' in
+        (* Alias the call site with the return symbol *)
+        let lookup_symbol = Symbol (x, relstack) in
+        (* What symbol should be returned depends on the length of the
+           lookup stack. If the lookup stack is a singleton, then the only
+           element it contains the immediate lookup variable, which we return.
+           Otherwise, we know that the first element is some function whose
+           value we don't actually care about (as part of the Function Enter
+           Non-Local rule), so we cannot alias the look and return var. *)
+        if List.is_empty lookup_stack' then begin
+          let%bind () = record_constraint @@ Constraint.Constraint_alias (lookup_symbol, ret_symbol) in
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Function Exit rule discovers %s = %s"
+              (show_symbol lookup_symbol) (show_symbol ret_symbol));
+          return lookup_symbol
+        end else begin
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Function Exit rule looks up %s, returns %s"
+              (show_symbol lookup_symbol) (show_symbol ret_symbol));
+          return ret_symbol
+        end
       end;
 
       (* ### Skip rule ### *)
@@ -686,17 +753,21 @@ struct
         (* Grab variable from lookup stack *)
         let%orzero lookup_var :: _ = lookup_stack in
         (* This must be a variable we AREN'T looking for. *)
-        let%orzero Unannotated_clause(Abs_clause(Abs_var x'', _)) = acl1 in
+        let%orzero Unannotated_clause (Abs_clause (Abs_var x'', _)) = acl1 in
         [%guard not @@ equal_ident x'' lookup_var ];
         (* Even if we're not looking for it, it has to be defined! *)
         let%bind _ = recurse [x''] acl0 relstack in
-        recurse lookup_stack acl1 relstack
+        let%bind ret_symbol = recurse lookup_stack acl1 relstack in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Skip rule returns %s, skips %s"
+            (show_symbol ret_symbol) (show_ident x''));
+        return ret_symbol
       end;
 
       (* ### Conditional Top rule ### *)
       begin
         (* This must be a non-binding enter wiring node for a conditional. *)
-        let%orzero Nonbinding_enter_clause(av,c) = acl1 in
+        let%orzero Nonbinding_enter_clause (av, c) = acl1 in
         let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, _, _)) = c in
         (* Look up the subject symbol. *)
         let%bind subject_symbol =
@@ -704,11 +775,16 @@ struct
         in
         (* Require that it has the same value as the wiring node. *)
         let%orzero Abs_value_bool b = av in
+        lazy_logger `trace (fun () -> "Looking up on Conditional Top rule");
         let%bind () = record_constraint @@
           Constraint.Constraint_value(subject_symbol, Constraint.Bool b)
         in
         (* Proceed by moving through the wiring node. *)
-        recurse lookup_stack acl1 relstack
+        let%bind ret_symbol = recurse lookup_stack acl1 relstack in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Conditional Top rule returns %s"
+            (show_symbol ret_symbol));
+        return ret_symbol
       end;
 
       (* ### Conditional Bottom - True rule ### *)
@@ -717,7 +793,7 @@ struct
         let%orzero lookup_var :: lookup_stack' = lookup_stack in
         (* This must be a binding exit clause which defines our lookup
             variable. *)
-        let%orzero Binding_exit_clause(Abs_var x, Abs_var x', c) = acl1 in
+        let%orzero Binding_exit_clause (Abs_var x, Abs_var x', c) = acl1 in
         [%guard equal_ident x lookup_var];
         (* Ensure that we're considering the true branch *)
         let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, e1, _)) = c in
@@ -729,10 +805,19 @@ struct
         in
         (* Require that its value matches this conditional branch. *)
         let%bind () = record_constraint @@
-          Constraint.Constraint_value(subject_symbol, Constraint.Bool true)
+          Constraint.Constraint_value (subject_symbol, Constraint.Bool true)
         in
+        (* recurse (x' :: lookup_stack') acl1 relstack *)
         (* Proceed to look up the value returned by this branch. *)
-        recurse (x' :: lookup_stack') acl1 relstack
+        let%bind ret_symbol = recurse (x' :: lookup_stack') acl1 relstack in
+        (* Alias the call site with the return symbol *)
+        let lookup_symbol = Symbol (x, relstack) in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Conditional Bottom - True rule returns %s = %s"
+            (show_symbol lookup_symbol) (show_symbol ret_symbol));
+        let%bind () = record_constraint @@
+          Constraint.Constraint_alias (lookup_symbol, ret_symbol) in
+        return lookup_symbol
       end;
 
       (* ### Conditional Bottom - False rule ### *)
@@ -741,7 +826,7 @@ struct
         let%orzero lookup_var :: lookup_stack' = lookup_stack in
         (* This must be a binding exit clause which defines our lookup
             variable. *)
-        let%orzero Binding_exit_clause(Abs_var x, Abs_var x', c) = acl1 in
+        let%orzero Binding_exit_clause (Abs_var x, Abs_var x', c) = acl1 in
         [%guard equal_ident x lookup_var];
         (* Ensure that we're considering the false branch *)
         let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, _, e2)) = c in
@@ -755,8 +840,17 @@ struct
         let%bind () = record_constraint @@
           Constraint.Constraint_value(subject_symbol, Constraint.Bool false)
         in
+        (* recurse (x' :: lookup_stack') acl1 relstack *)
         (* Proceed to look up the value returned by this branch. *)
-        recurse (x' :: lookup_stack') acl1 relstack
+        let%bind ret_symbol = recurse (x' :: lookup_stack') acl1 relstack in
+        (* Alias the call site with the return symbol *)
+        let lookup_symbol = Symbol (x, relstack) in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Conditional Bottom - False rule returns %s = %s"
+            (show_symbol lookup_symbol) (show_symbol ret_symbol));
+        let%bind () = record_constraint @@
+          Constraint.Constraint_alias (lookup_symbol, ret_symbol) in
+        return lookup_symbol
       end;
 
       (* Record projection handling (not a written rule) *)
@@ -767,7 +861,7 @@ struct
         (* This must be a record projection clause which defines our
             variable. *)
         let%orzero Unannotated_clause(
-            Abs_clause(Abs_var x, Abs_projection_body(Abs_var x', lbl))) =
+            Abs_clause (Abs_var x, Abs_projection_body(Abs_var x', lbl))) =
           acl1
         in
         [%guard equal_ident x lookup_var];
@@ -776,9 +870,9 @@ struct
         let%bind record_symbol = recurse [x'] acl1 relstack in
         (* Now record the constraint that the lookup variable must be the
             projection of the label from that record. *)
-        let lookup_symbol = Symbol(lookup_var, relstack) in
+        let lookup_symbol = Symbol (lookup_var, relstack) in
         let%bind () = record_constraint @@
-          Constraint_projection(lookup_symbol, record_symbol, lbl)
+          Constraint_projection (lookup_symbol, record_symbol, lbl)
         in
         (* We should have a "further" clause similar to the Binop rule: if the
             lookup stack is non-empty, we have to look up all that stuff to
@@ -792,6 +886,11 @@ struct
             "Non-singleton lookup stack in Binop rule!"
         end;
         (* And we're finished. *)
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Record Projection rule completed on %s = %s.%s"
+            (show_symbol lookup_symbol)
+            (show_symbol record_symbol)
+            (show_ident lbl));
         return lookup_symbol
       end;
 
@@ -812,23 +911,36 @@ struct
           Constraint_match(lookup_symbol, pattern_symbol, pattern)
         in
         (* And we are done *)
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Pattern Match rule completed on %s = %s ~ %s"
+            (show_symbol lookup_symbol)
+            (show_symbol pattern_symbol)
+            (show_pattern pattern));
         return lookup_symbol
       end;
 
       (* Abort (not a written rule) *)
       begin
+        (* Obtain lookup stack (the lookup var itself becomes unimportant) *)
         let%orzero _ :: lookup_stack' = lookup_stack in
+        (* This must be an abort clause *)
         let%orzero Unannotated_clause(
-            Abs_clause(Abs_var v, Abs_abort_body _)) = acl1 in
+            Abs_clause (Abs_var v, Abs_abort_body _)) = acl1
+        in
         let abort_symbol = Symbol(v, relstack) in
         (* TODO: Take care of any uncaught exceptions? *)
+        (* Look up the first variable of the program *)
         let abort_value = Ident_map.find v env.le_abort_mapping in
         let lookup_var = env.le_first_var in
         let new_lookup_stack = lookup_var :: lookup_stack' in
-        _trace_log_recurse new_lookup_stack relstack acl1;
         let%bind _ = recurse new_lookup_stack acl1 relstack in
+        (* Record the abort point and the abort constraint *)
         let%bind () = record_abort_point abort_symbol abort_value in
         let%bind () = record_constraint @@ Constraint_abort(abort_symbol) in
+        (* And we are done *)
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Abort rule completed on %s = abort"
+            (show_symbol abort_symbol));
         return abort_symbol
       end;
 
@@ -850,8 +962,9 @@ struct
     let open M in
     _trace_log_recurse lookup_stack' relstack' acl0';
     (* check_formulae @@ *)
-    cache (Cache_lookup(lookup_stack', acl0', relstack')) @@
-      lookup env lookup_stack' acl0' relstack'
+    let mon_val = lookup env lookup_stack' acl0' relstack' in
+    let cache_key = Cache_lookup (lookup_stack', acl0', relstack') in
+    cache cache_key mon_val
 
   and lookup
       (env : lookup_environment)
@@ -880,11 +993,11 @@ struct
     let initial_lookup_var = env.le_first_var in
     let acl =
       try
-        Unannotated_clause(
+        Unannotated_clause (
           lift_clause @@ Ident_map.find program_point env.le_clause_mapping)
       with
       | Not_found ->
-        raise @@ Invalid_query(
+        raise @@ Invalid_query (
           Printf.sprintf "Variable %s is not defined"
             (show_ident program_point)
         )
@@ -921,25 +1034,25 @@ struct
       let solver = eval_result.M.er_solver in
       let errors = eval_result.M.er_abort_points in
       let error_tree_map =
-      errors
-      |> Symbol_map.enum
-      |> Enum.map
-        (fun (Symbol (symb_id, rstack), e) ->
-          let pr_ids = e.abort_predicate_idents in
-          let preds = List.map (fun id -> Symbol(id, rstack)) pr_ids in
-          ((Symbol (symb_id, rstack)), preds)
-        )
-      |> Enum.map
-        (fun (symb, preds) ->
-          (symb, (List.map (Solver.find_errors solver) preds))
-        )
-      |> Enum.map
-        (fun (symb, err_list) ->
-          (symb, Error_tree.tree_from_error_list err_list)
-        )
-      |> Enum.filter
-        (fun (_, err_tree) -> not @@ Error_tree.is_empty err_tree)
-      |> Symbol_map.of_enum
+        errors
+        |> Symbol_map.enum
+        |> Enum.map
+          (fun (Symbol (symb_id, rstack), e) ->
+            let pred_ids = e.abort_predicate_idents in
+            let preds = List.map (fun id -> Symbol(id, rstack)) pred_ids in
+            ((Symbol (symb_id, rstack)), preds)
+          )
+        |> Enum.map
+          (fun (symb, preds) ->
+            (symb, (List.map (Solver.find_errors solver) preds))
+          )
+        |> Enum.map
+          (fun (symb, err_list) ->
+            (symb, Error_tree.tree_from_error_list err_list)
+          )
+        |> Enum.filter
+          (fun (_, err_tree) -> not @@ Error_tree.is_empty err_tree)
+        |> Symbol_map.of_enum
       in
       Some {
         er_solver = solver;

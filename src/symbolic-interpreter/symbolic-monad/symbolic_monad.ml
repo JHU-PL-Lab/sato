@@ -501,6 +501,8 @@ struct
   ;;
 
   let record_constraint (c : Constraint.t) : unit m =
+    lazy_logger `trace (fun () ->
+      Printf.sprintf "Add constraint %s" (Constraint.show c));
     _record_log @@
     { log_solver = Solver.singleton c;
       log_decisions = Relative_stack.Map.empty;

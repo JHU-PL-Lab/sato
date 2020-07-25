@@ -18,6 +18,7 @@ type error_binop = {
 
 type error_match = {
   err_match_ident : ident;
+  err_match_aliases : ident list;
   err_match_value : value_source;
   err_match_expected_type : type_sig;
   err_match_actual_type : type_sig;
@@ -100,7 +101,17 @@ module Error_tree : Error_tree = struct
       end
     | Error_match match_err ->
       begin
-        "* Value    : " ^ (show_value_source match_err.err_match_value) ^ "\n" ^
+        let alias_str =
+          let alias_chain = match_err.err_match_aliases in
+          if List.length alias_chain > 1 then begin
+            (show_ident @@ List.first alias_chain) ^ " = " ^
+            (show_ident @@ List.last alias_chain)
+          end else begin
+            (show_ident @@ List.first alias_chain)
+          end
+        in
+        "* Value    : " ^ alias_str ^ " = " ^
+          (show_value_source match_err.err_match_value) ^ "\n" ^
         "* Expected : " ^ (show_type_sig match_err.err_match_expected_type) ^ "\n" ^
         "* Actual   : " ^ (show_type_sig match_err.err_match_actual_type)
       end
