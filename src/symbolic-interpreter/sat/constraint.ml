@@ -52,6 +52,7 @@ type value_source =
   | Value of value
   | Input
   | Binop of symbol * binary_operator * symbol
+  | Match of symbol * pattern
   | Abort
 [@@ deriving eq, ord, to_yojson]
 ;;
@@ -65,6 +66,10 @@ let pp_value_source formatter val_src =
     let (Symbol (i2, _)) = x2 in
     Format.fprintf formatter "%a %a %a"
       pp_ident i1 pp_binary_operator op pp_ident i2
+  | Match (x, pattern) ->
+    let (Symbol (ident, _)) = x in
+    Format.fprintf formatter "%a ~ %a"
+      pp_ident ident pp_pattern pattern
   | Abort -> Format.pp_print_string formatter "abort"
 ;;
 

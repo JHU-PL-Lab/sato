@@ -34,6 +34,7 @@ type value_source =
   | Value of value
   | Input
   | Binop of symbol * binary_operator * symbol
+  | Match of symbol * pattern
   | Abort
 [@@deriving eq, ord, show, to_yojson]
 ;;

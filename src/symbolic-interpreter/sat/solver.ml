@@ -92,8 +92,7 @@ type t =
     type_constraints_by_symbol : symbol_type Symbol_map.t;
 
     (** An index of all abort constraints by symbol.  Because a symbol can only
-        identify a single abort clause and (in the concrete syntax) are all
-        identical, this is a set. *)
+        identify a single abort clause, this is a set. *)
     abort_constraints_by_symbol : Symbol_set.t;
 
     (** The unique stack constraint which may appear in this solver.  Only one
@@ -122,6 +121,8 @@ let empty =
   }
 ;;
 
+(* **** Helper functions **** *)
+
 let _binop_types (op : binary_operator)
   : symbol_type * symbol_type * symbol_type =
   match op with
@@ -138,9 +139,92 @@ let _binop_types (op : binary_operator)
   | Binary_operator_xor -> (BoolSymbol, BoolSymbol, BoolSymbol)
 ;;
 
-let _get_type_of_symbol (symbol : symbol) (solver : t) : symbol_type option =
+let rec _construct_alias_chain solver symbol =
+  let alias_opt =
+    Symbol_map.Exceptionless.find symbol solver.alias_constraints_by_symbol
+  in
+  match alias_opt with
+  | Some aliased_symb -> symbol :: (_construct_alias_chain solver aliased_symb)
+  | None -> [symbol]
+;;
+
+
+let _get_symbol_type solver symbol : symbol_type option =
   Symbol_map.Exceptionless.find symbol solver.type_constraints_by_symbol
 ;;
+
+let _get_type solver symbol : type_sig =
+  let symb_type =
+    match _get_symbol_type solver symbol with
+    | Some st -> st
+    | None ->
+      raise @@ Utils.Invariant_failure
+        (Printf.sprintf "symbol %s not found in type constraint set!"
+          (show_symbol symbol))
+  in
+  match symb_type with
+  | BottomSymbol -> Bottom_type
+  | IntSymbol -> Int_type
+  | BoolSymbol -> Bool_type
+  | FunctionSymbol -> Fun_type
+  | RecordSymbol ->
+    let rec_val =
+      try 
+        Symbol_map.find symbol solver.value_constraints_by_symbol
+      with Not_found ->
+        raise @@ Utils.Invariant_failure
+          (Printf.sprintf "Symbol %s not found in value constraint set"
+            (show_symbol symbol))
+    in
+    let rec_lbls =
+      match rec_val with
+      | Record rmap ->
+        rmap
+        |> Ident_map.keys
+        |> Ident_set.of_enum
+      | _ ->
+        raise @@ Utils.Invariant_failure
+          (Printf.sprintf "Value %s incorrectly typed as record"
+            (show_value rec_val))
+    in
+    Rec_type rec_lbls
+;;
+
+let _get_value_source solver symbol : value_source option =
+  let value_opt =
+    Symbol_map.Exceptionless.find symbol solver.value_constraints_by_symbol
+  in
+  let input_opt =
+    Symbol_set.Exceptionless.find symbol solver.input_constraints_by_symbol
+  in
+  let binop_opt =
+    Symbol_map.Exceptionless.find symbol solver.binop_constraints_by_symbol
+  in
+  let match_opt =
+    Symbol_map.Exceptionless.find symbol solver.match_constraints_by_symbol
+  in
+  let abort_opt =
+    Symbol_set.Exceptionless.find symbol solver.abort_constraints_by_symbol
+  in
+  match (value_opt, input_opt, binop_opt, match_opt, abort_opt) with
+  | (Some value, None, None, None, None) -> 
+      Some (Constraint.Value value)
+  | (None, Some _, None, None, None) ->
+      Some (Constraint.Input)
+  | (None, None, Some (s1, op, s2), None, None) ->
+      Some (Constraint.Binop (s1, op, s2))
+  | (None, None, None, Some (s, p), None) ->
+      Some (Constraint.Match (s, p))
+  | (None, None, None, None, Some _) ->
+      Some (Constraint.Abort)
+  | (None, None, None, None, None) ->
+      None
+  | _ ->
+    raise @@ Utils.Invariant_failure
+      (Printf.sprintf "%s has multiple value definitions" (show_symbol symbol))
+;;
+
+(* **** Constraint set operations **** *)
 
 let rec _add_constraints_and_close
     (constraints : Constraint.Set.t) (solver : t)
@@ -245,14 +329,10 @@ let rec _add_constraints_and_close
       in
       let new_constraints : Constraint.Set.t =
         match c with
-        | Constraint_value(x,v) ->
+        | Constraint_value(x, v) ->
           (* TODO: Maybe add a second check for pattern match contradictions, 
              just like with record projection. *)
           begin
-            (* let transitivity_constraints =
-              Symbol_to_symbol_multimap.find x solver.alias_constraints_by_symbol
-              |> Enum.map (fun x' -> Constraint_value(x',v))
-            in *)
             let projection_constraints =
               match v with
               | Record m ->
@@ -263,9 +343,9 @@ let rec _add_constraints_and_close
                     match Ident_map.Exceptionless.find lbl m with
                     | None ->
                       (* This means that we have two constraints.  One is a
-                          record value assignment and the other is a projection
-                          from that record.  But the projection is for a label
-                          that the record doesn't have.  Contradiction! *)
+                         record value assignment and the other is a projection
+                         from that record.  But the projection is for a label
+                         that the record doesn't have.  Contradiction! *)
                       raise @@ Contradiction(ProjectionContradiction(x',x,lbl))
                     | Some x'' ->
                       Constraint_alias(x',x'')
@@ -289,72 +369,56 @@ let rec _add_constraints_and_close
           end
         | Constraint_input(x) ->
           Constraint.Set.singleton @@ Constraint_type(x, IntSymbol)
-        | Constraint_alias(x,x') ->
+        | Constraint_alias(x, x') ->
           begin
-            (* let symmetry_constraint =
-              Enum.singleton(Constraint_alias(x',x))
-            in *)
             let value_constraints =
-              match Symbol_map.Exceptionless.find x'
-                      solver.value_constraints_by_symbol with
-              | None -> Enum.empty ()
-              | Some v -> Enum.singleton(Constraint_value(x,v))
-            in
-            let binop_constraints =
-              match Symbol_map.Exceptionless.find x'
-                      solver.binop_constraints_by_symbol with
-              | None -> Enum.empty ()
-              | Some (s1, op, s2) -> Enum.singleton(Constraint_binop(x, s1, op, s2))
-            in
-            let input_constraints =
-              match Symbol_set.Exceptionless.find x'
-                      solver.input_constraints_by_symbol with
-              | None -> Enum.empty ()
-              | Some _ -> Enum.singleton(Constraint_input x)
-            in
-            let abort_constraints =
-              match Symbol_set.Exceptionless.find x'
-                      solver.abort_constraints_by_symbol with
-              | None -> Enum.empty ()
-              | Some _ -> Enum.singleton(Constraint_abort x)
+              match _get_value_source solver x' with
+              | Some (Constraint.Value v) ->
+                Enum.singleton (Constraint_value (x, v))
+              | Some (Constraint.Input) ->
+                Enum.singleton (Constraint_input x)
+              | Some (Constraint.Binop (x1, op, x2)) ->
+                Enum.singleton (Constraint_binop (x, x1, op, x2))
+              | Some (Constraint.Match (x'', p)) ->
+                Enum.singleton (Constraint_match (x, x'', p))
+              | Some (Constraint.Abort) ->
+                Enum.singleton (Constraint_abort (x))
+              | None ->
+                Enum.empty ()
             in
             let type_constraints =
               match Symbol_map.Exceptionless.find x'
                       solver.type_constraints_by_symbol with
-              | None -> Enum.empty ()
               | Some t -> Enum.singleton(Constraint_type(x,t))
+              | None -> Enum.empty ()
             in
             let constraint_enum =
-              (Enum.empty ())
-              |> Enum.append value_constraints
-              |> Enum.append binop_constraints
-              |> Enum.append input_constraints
-              |> Enum.append abort_constraints
-              |> Enum.append type_constraints
+              Enum.append value_constraints type_constraints
             in
             Constraint.Set.of_enum constraint_enum
           end
-        | Constraint_binop(x,x',op,x'') ->
+        | Constraint_binop(x, x', op, x'') ->
           begin
             let (tLeft,tRight,tOut) = _binop_types op in
             Constraint.Set.of_enum @@ List.enum @@
             [
-              Constraint_type(x,tOut);
-              Constraint_type(x',tLeft);
-              Constraint_type(x'',tRight);
+              Constraint_type (x,tOut);
+              Constraint_type (x',tLeft);
+              Constraint_type (x'',tRight);
             ]
           end
-        | Constraint_projection(x,x',lbl) ->
+        | Constraint_projection(x, x', lbl) ->
           begin
-            let nc = Constraint.Set.singleton @@
-                     Constraint_type(x', RecordSymbol)
+            let new_const =
+              Constraint.Set.singleton @@ Constraint_type (x', RecordSymbol)
             in
-            let record_val = Symbol_map.Exceptionless.find x'
-                    solver.value_constraints_by_symbol
+            let record_val =
+              Symbol_map.Exceptionless.find x'
+                solver.value_constraints_by_symbol
             in
             match record_val with
-            | None -> nc
-            | Some(Int _ | Bool _ | Function _) -> nc
+            | None -> new_const
+            | Some(Int _ | Bool _ | Function _) -> new_const
             | Some(Record record_body) ->
               match Ident_map.Exceptionless.find lbl record_body with
               | None ->
@@ -364,52 +428,51 @@ let rec _add_constraints_and_close
                    that the record doesn't have.  Contradiction! *)
                 raise @@ Contradiction(ProjectionContradiction(x,x',lbl))
               | Some x'' ->
-                nc |> Constraint.Set.add @@ Constraint_alias(x,x'')
+                Constraint.Set.add (Constraint_alias(x,x'')) new_const
           end
-        | Constraint_match(x,x',p) ->
+        | Constraint_match(x, x', pat) ->
           begin
-            let nc = Constraint.Set.empty in
-            match p with
+            match pat with
             | Any_pattern ->
               begin
                 (* TODO: Should we also look up x' here as well? *)
-                nc |> Constraint.Set.add @@ Constraint_value(x, Bool(true))
+                Constraint.Set.singleton @@ Constraint_value(x, Bool(true))
               end
             | Int_pattern ->
               begin
                 let typ = Symbol_map.Exceptionless.find x'
                   solver.type_constraints_by_symbol in
                 match typ with
-                | Some(IntSymbol) ->
-                  nc |> Constraint.Set.add @@ Constraint_value(x, Bool(true))
-                | Some(_) ->
-                  nc |> Constraint.Set.add @@ Constraint_value(x, Bool(false))
+                | Some (IntSymbol) ->
+                  Constraint.Set.singleton @@ Constraint_value(x, Bool(true))
+                | Some _ ->
+                  Constraint.Set.singleton @@ Constraint_value(x, Bool(false))
                 | None ->
-                  nc
+                  Constraint.Set.empty
               end
             | Bool_pattern ->
               begin
                 let typ = Symbol_map.Exceptionless.find x'
                   solver.type_constraints_by_symbol in
                 match typ with
-                | Some(BoolSymbol) ->
-                  nc |> Constraint.Set.add @@ Constraint_value(x, Bool(true))
-                | Some(_) ->
-                  nc |> Constraint.Set.add @@ Constraint_value(x, Bool(false))
+                | Some (BoolSymbol) ->
+                  Constraint.Set.singleton @@ Constraint_value(x, Bool(true))
+                | Some _ ->
+                  Constraint.Set.singleton @@ Constraint_value(x, Bool(false))
                 | None ->
-                  nc
+                  Constraint.Set.empty
               end
             | Fun_pattern ->
               begin
                 let typ = Symbol_map.Exceptionless.find x'
                   solver.type_constraints_by_symbol in
                 match typ with
-                | Some(FunctionSymbol) ->
-                  nc |> Constraint.Set.add @@ Constraint_value(x, Bool(true))
-                | Some(_) ->
-                  nc |> Constraint.Set.add @@ Constraint_value(x, Bool(false))
+                | Some (FunctionSymbol) ->
+                  Constraint.Set.singleton @@ Constraint_value(x, Bool(true))
+                | Some _ ->
+                  Constraint.Set.singleton @@ Constraint_value(x, Bool(false))
                 | None ->
-                  nc
+                  Constraint.Set.empty
               end
             | Rec_pattern record_pattern ->
               begin
@@ -418,31 +481,27 @@ let rec _add_constraints_and_close
                 in
                 match record_val with
                 | Some(Record record_body) ->
-                  let pattern_enum = Ident_set.enum record_pattern in
-                  let record_keys = Ident_set.of_enum
-                    (Ident_map.keys record_body) in
-                  let res = Enum.for_all
-                    (fun ident -> Ident_set.mem ident record_keys) pattern_enum
+                  let record_lbls =
+                    record_body
+                    |> Ident_map.keys
+                    |> Ident_set.of_enum
                   in
-                  if res then
-                    nc |> Constraint.Set.add @@ Constraint_value(x, Bool(true))
+                  if Ident_set.subset record_pattern record_lbls then
+                    Constraint.Set.singleton @@ Constraint_value(x, Bool(true))
                   else
-                    nc |> Constraint.Set.add @@ Constraint_value(x, Bool(false))
-                | Some(_) ->
-                  nc |> Constraint.Set.add @@ Constraint_value(x, Bool(false))
+                    Constraint.Set.singleton @@ Constraint_value(x, Bool(false))
+                | Some _ ->
+                  Constraint.Set.singleton @@ Constraint_value(x, Bool(false))
                 | None ->
-                  nc
+                  Constraint.Set.empty
               end
           end
-        | Constraint_type(_,_) ->
-          (* Symbol_to_symbol_multimap.find x solver.alias_constraints_by_symbol
-          |> Enum.map (fun x' -> Constraint_type(x',t))
-          |> Constraint.Set.of_enum *)
+        | Constraint_type (_,_) ->
           Constraint.Set.empty
         | Constraint_stack _ ->
           Constraint.Set.empty
-        | Constraint_abort(ab) ->
-          Constraint.Set.singleton @@ Constraint_type(ab, BottomSymbol);
+        | Constraint_abort ab ->
+          Constraint.Set.singleton @@ Constraint_type(ab, BottomSymbol)
       in
       _add_constraints_and_close
         (Constraint.Set.union new_constraints constraints) new_solver
@@ -465,6 +524,8 @@ let union s1 s2 =
   _add_constraints_and_close smaller.constraints larger
 ;;
 
+(* **** Constraint set solving (feat. Z3) **** *)
+
 let z3_expr_of_symbol
     (ctx : Z3.context)
     (symbol_cache : symbol_cache)
@@ -472,7 +533,7 @@ let z3_expr_of_symbol
     (symbol : symbol)
   : Z3.Expr.expr option =
   let z3symbol = define_symbol symbol_cache symbol in
-  match _get_type_of_symbol symbol solver with
+  match _get_symbol_type solver symbol with
   | Some IntSymbol -> Some(Z3.Arithmetic.Integer.mk_const ctx z3symbol)
   | Some BoolSymbol -> Some(Z3.Boolean.mk_const ctx z3symbol)
   | Some FunctionSymbol -> None
@@ -588,7 +649,7 @@ let solve (solver : t) : solution option =
           | None -> None
           | Some expr ->
             begin
-              match _get_type_of_symbol symbol solver with
+              match _get_symbol_type solver symbol with
               | Some IntSymbol ->
                 begin
                   match Z3.Model.eval model expr true with
@@ -634,89 +695,7 @@ let solvable solver =
   Option.is_some @@ solve solver
 ;;
 
-let rec _construct_alias_chain solver symbol =
-  let alias_opt =
-    Symbol_map.Exceptionless.find symbol solver.alias_constraints_by_symbol
-  in
-  match alias_opt with
-  | Some aliased_symb -> symbol :: (_construct_alias_chain solver aliased_symb)
-  | None -> [symbol]
-;;
-
-let _get_val_source solver symbol =
-  let value_opt =
-    Symbol_map.Exceptionless.find symbol solver.value_constraints_by_symbol
-  in
-  let input_opt =
-    Symbol_set.Exceptionless.find symbol solver.input_constraints_by_symbol
-  in
-  let binop_opt =
-    Symbol_map.Exceptionless.find symbol solver.binop_constraints_by_symbol
-  in
-  let abort_opt =
-    Symbol_set.Exceptionless.find symbol solver.abort_constraints_by_symbol
-  in
-  match (value_opt, input_opt, binop_opt, abort_opt) with
-  | (Some value, None, None, None) -> Constraint.Value value
-    (*
-    begin
-      match value with
-      | Constraint.Int n -> Value_body (Value_int n)
-      | Constraint.Bool b -> Value_body (Value_bool b)
-      | Constraint.Function f -> Value_body (Value_function f)
-      | Constraint.Record r ->
-        begin
-          let r' =
-            r
-            |> Ident_map.enum
-            |> Enum.map (fun (lbl, Symbol(id, _)) -> (lbl, Var(id, None)))
-            |> Ident_map.of_enum
-          in
-          Value_body (Value_record (Record_value r'))
-        end
-    end
-    *)
-  | (None, Some _, None, None) -> Constraint.Input
-  | (None, None, Some (s1, op, s2), None) -> Constraint.Binop (s1, op, s2)
-  | (None, None, None, Some _) -> Constraint.Abort
-  | (None, None, None, None) ->
-    raise @@ Utils.Invariant_failure
-      ("Symbol " ^ (show_symbol symbol) ^ " has no value in constraint set!")
-  | _ ->
-    raise @@ Utils.Invariant_failure
-      ("Symbol " ^ (show_symbol symbol) ^ " has multiple value definitions.")
-;;
-
-let _find_type solver symbol =
-  let symb_type =
-    try
-      Symbol_map.find symbol solver.type_constraints_by_symbol
-    with Not_found ->
-      raise @@ Utils.Invariant_failure "Symbol not found in type constraint set!"
-  in
-  match symb_type with
-  | BottomSymbol -> Bottom_type
-  | IntSymbol -> Int_type
-  | BoolSymbol -> Bool_type
-  | FunctionSymbol -> Fun_type
-  | RecordSymbol ->
-    let rec_val =
-      try 
-        Symbol_map.find symbol solver.value_constraints_by_symbol
-      with Not_found ->
-        raise @@ Utils.Invariant_failure "Symbol not found in value constraint set!"
-    in
-    let rec_lbls =
-      match rec_val with
-      | Record rmap ->
-        rmap
-        |> Ident_map.keys
-        |> Ident_set.of_enum
-      | _ ->
-        raise @@ Utils.Invariant_failure "Value incorrectly typed as record!"
-    in
-    Rec_type rec_lbls
-;;
+(* **** Error finding **** *)
 
 let rec _find_errors solver symbol constrained_clause =
   let binop_opt =
@@ -761,8 +740,18 @@ let rec _find_errors solver symbol constrained_clause =
           let binop_error = {
             err_binop_ident = (fun (Symbol (x, _)) -> x) symbol;
             err_binop_operation = op;
-            err_binop_left_val = _get_val_source solver s1;
-            err_binop_right_val = _get_val_source solver s2;
+            err_binop_left_val =
+              begin
+                match _get_value_source solver s1 with
+                | Some vs -> vs
+                | None -> raise Not_found
+              end;
+            err_binop_right_val =
+              begin
+                match _get_value_source solver s2 with
+                | Some vs -> vs
+                | None -> raise Not_found
+              end;
           }
           in
           lazy_logger `trace (fun () -> (show_error_binop binop_error));
@@ -797,13 +786,20 @@ let rec _find_errors solver symbol constrained_clause =
           | Rec_pattern labels -> Rec_type labels
           | Any_pattern -> Top_type
         in
-        let actual_type = _find_type solver match_symb in
+        let actual_type = _get_type solver match_symb in
         if not (Ast.Type_signature.subtype actual_type expected_type) then begin
           let match_error = {
             err_match_ident = (fun (Symbol(x, _)) -> x) symbol;
             err_match_aliases = List.map (fun (Symbol(x, _)) -> x) alias_chain;
             err_match_clause = constrained_clause;
-            err_match_value = _get_val_source solver match_symb;
+            err_match_value =
+              begin
+                match _get_value_source solver match_symb with
+                | Some vs -> vs
+                | None -> raise @@ Utils.Invariant_failure
+                  (Printf.sprintf "%s has no value in constraint set!"
+                    (show_symbol match_symb))
+              end;
             err_match_expected_type = expected_type;
             err_match_actual_type = actual_type;
           }
@@ -826,17 +822,9 @@ let rec _find_errors solver symbol constrained_clause =
     raise @@ Utils.Invariant_failure ("Multiple definitions for symbol " ^ (show_symbol symbol))
 ;;
 
-(*
-let find_errors solver symbol =
-  match _find_errors solver symbol with
-  | Some error_tree -> error_tree
-  | None -> raise @@ Utils.Invariant_failure
-    (Printf.sprintf "Error tree cannot be produced for symbol %s"
-      (show_symbol symbol))
-;;
-*)
-
 let find_errors solver symbol = _find_errors solver symbol;;
+
+(* **** Other functions **** *)
 
 let enum solver = Constraint.Set.enum solver.constraints;;
 
