@@ -73,9 +73,7 @@ val solve : t -> solution option;;
 (** Determines whether a solution exists for a given solver. *)
 val solvable : t -> bool;;
 
-(** Find a type error associated with a pattern match symbol. *)
-val find_type_error : t -> symbol -> type_error option;;
-
+(** Find errors associated with a particular abort clause. *)
 val find_errors : t -> symbol -> Ast.clause -> Error_tree.t;;
 
 (** Enumerates the constraints in a solver. *)
