@@ -1042,12 +1042,13 @@ struct
         |> Enum.map
           (fun (Symbol (symb_id, rstack), e) ->
             let pred_ids = e.abort_predicate_idents in
-            let preds = List.map (fun id -> Symbol(id, rstack)) pred_ids in
-            ((Symbol (symb_id, rstack)), preds)
+            let cond_cls = e.abort_return_clauses in
+            let preds = List.map (fun id -> (Symbol(id, rstack))) pred_ids in
+            ((Symbol (symb_id, rstack)), (preds, cond_cls))
           )
         |> Enum.map
-          (fun (symb, preds) ->
-            (symb, (List.map (Solver.find_errors solver) preds))
+          (fun (symb, (preds, cond_cls)) ->
+            (symb, (List.map2 (Solver.find_errors solver) preds cond_cls))
           )
         |> Enum.map
           (fun (symb, err_list) ->

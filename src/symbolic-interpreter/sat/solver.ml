@@ -811,7 +811,7 @@ let _find_type solver symbol =
     Rec_type rec_lbls
 ;;
 
-let rec _find_errors solver symbol =
+let rec _find_errors solver symbol constrained_clause =
   let binop_opt =
     Symbol_map.Exceptionless.find symbol solver.binop_constraints_by_symbol
   in
@@ -824,8 +824,8 @@ let rec _find_errors solver symbol =
       lazy_logger `trace (fun () ->
         Printf.sprintf "Binary operation on symbol %s" (show_symbol symbol));
       let (s1, op, s2) = b in
-      let et1 = _find_errors solver s1 in
-      let et2 = _find_errors solver s2  in
+      let et1 = _find_errors solver s1 constrained_clause in
+      let et2 = _find_errors solver s2 constrained_clause in
       match op with
       (* TODO: If a symbol is another and/or or a pattern, recurse on find_error. Otherwise treat this as a leaf node. *)
       | Binary_operator_and ->
@@ -891,10 +891,11 @@ let rec _find_errors solver symbol =
           | Any_pattern -> Top_type
         in
         let actual_type = _find_type solver match_symb in
-        if not (Ast.Type_signature.subtype actual_type expected_type) then
+        if not (Ast.Type_signature.subtype actual_type expected_type) then begin
           let match_error = {
             err_match_ident = (fun (Symbol(x, _)) -> x) symbol;
             err_match_aliases = List.map (fun (Symbol(x, _)) -> x) alias_chain;
+            err_match_clause = constrained_clause;
             err_match_value = _get_val_source solver match_symb;
             err_match_expected_type = expected_type;
             err_match_actual_type = actual_type;
@@ -903,8 +904,9 @@ let rec _find_errors solver symbol =
           lazy_logger `trace (fun () ->
             Printf.sprintf "Match error:\n%s" (show_error_match match_error));
           Error_tree.singleton (Error_match match_error)
-        else
+        end else begin
           Error_tree.empty
+        end
       | Constraint.Bool true ->
         Error_tree.empty
       | _ ->

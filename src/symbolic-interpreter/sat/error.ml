@@ -20,6 +20,7 @@ type error_match = {
   err_match_ident : ident;
   err_match_aliases : ident list;
   err_match_value : value_source;
+  err_match_clause : clause;
   err_match_expected_type : type_sig;
   err_match_actual_type : type_sig;
 }
@@ -103,15 +104,25 @@ module Error_tree : Error_tree = struct
       begin
         let alias_str =
           let alias_chain = match_err.err_match_aliases in
+          String.join " = " @@ List.map show_ident alias_chain
+          (*
           if List.length alias_chain > 1 then begin
             (show_ident @@ List.first alias_chain) ^ " = " ^
             (show_ident @@ List.last alias_chain)
           end else begin
             (show_ident @@ List.first alias_chain)
           end
+          *)
+        in
+        let clause_str =
+          match_err.err_match_clause
+          (* Delete context stack information for end-user *)
+          |> Ast_tools.map_clause_vars (fun (Var (x, _)) -> Var (x, None))
+          |> show_clause
         in
         "* Value    : " ^ alias_str ^ " = " ^
           (show_value_source match_err.err_match_value) ^ "\n" ^
+        "* Clause   : " ^ clause_str ^ "\n" ^
         "* Expected : " ^ (show_type_sig match_err.err_match_expected_type) ^ "\n" ^
         "* Actual   : " ^ (show_type_sig match_err.err_match_actual_type)
       end

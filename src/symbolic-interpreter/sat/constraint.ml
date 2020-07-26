@@ -61,8 +61,10 @@ let pp_value_source formatter val_src =
   | Value v -> pp_value formatter v
   | Input -> Format.pp_print_string formatter "input"
   | Binop (x1, op, x2) ->
+    let (Symbol (i1, _)) = x1 in
+    let (Symbol (i2, _)) = x2 in
     Format.fprintf formatter "%a %a %a"
-      pp_symbol x1 pp_binary_operator op pp_symbol x2
+      pp_ident i1 pp_binary_operator op pp_ident i2
   | Abort -> Format.pp_print_string formatter "abort"
 ;;
 
