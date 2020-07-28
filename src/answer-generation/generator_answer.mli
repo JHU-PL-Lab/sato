@@ -29,6 +29,8 @@ module type Answer = sig
   (** True if generating an answer from the result is successful, false
       otherwise. *)
   val generation_successful : t -> bool;;
+
+  val remove_instrument_vars : Ast.var Ast.Var_map.t -> t -> t;;
 end;;
 
 (** An input sequence for a single program flow of symbolic evaluation. *)

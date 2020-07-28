@@ -9,6 +9,7 @@ type translation_context =
     tc_contextual_recursion : bool;
     mutable tc_fresh_name_counter : int;
     (* mutable tc_odefa_natodefa_info : odefa_natodefa_info; *)
+    mutable tc_instrumented_var_map : Ast.var Ast.Var_map.t;
   }
 [@@deriving eq, ord (*, show *)]
 ;;
@@ -21,6 +22,7 @@ let new_translation_context
   { tc_fresh_name_counter = 0;
     tc_fresh_suffix_separator = suffix;
     tc_contextual_recursion = contextual_recursion;
+    tc_instrumented_var_map = Ast.Var_map.empty;
     (* tc_odefa_natodefa_info = {
       odefa_aborts = Ast.Var_map.empty;
       natodefa_exprs = Ast.Var_map.empty;
@@ -33,6 +35,8 @@ module TranslationMonad : sig
   val run : translation_context -> 'a m -> 'a
   val fresh_name : string -> string m
   val fresh_var : string -> Ast.var m
+  val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
+  val instrument_map : Ast.var Ast.Var_map.t m
   (* val add_natodefa_expr : Ast.var -> On_ast.expr -> unit m *)
   val freshness_string : string m
   val acontextual_recursion : bool m
@@ -64,6 +68,16 @@ end = struct
   let fresh_var name ctx =
     let name' = fresh_name name ctx in
     Ast.Var(Ast.Ident name', None)
+  ;;
+
+  let add_instrument_var_pair v_key v_val ctx =
+    ctx.tc_instrumented_var_map
+      <- Ast.Var_map.add v_key v_val ctx.tc_instrumented_var_map;
+    ()
+  ;;
+
+  let instrument_map ctx =
+    ctx.tc_instrumented_var_map
   ;;
 
   let freshness_string ctx =

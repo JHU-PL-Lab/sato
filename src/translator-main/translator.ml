@@ -32,7 +32,7 @@ let main () : unit =
   | Odefa_natural_to_odefa ->
     begin
       let on_expr = On_parse.parse_program IO.stdin in
-      let odefa_expr = On_to_odefa.translate on_expr in
+      let (odefa_expr, _) = On_to_odefa.translate on_expr in
       let result_expr =
         if options.ta_parseable then
           map_expr_vars purge_special_symbols odefa_expr

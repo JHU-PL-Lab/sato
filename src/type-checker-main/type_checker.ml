@@ -18,7 +18,8 @@ exception GenerationComplete;;
 module Type_error_generator = Generator.Make(Generator_answer.Type_errors);;
 module Ans = Type_error_generator.Answer;;
 
-let get_ast (args : Type_checker_parser.type_checker_args) : Ast.expr =
+let get_ast (args : Type_checker_parser.type_checker_args)
+  : (Ast.expr * Ast.var Ast.Var_map.t) =
   let filename : string = args.tc_filename in
   let is_natodefa = Filename.extension filename = ".natodefa" in
   let is_odefa = Filename.extension filename = ".odefa" in
@@ -27,16 +28,16 @@ let get_ast (args : Type_checker_parser.type_checker_args) : Ast.expr =
       let natodefa_ast =
         File.with_file_in filename On_parse.parse_program
       in
-      let odefa_ast =
+      let (odefa_ast, var_map) =
         On_to_odefa.translate ~is_instrumented:true natodefa_ast
       in
       Ast_wellformedness.check_wellformed_expr odefa_ast;
-      odefa_ast
+      (odefa_ast, var_map)
     end else if is_odefa then begin
       let odefa_ast = File.with_file_in filename Parser.parse_program in
-      let odefa_ast' = Type_instrumentation.instrument_odefa odefa_ast in
+      let (odefa_ast', var_map) = Type_instrumentation.instrument_odefa odefa_ast in
       let () = Ast_wellformedness.check_wellformed_expr odefa_ast' in
-      odefa_ast'
+      (odefa_ast', var_map)
     end else begin
       raise @@ Invalid_argument "Filetype not supported"
     end
@@ -61,7 +62,7 @@ let get_ast (args : Type_checker_parser.type_checker_args) : Ast.expr =
 (* TODO: Add variable of operation where type error occured *)
 let () =
   let args = Type_checker_parser.parse_args () in
-  let ast = get_ast args in
+  let (ast, var_map) = get_ast args in
   lazy_logger `debug (fun () -> Printf.sprintf "Translated program:\n%s" (Ast_pp.show_expr ast));
   try
     let results_remaining = ref args.tc_maximum_results in
@@ -76,7 +77,8 @@ let () =
     let generation_callback
       (type_errors : Ans.t) (steps: int) : unit =
       let _ = steps in (* Temp *)
-      print_endline (Ans.show type_errors);
+      let type_errors' = Ans.remove_instrument_vars var_map type_errors in
+      print_endline (Ans.show type_errors');
       flush stdout;
       total_errors := !total_errors + Ans.count type_errors;
       results_remaining := (Option.map (fun n -> n - 1) !results_remaining);

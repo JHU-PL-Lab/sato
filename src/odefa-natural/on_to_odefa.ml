@@ -995,8 +995,8 @@ let translate
     ?translation_context:(translation_context=None)
     ?is_instrumented:(is_instrumented=false)
     (e : On_ast.expr)
-  : Odefa_ast.Ast.expr =
-  let (e_m_with_info : Ast.expr m) =
+  : (Ast.expr * Ast.var Ast.Var_map.t) =
+  let (e_m_with_info : (Ast.expr * Ast.var Ast.Var_map.t) m) =
     let%bind transformed_e =
       return e
       >>= debug_transform "pre-alphatize" alphatize
@@ -1008,14 +1008,16 @@ let translate
     in
     let%bind (c_list, _) = flatten_expr transformed_e in
     let%bind c_list = (* NEW! *)
-      if is_instrumented then Type_instrumentation.instrument_clauses c_list else return c_list
+      if is_instrumented then
+        Type_instrumentation.instrument_clauses c_list else return c_list
     in
     let Clause(last_var, _) = List.last c_list in
     let%bind fresh_str = freshness_string in
     let res_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
     let res_clause = Ast.Clause(res_var, Ast.Var_body(last_var)) in
     (* let%bind odefa_on_info = get_odefa_natodefa_info in *)
-    return @@ Ast.Expr(c_list @ [res_clause])
+    let%bind inst_map = instrument_map in
+    return (Ast.Expr(c_list @ [res_clause]), inst_map)
   in
   let context =
     match translation_context with

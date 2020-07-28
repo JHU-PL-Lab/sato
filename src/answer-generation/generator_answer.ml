@@ -25,6 +25,7 @@ module type Answer = sig
   val count : t -> int;;
   val count_list : t list -> int;;
   val generation_successful : t -> bool;;
+  val remove_instrument_vars : var Var_map.t -> t -> t;;
 end;;
 
 (* Utility to parse int sequences separated by commas. *)
@@ -103,12 +104,7 @@ module Input_sequence : Answer = struct
     | None -> false
   ;;
 
-  (*
-  let test_str input_list str =
-    let i = answer_from_string str in
-    List.mem i input_list
-  ;;
-  *)
+  let remove_instrument_vars (_ : var Var_map.t) (inputs : t) = inputs;;
 end;;
 
 (* **** Type Errors **** *)
@@ -172,14 +168,58 @@ module Type_errors : Answer = struct
     end
   ;;
 
-  let count type_errors = List.length type_errors.err_errors;;
+  let count errors = List.length errors.err_errors;;
 
-  let count_list type_error_list =
-    type_error_list
+  let count_list error_list =
+    error_list
     |> List.map count
     |> List.fold_left (fun a x -> x + a) 0
   ;;
 
   (* Currently always returns true; no mechanism to detect failed answer gen *)
   let generation_successful (_: t) = true;;
+
+  let remove_instrument_vars_error
+      (inst_var_map : var Var_map.t)
+      (error : error) =
+    match error with
+    | Error_binop _ -> error
+    | Error_match err ->
+      begin
+        (* TODO: Deal with the final clause *)
+        let err_match_aliases' =
+          List.filter
+            (fun a ->
+              not @@ Var_map.mem (Var (a, None)) inst_var_map
+            )
+            err.err_match_aliases
+        in
+        let err_match_clause' =
+          let cls = err.err_match_clause in
+          let (Clause (v, body)) = cls in
+          try
+            let v' = Var_map.find v inst_var_map in
+            Clause (v', body)
+          with Not_found ->
+            cls
+        in
+        Error_match {
+          err with
+          err_match_aliases = err_match_aliases';
+          err_match_clause = err_match_clause';
+        }
+      end
+  ;;
+
+  let remove_instrument_vars
+      (inst_var_map : var Var_map.t)
+      (error : t) =
+    let rm_inst_var_fn = remove_instrument_vars_error inst_var_map in
+    let error_list = error.err_errors in
+    let error_list' = List.map (Error_tree.map rm_inst_var_fn) error_list in
+    {
+      error with
+      err_errors = error_list';
+    }
+  ;;
 end;;

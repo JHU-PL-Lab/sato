@@ -46,6 +46,7 @@ module type Error_tree = sig
   val empty : t;;
   val is_empty : t -> bool;;
   val parse : string -> t;;
+  val map : (error -> error) -> t -> t;;
 end;;
 
 module Error_tree : Error_tree = struct
@@ -149,6 +150,16 @@ module Error_tree : Error_tree = struct
     match error_tree with
     | Empty -> true
     | Node (_, _) | Error _ -> false
+  ;;
+
+  let map fn error_tree =
+    let rec _walk fn error_tree =
+      match error_tree with
+      | Node (et1, et2) -> Node (_walk fn et1, _walk fn et2)
+      | Error err -> Error (fn err)
+      | Empty -> Empty
+    in
+    _walk fn error_tree
   ;;
 
   (* The following s-expression code is taken from Martin Josefsson at
@@ -263,8 +274,8 @@ module Error_tree : Error_tree = struct
       end
   ;;
 
-  let rec s_expr_to_err_tree sexpr =
-    match sexpr with
+  let rec s_expr_to_err_tree s_expr =
+    match s_expr with
     | Atom err_str ->
       begin
         let err_str_list =
@@ -314,4 +325,5 @@ module Error_tree : Error_tree = struct
     let s_expr = s_expression_of_token_list err_str_tokenized in
     let e_tree = s_expr_to_err_tree s_expr in
     e_tree
+  ;;
 end;;

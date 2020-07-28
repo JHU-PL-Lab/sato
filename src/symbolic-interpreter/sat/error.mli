@@ -74,6 +74,9 @@ module type Error_tree = sig
 
   (** Parses a string into an error tree *)
   val parse : string -> t;;
+
+  (** Maps a function over the errors in an error tree. *)
+  val map : (error -> error) -> t -> t;;
 end;;
 
 module Error_tree : Error_tree;;

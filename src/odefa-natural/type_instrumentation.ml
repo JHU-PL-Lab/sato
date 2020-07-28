@@ -64,6 +64,7 @@ let rec instrument_clauses
               let m_cls = Clause(m, m_bod) in
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
+              let%bind () = add_instrument_var_pair c_binop v in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
               let%bind f_path = add_abort_expr v in
               let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
@@ -85,6 +86,7 @@ let rec instrument_clauses
               let m_cls = Clause(m, m_bod) in
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
+              let%bind () = add_instrument_var_pair c_binop v in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
               let%bind f_path = add_abort_expr v in
               let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
@@ -106,6 +108,7 @@ let rec instrument_clauses
               let m_cls = Clause(m, m_bod) in
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
+              let%bind () = add_instrument_var_pair c_binop v in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
               let%bind f_path = add_abort_expr v in
               let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
@@ -126,6 +129,7 @@ let rec instrument_clauses
               let m_cls = Clause(m, m_bod) in
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
+              let%bind () = add_instrument_var_pair c_binop v in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
               let%bind f_path = add_abort_expr v in
               let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
@@ -151,6 +155,7 @@ let rec instrument_clauses
           let m_clause = Clause(m, Match_body(r, rec_pat)) in
           (* Conditional *)
           let%bind c_proj = fresh_var "c_proj" in
+          let%bind () = add_instrument_var_pair c_proj v in
           let%bind t_path = return @@ Expr([Clause(c_proj, body)]) in
           let%bind f_path = add_abort_expr v in
           let cond_clause = Clause(v, Conditional_body(m, t_path, f_path)) in
@@ -173,6 +178,7 @@ let rec instrument_clauses
           let m_clause = Clause(m, Match_body(f, Fun_pattern)) in
           (* Conditional *)
           let%bind c_appl = fresh_var "c_appl" in
+          let%bind () = add_instrument_var_pair c_appl v in
           let%bind t_path = return @@ Expr([Clause(c_appl, body)]) in
           let%bind f_path = add_abort_expr v in
           let cond_clause = Clause(v, Conditional_body(m, t_path, f_path)) in
@@ -201,6 +207,7 @@ let rec instrument_clauses
           let body' = Conditional_body(pred, Expr path1', Expr path2') in
           (* Constrain conditional *)
           let%bind c_cond = fresh_var "c_cond" in
+          let%bind () = add_instrument_var_pair c_cond v in
           let%bind t_path = return @@ Expr([Clause(c_cond, body')]) in
           let%bind f_path = add_abort_expr v in
           let cond_clause = Clause(v, Conditional_body(m, t_path, f_path)) in
@@ -211,8 +218,8 @@ let rec instrument_clauses
   | [] -> return []
 ;;
 
-let instrument_odefa (odefa_ast : expr) : expr =
-  let (monad_val : expr m) =
+let instrument_odefa (odefa_ast : expr) : (expr * var Var_map.t) =
+  let (monad_val : (expr * var Var_map.t) m) =
     (* Transform odefa program *)
     let Expr(odefa_clist) = odefa_ast in
     let%bind trans_clist = instrument_clauses odefa_clist in
@@ -221,7 +228,8 @@ let instrument_odefa (odefa_ast : expr) : expr =
     let%bind fresh_str = freshness_string in
     let result_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
     let result_clause = Ast.Clause(result_var, Ast.Var_body(last_var)) in
-    return @@ Expr(trans_clist @ [result_clause])
+    let%bind inst_map = instrument_map in
+    return (Expr(trans_clist @ [result_clause]), inst_map)
   in
   let context = Translator_utils.new_translation_context () in
   run context monad_val

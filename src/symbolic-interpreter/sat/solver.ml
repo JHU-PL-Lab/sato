@@ -802,6 +802,7 @@ let rec _find_errors solver symbol constrained_clause =
         | hd :: tl -> (hd, tl)
         | [] -> raise @@ Utils.Invariant_failure "At least one variable must exist in alias chain"
       in
+      let alias_chain = List.rev alias_chain in
       let match_value =
         try
           Symbol_map.find symbol solver.value_constraints_by_symbol
