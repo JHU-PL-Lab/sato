@@ -224,6 +224,35 @@ let _get_value_source solver symbol : value_source option =
       (Printf.sprintf "%s has multiple value definitions" (show_symbol symbol))
 ;;
 
+let _symbolic_to_concrete_value (val_src : value_source) : clause_body =
+  match val_src with
+  | Constraint.Value v ->
+    begin
+    match v with
+    | Int n -> Value_body (Value_int n)
+    | Bool b -> Value_body (Value_bool b)
+    | Function f -> Value_body (Value_function f)
+    | Record r ->
+      (* Eliminate relative stack info *)
+      let r' =
+        r
+        |> Ident_map.enum
+        |> Enum.map (fun (lbl, (Symbol (x, _))) -> (lbl, Var (x, None)))
+        |> Ident_map.of_enum
+      in
+      Value_body (Value_record (Record_value r'))
+    end
+  | Constraint.Input -> Input_body
+  | Constraint.Binop (x1, op, x2) ->
+    let (Symbol (i1, _)) = x1 in
+    let (Symbol (i2, _)) = x2 in
+    Binary_operation_body (Var(i1, None), op, Var(i2, None))
+  | Constraint.Match (x', pattern) ->
+    let (Symbol (id, _)) = x' in
+    Match_body (Var(id, None), pattern)
+  | Constraint.Abort -> Abort_body []
+;;
+
 (* **** Constraint set operations **** *)
 
 let rec _add_constraints_and_close
@@ -767,7 +796,12 @@ let rec _find_errors solver symbol constrained_clause =
       lazy_logger `trace (fun () ->
         Printf.sprintf "Pattern match on symbol %s" (show_symbol symbol));
       let (match_symb, pattern) = m in
-      let alias_chain = _construct_alias_chain solver match_symb in
+      let a_chain = _construct_alias_chain solver match_symb in
+      let (Symbol(v, _), alias_chain) =
+        match List.rev a_chain with
+        | hd :: tl -> (hd, tl)
+        | [] -> raise @@ Utils.Invariant_failure "At least one variable must exist in alias chain"
+      in
       let match_value =
         try
           Symbol_map.find symbol solver.value_constraints_by_symbol
@@ -789,13 +823,12 @@ let rec _find_errors solver symbol constrained_clause =
         let actual_type = _get_type solver match_symb in
         if not (Ast.Type_signature.subtype actual_type expected_type) then begin
           let match_error = {
-            err_match_ident = (fun (Symbol(x, _)) -> x) symbol;
             err_match_aliases = List.map (fun (Symbol(x, _)) -> x) alias_chain;
             err_match_clause = constrained_clause;
             err_match_value =
               begin
                 match _get_value_source solver match_symb with
-                | Some vs -> vs
+                | Some vs -> Ast.Clause (Var (v, None), _symbolic_to_concrete_value vs)
                 | None -> raise @@ Utils.Invariant_failure
                   (Printf.sprintf "%s has no value in constraint set!"
                     (show_symbol match_symb))

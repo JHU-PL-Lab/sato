@@ -11,6 +11,7 @@
     z3
     odefa.ast
     odefa.ddpa
+    odefa.parser
     odefa.utils
   )
   (preprocess

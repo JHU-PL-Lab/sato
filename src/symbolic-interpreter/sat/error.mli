@@ -20,14 +20,11 @@ type error_binop = {
 ;;
 
 type error_match = {
-  (** The identifier of the pattern match clause. *)
-  err_match_ident : ident;
-
   (** The alias chain of the ident begin matched upon. *)
   err_match_aliases : ident list;
 
   (** The value of the ident that is being matched. *)
-  err_match_value : value_source;
+  err_match_value : clause;
 
   (** The clause that is being constrained by the abort's conditional. *)
   err_match_clause : clause;
@@ -74,6 +71,9 @@ module type Error_tree = sig
 
   (** Returns true if the error tree is empty, false otherwise. *)
   val is_empty : t -> bool;;
+
+  (** Parses a string into an error tree *)
+  val parse : string -> t;;
 end;;
 
 module Error_tree : Error_tree;;
