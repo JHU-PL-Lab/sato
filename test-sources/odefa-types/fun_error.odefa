@@ -1,6 +1,6 @@
 # EXPECT-WELL-FORMED
 # EXPECT-STUCK
-# EXPECT-TYPE-ERROR ~result [] [ "ans = zero zero" "zero = 0" "fun" "int" ]
+# EXPECT-TYPE-ERROR ~result [] : [ "zero = 0" "ans = zero zero" "fun" "int" ]
 # EXPECT-ALL-TYPE-ERRORS-FOUND
 
 zero = 0;

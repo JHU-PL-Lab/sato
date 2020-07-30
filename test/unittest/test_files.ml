@@ -363,8 +363,11 @@ let _parse_type_errors args_lst =
               Type_error_generator.Answer.answer_from_string type_errs
             in
             Expect_type_error (var_name, type_errs)
-          with Generator_answer.Parse_failure ->
-            raise @@ Expectation_parse_failure "Cannot parse type error string"
+          with
+            | Generator_answer.Parse_failure | Not_found -> (* TODO: Catch Not_found in answer_from_string *)
+              raise @@ Expectation_parse_failure "Cannot parse type error string"
+            | Odefa_symbolic_interpreter.Error.Parse_failure s ->
+              raise @@ Expectation_parse_failure s
         end
       | [] ->
         raise @@ Expectation_parse_failure "No type errors listed"
@@ -881,6 +884,7 @@ let test_sato
     (filename : string)
     (expect_left : test_expectation list ref)
     (stack_module_choice : expectation_stack_decision)
+    (instrument_map : var Var_map.t)
     (expr : expr)
   : unit =
   let observation = _observation filename in
@@ -956,9 +960,13 @@ let test_sato
         (steps : int)
       : unit =
       let _ = steps in
-      total_err_lst := (x, type_errors) :: (!total_err_lst);
+      let type_errors' =
+        Type_error_generator.Answer.remove_instrument_vars
+          instrument_map type_errors
+      in
+      total_err_lst := (x, type_errors') :: (!total_err_lst);
       total_err_num :=
-        !total_err_num + Type_error_generator.Answer.count type_errors;
+        !total_err_num + Type_error_generator.Answer.count type_errors';
     in
     let _ =
       Type_error_generator.generate_answers
@@ -993,8 +1001,8 @@ let test_sato
           in
           Some failure_msg
         else
-          let _ = total_err_lst :=
-            List.remove !total_err_lst type_err_expect
+          let () =
+            total_err_lst := List.remove !total_err_lst type_err_expect
           in
           None
       )
@@ -1041,16 +1049,16 @@ let make_test filename expectations =
     let expectations_left = ref expectations in
     (* Translate code if it's natodefa *)
     let is_nato = String.ends_with filename "natodefa" in
-    let (expr, instrumented_expr) =
+    let (expr, instrumented_expr, instrument_map) =
       if is_nato then
         let on_expr = File.with_file_in filename On_parse.parse_program in
-        let e = On_to_odefa.translate on_expr in
-        let ins_e = Type_instrumentation.instrument_odefa e in
-        (e, ins_e)
+        let (e, _) = On_to_odefa.translate on_expr in
+        let (inst_e, inst_map) = Type_instrumentation.instrument_odefa e in
+        (e, inst_e, inst_map)
       else
         let e = File.with_file_in filename Parser.parse_program in
-        let ins_e = Type_instrumentation.instrument_odefa e in
-        (e, ins_e)
+        let (inst_e, inst_map) = Type_instrumentation.instrument_odefa e in
+        (e, inst_e, inst_map)
     in
     (* Decide what kind of analysis to perform. *)
     let module_choice = ref Default_stack in
@@ -1061,7 +1069,7 @@ let make_test filename expectations =
     (* TODO: If no tests for a certain program exist, don't run said program. *)
     test_ddpa filename expectations_left !module_choice expr;
     test_ddse filename expectations_left !module_choice expr;
-    test_sato filename expectations_left !module_choice instrumented_expr;
+    test_sato filename expectations_left !module_choice instrument_map instrumented_expr;
     (* Now assert that every expectation has been addressed. *)
     match !expectations_left with
     | [] -> ()
@@ -1150,8 +1158,8 @@ let make_tests_from_dir pathname =
     |> Enum.filter (fun f -> not @@ Sys.is_directory f)
     |> Enum.filter (fun f ->
         (List.fold_left
-           (fun acc -> fun legal_ext -> acc || (String.ends_with f legal_ext))
-           false legal_exts))
+          (fun acc -> fun legal_ext -> acc || (String.ends_with f legal_ext))
+          false legal_exts))
     |> Enum.map wrap_make_test_from
     |> List.of_enum
   else
@@ -1162,11 +1170,11 @@ let make_tests_from_dir pathname =
 let tests =
   "Test_source_files" >::: (
     make_tests_from_dir "test-sources"
-    @ make_tests_from_dir "test-sources/odefa-basic"
-    @ make_tests_from_dir "test-sources/odefa-fails"
-    @ make_tests_from_dir "test-sources/odefa-input"
-    @ make_tests_from_dir "test-sources/odefa-stack"
-    (* @ make_tests_from_dir "test-sources/odefa-types" *)
+    (* @ make_tests_from_dir "test-sources/odefa-basic" *)
+    (* @ make_tests_from_dir "test-sources/odefa-fails" *)
+    (* @ make_tests_from_dir "test-sources/odefa-input" *)
+    (* @ make_tests_from_dir "test-sources/odefa-stack" *)
+    @ make_tests_from_dir "test-sources/odefa-types"
     (*
     make_tests_from_dir "test-sources/natodefa-basic" @
     make_tests_from_dir "test-sources/natodefa-input" *)

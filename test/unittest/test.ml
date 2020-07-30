@@ -28,7 +28,8 @@ let () =
         Logger_utils.set_default_logging_level @@
         parse_module_level logging_instructions
     with
-    | Not_found -> ()
+    | Not_found ->
+      ()
   end;
   run_test_tt_main ("Tests" >::: all_tests)
 ;;

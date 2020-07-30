@@ -1,5 +1,5 @@
 # EXPECT-WELL-FORMED
-# EXPECT-TYPE-ERROR ~result [] [ "sum = x + y" "c = true" "int" "bool" ] [ "sum = x + y" "b = {}" "int" "{}" ]
+# EXPECT-TYPE-ERROR ~result [] : [ "y = c = true" "sum = x + y" "int" "bool" ] [ "y = b = {}" "sum = x + y" "int" "{}" ]
 # EXPECT-ALL-TYPE-ERRORS-FOUND
 
 # XXX: Interesting that both type errors can be detected
