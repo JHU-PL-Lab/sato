@@ -3,6 +3,8 @@ open Ast;;
 
 open Constraint;;
 
+exception Parse_failure of string;;
+
 type error_binop = {
   (** The identifier of the binop clause. *)
   err_binop_ident : ident;

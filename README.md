@@ -57,7 +57,7 @@ TODO
   - [x] ~~Report actual knock-on errors instead of the count?~~
   - [x] No need to report (unreachable) knock-on errors
   - [ ] If incorrectly-typed var was a function argument, report call site instead of original definition
-  - [ ] Report original binop instead of new constrained binop as value source
+  - [x] Report original binop instead of new constrained binop as value source (at least for odefa)
 - [x] Refactor the solver
   - [x] ~~Replace separate `symbol_type` with `type_sig`~~ (Added comments instead)
   - [x] Add Input to values
@@ -65,10 +65,13 @@ TODO
   - [x] Remove #true# clauses
   - [x] Add appropriate variant type for input values
   - [x] DON'T add new types for inputs
+- [ ] Fix bug where record projection errors are not caught
+  - [ ] Idea - introduce value of type Bottom to AST/Abstract AST
 - [ ] Encode aborts with the relevant conditional identifiers
-  - [ ] Check to ensure that conditionals are valid (ie. are nested and include the abort as the final retv), either before or during lookup.
-  - [ ] Extract predicate and use constraint set to extract patterns + boolean operators
-  - [ ] Extract return values; retvs from true branches are what the abort constrains
+  - [x] Check to ensure that conditionals are valid (ie. are nested and include the abort as the final retv), either before or during lookup.
+  - [x] Extract predicate and use constraint set to extract patterns + boolean operators
+  - [ ] Continue to refine predicate tree construction
+  - [x] Extract return values; retvs from true branches are what the abort constrains
 - [ ] More errors
   - [ ] ~~Add "Primitive" pattern/type for bool + int "=="~~ Use an `or` statement instead
   - [ ] Divide by zero (new nonzero pattern + type vs. nested constraints)
@@ -90,23 +93,3 @@ TODO
 - [ ] Achieve 100% coverage in finding errors (ultimate goal...)
   - [ ] Run test from back, then if it gets stuck, restart in the middle of the program in a non-covered portion of code
   - [x] \(This is a key advantage over forward analyses - no need to know values starting from the middle\)
-
-```
-m11 = a ~ int;
-m12 = b ~ int;
-m1 = m11 and m12;
-c_binop = m1 ? ( m2 = b <> 0;
-                 c_binop' = m2 ? ( c = a / b ) : ( ab2 = abort [ c_binop' ] )
-           ) : ( ab1 = abort [ c_binop ] )
-
------
-
-m11 = a ~ int;
-m12 = b ~ int;
-m1 = m11 and m12;
-m21 = a ~ bool;
-m22 = b ~ bool;
-m2 = m21 and m22;
-m = m1 or m2;
-c_binop = m ? ( c = a == b ) : ( ab = abort [ m ] )
-```

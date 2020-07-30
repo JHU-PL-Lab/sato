@@ -59,6 +59,7 @@ module Input_sequence : Answer = struct
     let (input_seq, ab_symb_list) =
       Generator_utils.input_sequence_from_result e x result
     in
+    (* lazy_logger `trace (fun () -> "Abort symbols: " ^ (String.join ", " @@ List.map show_symbol ab_symb_list)); *)
     if List.is_empty ab_symb_list then
       Some input_seq
     else

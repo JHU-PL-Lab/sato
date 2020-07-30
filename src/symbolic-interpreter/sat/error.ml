@@ -226,8 +226,8 @@ module Error_tree : Error_tree = struct
     let expr_lst =
       try
         Odefa_parser.Parser.parse_expression_string cl_str
-      with Odefa_parser.Parser.Parse_error _ ->
-        raise @@ Parse_failure "cannot parse clause"
+      with Odefa_parser.Parser.Parse_error (_, _, _, _) ->
+        raise @@ Parse_failure ("cannot parse clause " ^ cl_str)
     in
     match expr_lst with
     | [expr] ->
