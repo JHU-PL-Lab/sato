@@ -186,27 +186,37 @@ module Type_errors : Answer = struct
     | Error_binop _ -> error
     | Error_match err ->
       begin
-        (* TODO: Deal with the final clause *)
-        let err_match_aliases' =
-          List.filter
-            (fun a ->
-              not @@ Var_map.mem (Var (a, None)) inst_var_map
-            )
-            err.err_match_aliases
-        in
-        let err_match_clause' =
-          let cls = err.err_match_clause in
-          let (Clause (v, body)) = cls in
+        let (Clause (v_val, b_val)) = err.err_match_value in
+        let (Clause (v_match, b_match)) = err.err_match_clause in
+        let match_aliases = err.err_match_aliases in
+        let (value_cls', match_aliases') =
           try
-            let v' = Var_map.find v inst_var_map in
-            Clause (v', body)
+            (* Replace the var in the value clause and remove extra var in
+               alias chain *)
+            let v_val' = Var_map.find v_val inst_var_map in
+            let Var (v_ident', _) = v_val' in
+            (Clause (v_val', b_val), List.remove match_aliases v_ident')
           with Not_found ->
-            cls
+            (Clause (v_val, b_val), match_aliases)
+        in
+        let match_aliases'' =
+          List.filter
+            (* Stacks aren't set during instrumenting, so we're safe *)
+            (fun a -> not @@ Var_map.mem (Var (a, None)) inst_var_map)
+            match_aliases'
+        in
+        let match_cls' =
+          try
+            let v_match' = Var_map.find v_match inst_var_map in
+            Clause (v_match', b_match)
+          with Not_found ->
+            Clause (v_match, b_match)
         in
         Error_match {
           err with
-          err_match_aliases = err_match_aliases';
-          err_match_clause = err_match_clause';
+          err_match_aliases = match_aliases'';
+          err_match_clause = match_cls';
+          err_match_value = value_cls';
         }
       end
   ;;
