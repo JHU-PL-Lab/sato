@@ -814,13 +814,20 @@ struct
         let%bind ret_symbol = recurse (x' :: lookup_stack') acl1 relstack in
         (* Alias the call site with the return symbol *)
         let lookup_symbol = Symbol (x, relstack) in
-        lazy_logger `trace (fun () ->
-          Printf.sprintf "Conditional Bottom - True rule returns %s = %s"
-            (show_symbol lookup_symbol) (show_symbol ret_symbol));
-        let%bind () = record_constraint @@
-          Constraint.Constraint_alias (lookup_symbol, ret_symbol)
-        in
-        return lookup_symbol
+        if List.is_empty lookup_stack' then begin
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Conditional Bottom - True rule returns %s = %s"
+              (show_symbol lookup_symbol) (show_symbol ret_symbol));
+          let%bind () = record_constraint @@
+            Constraint.Constraint_alias (lookup_symbol, ret_symbol)
+          in
+          return lookup_symbol
+        end else begin
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Conditional Bottom - True rule looks up %s, returns %s"
+              (show_symbol lookup_symbol) (show_symbol ret_symbol));
+          return ret_symbol
+        end
       end;
 
       (* ### Conditional Bottom - False rule ### *)
@@ -847,13 +854,20 @@ struct
         let%bind ret_symbol = recurse (x' :: lookup_stack') acl1 relstack in
         (* Alias the call site with the return symbol *)
         let lookup_symbol = Symbol (x, relstack) in
-        lazy_logger `trace (fun () ->
-          Printf.sprintf "Conditional Bottom - False rule returns %s = %s"
-            (show_symbol lookup_symbol) (show_symbol ret_symbol));
-        let%bind () = record_constraint @@
-          Constraint.Constraint_alias (lookup_symbol, ret_symbol)
-        in
-        return lookup_symbol
+        if List.is_empty lookup_stack' then begin
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Conditional Bottom - False rule returns %s = %s"
+              (show_symbol lookup_symbol) (show_symbol ret_symbol));
+          let%bind () = record_constraint @@
+            Constraint.Constraint_alias (lookup_symbol, ret_symbol)
+          in
+          return lookup_symbol
+        end else begin
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Conditional Bottom - False rule looks up %s, returns %s"
+              (show_symbol lookup_symbol) (show_symbol ret_symbol));
+          return ret_symbol
+        end
       end;
 
       (* Record projection handling (not a written rule) *)
