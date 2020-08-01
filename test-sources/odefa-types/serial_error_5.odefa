@@ -1,7 +1,8 @@
 # EXPECT-WELL-FORMED
 # EXPECT-STUCK
-# EXPECT-TYPE-ERROR ~result [] : [ "x = zero = 0" "rx = x and tru" "bool" "int" ] [ "y = one = 1" "ry = y or fls" "bool" "int" ]
-# EXPECT-ALL-TYPE-ERRORS-FOUND
+# EXPECT-TYPE-ERROR-COUNT 2
+# EXPECT-TYPE-ERROR ~result [] : "match" "x" "zero = 0" "rx = x and tru" "bool" "int"
+# EXPECT-TYPE-ERROR ~result [] : "match" "y" "one = 1" "ry = y or fls" "bool" "int"
 
 zero = 0;
 one = 1;

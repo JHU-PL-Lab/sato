@@ -38,14 +38,13 @@
 
    - EXPECT-NO-TYPE-ERRORS: We expect not to find any type errors using Sato.
 
-   - EXPECT-TYPE-ERROR <var> <input seq> <type errors>: We expect that,
+   - EXPECT-TYPE-ERROR-COUNT <num>: We expect to find <num> type errors using
+      Sato.
+    
+   - EXPECT-TYPE-ERROR <var> <input seq> : <type errors>: We expect that,
       looking up from <var>, to encounter all the type errors in <type errors>
       associated with the input sequence <input seq>. Type erro syntax has
       the form ["<operation>" "<definition>" "<expected>" "<actual>"].
-
-   - EXPECT-ALL-TYPE-ERRORS-FOUND: We expect that all the type errors we've
-      found were the ones we listed in EXPECT-TYPE-ERROR expections, with
-      no spurious errors.
 *)
 
 (* FIXME: purge the term "inconsistency" *)
@@ -82,6 +81,8 @@ exception File_test_creation_failure of string;;
     sequences have been generated. *)
 
 exception Input_generation_complete;;
+
+module String_map = Map.Make(String);;
 
 module Input_generator = Generator.Make(Input_sequence);;
 module Type_error_generator = Generator.Make(Type_errors);;
@@ -123,11 +124,12 @@ type test_expectation =
   | Expect_required_input_sequence_generation_steps of int
   (* Are there type errors? *)
   | Expect_no_type_errors
+  (* How many type errors? *)
+  | Expect_type_error_count of int
+  (* Which type errors? *)
   | Expect_type_error of
     string * (* variable to look up from *)
     Type_error_generator.Answer.t (* the sequence of type errors *)
-  (* Are there no type errors other than the ones that were expected? *)
-  | Expect_all_type_errors_found
 ;;
 
 (* **** Expectation utility functions **** *)
@@ -157,14 +159,15 @@ let pp_test_expectation formatter expectation =
       x
       (string_of_input_sequences inputs)
       (if complete then " (and no others)" else "")
-  | Expect_required_input_sequence_generation_steps(n) ->
+  | Expect_required_input_sequence_generation_steps n ->
     Format.fprintf formatter "Expect input sequence generation steps = %d" n
-  | Expect_no_type_errors -> Format.pp_print_string formatter "Expect_no_type_errors"
+  | Expect_no_type_errors ->
+    Format.pp_print_string formatter "Expect_no_type_errors"
+  | Expect_type_error_count n ->
+    Format.fprintf formatter "Expect %d type errors" n
   | Expect_type_error (_, errors) ->
     Format.fprintf formatter "Expect_type_error %s"
       (Type_error_generator.Answer.show errors)
-  | Expect_all_type_errors_found ->
-    Format.pp_print_string formatter "Expect_all_type_errors_found"
 ;;
 
 let name_of_expectation expectation =
@@ -200,8 +203,10 @@ let name_of_expectation expectation =
   | Expect_required_input_sequence_generation_steps(n) ->
     Printf.sprintf "should only require %d steps to discover inputs" n
   | Expect_no_type_errors -> "should have no type errors"
-  | Expect_type_error (_, _) -> "should have a type error" (* FIXME *)
-  | Expect_all_type_errors_found -> "should have found all listed type errors"
+  | Expect_type_error_count n ->
+    Printf.sprintf "should have %d type errors" n
+  | Expect_type_error (x, _) ->
+    Printf.sprintf "should have type error when looking up %s" x
 ;;
 
 (* **** Expectation parsing **** *)
@@ -343,6 +348,17 @@ let _parse_gen_steps args =
   end
 ;;
 
+let _parse_error_count arg_str =
+  let count_str = assert_one_arg arg_str in
+  begin
+    try
+      Expect_type_error_count (int_of_string count_str)
+    with Failure _ ->
+      raise @@
+        Expectation_parse_failure ("Cannot parse string " ^ count_str)
+  end
+;;
+
 let _parse_type_errors args_lst =
   let args_lst' =
     String_utils.whitespace_split ~max:2 (String.join "" args_lst)
@@ -418,11 +434,10 @@ let parse_expectation str =
       | "EXPECT-NO-TYPE-ERRORS" :: args_part ->
         assert_no_args args_part;
         Expect_no_type_errors
+      | "EXPECT-TYPE-ERROR-COUNT" :: args_part ->
+        _parse_error_count args_part;
       | "EXPECT-TYPE-ERROR" :: args_part ->
         _parse_type_errors args_part
-      | "EXPECT-ALL-TYPE-ERRORS-FOUND" :: args_part ->
-        assert_no_args args_part;
-        Expect_all_type_errors_found
       | _ ->
         raise @@ Expectation_not_found
     in
@@ -569,10 +584,10 @@ let observe_no_type_errors_found expect_present expectation =
   | _ -> Some expectation
 ;;
 
-let observe_all_type_errors_found expect_present expectation =
+let observe_n_errors_found expect_present expectation =
   match expectation with
-  | Expect_all_type_errors_found ->
-    expect_present := true;
+  | Expect_type_error_count n ->
+    expect_present := Some n;
     None
   | _ -> Some expectation
 ;;
@@ -732,9 +747,10 @@ let test_ddse
     (filename : string)
     (expect_left : test_expectation list ref)
     (stack_module_choice : expectation_stack_decision)
+    (input_generation_steps : int)
     (expr: Ast.expr)
   : unit =
-  let observation = _observation filename in
+  let _ = filename in
   (* Configure DDSE options. *)
   (* Select the appropriate context stack for DDPA. *)
   let chosen_module_option =
@@ -743,13 +759,6 @@ let test_ddse
       Some (module Ddpa_single_element_stack.Stack :
               Ddpa_context_stack.Context_stack)
     | Chosen_stack value -> value
-  in
-  (* Configure the max number of steps. *)
-  let input_generation_steps_ref = ref None in
-  expect_left := observation !expect_left
-    (observe_input_generation_steps input_generation_steps_ref);
-  let input_generation_steps =
-    Option.default 10000 !input_generation_steps_ref (* TODO: Increase from 10000 *)
   in
   (* Set context model *)
   let configuration =
@@ -787,11 +796,13 @@ let test_ddse
       expr
       (Ident x)
     in
+    (* let found_input_sequences = ref [] in *)
     let remaining_input_seq = ref inputs in
     let callback
         (sequence : Input_generator.Answer.t)
         (_steps : int)
       : unit =
+      (* found_input_sequences := sequence :: (!found_input_sequences); *)
       if List.mem sequence !remaining_input_seq then begin
         (* An input sequence was generated that was expected. *)
         remaining_input_seq := List.remove !remaining_input_seq sequence;
@@ -884,6 +895,7 @@ let test_sato
     (filename : string)
     (expect_left : test_expectation list ref)
     (stack_module_choice : expectation_stack_decision)
+    (generation_steps : int)
     (instrument_map : var Var_map.t)
     (expr : expr)
   : unit =
@@ -896,13 +908,6 @@ let test_sato
       Some (module Ddpa_single_element_stack.Stack :
               Ddpa_context_stack.Context_stack)
     | Chosen_stack value -> value
-  in
-  (* Configure the max number of steps. *)
-  let generation_steps_ref = ref None in
-  expect_left := observation !expect_left
-    (observe_input_generation_steps generation_steps_ref);
-  let generation_steps =
-    Option.default 10000 !generation_steps_ref (* TODO: Increase from 10000 *)
   in
   (* Configure the context model *)
   let configuration =
@@ -979,53 +984,65 @@ let test_sato
   let _ = List.map run_type_checker target_var_list in
   (* Report failed expectations *)
   let no_err_expect = ref false in
-  let all_err_expect = ref false in
+  let n_err_expect = ref None in
   expect_left :=
     observation !expect_left (observe_no_type_errors_found no_err_expect);
   expect_left :=
-    observation !expect_left (observe_all_type_errors_found all_err_expect);
-  let violate_no_type_err_expect_msg =
+    observation !expect_left (observe_n_errors_found n_err_expect);
+  let violate_no_expected_err_msg =
     if !no_err_expect && !total_err_num > 0 then
         ["expected no type errors, but type errors found"]
       else
         []
   in
-  let unfound_type_err_msgs =
+  let violate_n_expected_err_msg =
+    match !n_err_expect with
+    | Some n ->
+      begin
+        if !total_err_num <> n then
+          [
+            "expected " ^ (string_of_int n) ^
+            " errors, but " ^ (string_of_int @@ !total_err_num) ^
+            " errors found"
+          ]
+        else
+          []
+      end
+    | None -> []
+  in
+  let total_err_multimap =
+    List.fold_left
+      (fun map (expected_x, expected_err) ->
+        let err_list = String_map.find_default [] expected_x map in
+        let err_list' = expected_err :: err_list in
+        String_map.add expected_x err_list' map
+      )
+      String_map.empty
+      !total_err_lst
+  in
+  let unfound_expected_errs =
     List.filter_map
       (fun type_err_expect ->
-        if not (List.mem type_err_expect !total_err_lst) then
-          let (_, err) = type_err_expect in
-          let failure_msg =
-            "expected type errors not found:\n" ^
-            (Type_error_generator.Answer.show err)
+        let (expected_x, expected_err) = type_err_expect in
+        try
+          let errors = String_map.find expected_x total_err_multimap in
+          let is_mem =
+            Type_error_generator.Answer.test_mem errors expected_err
           in
-          Some failure_msg
-        else
-          let () =
-            total_err_lst := List.remove !total_err_lst type_err_expect
-          in
-          None
+          if not is_mem then Some expected_err else None
+        with Not_found -> None
       )
       type_err_expectations
   in
-  let spurious_type_err_msgs =
-    if !all_err_expect then
-      List.map
-        (fun (_, err) ->
-          let failure_msg =
-            "spurious type errors found:\n" ^
-            (Type_error_generator.Answer.show err)
-          in
-          failure_msg
-        )
-        !total_err_lst
-    else
-      []
+  let unfound_expected_errs_msg =
+    List.map
+      (fun e -> "error not found:\n" ^ (Type_error_generator.Answer.show e))
+      unfound_expected_errs
   in
   let err_msgs =
-    violate_no_type_err_expect_msg
-    @ unfound_type_err_msgs
-    @ spurious_type_err_msgs
+    violate_no_expected_err_msg @
+    violate_n_expected_err_msg @
+    unfound_expected_errs_msg
   in
   if List.is_empty err_msgs then
     ()
@@ -1049,27 +1066,38 @@ let make_test filename expectations =
     let expectations_left = ref expectations in
     (* Translate code if it's natodefa *)
     let is_nato = String.ends_with filename "natodefa" in
-    let (expr, instrumented_expr, instrument_map) =
-      if is_nato then
+    let (expr, i_expr, i_map) =
+      if is_nato then begin
         let on_expr = File.with_file_in filename On_parse.parse_program in
         let (e, _) = On_to_odefa.translate on_expr in
-        let (inst_e, inst_map) = Type_instrumentation.instrument_odefa e in
-        (e, inst_e, inst_map)
-      else
+        let (instrumented_e, instrument_map) =
+          Type_instrumentation.instrument_odefa e
+        in
+        (e, instrumented_e, instrument_map)
+      end else begin
         let e = File.with_file_in filename Parser.parse_program in
-        let (inst_e, inst_map) = Type_instrumentation.instrument_odefa e in
-        (e, inst_e, inst_map)
+        let (instrumented_e, instrument_map) =
+          Type_instrumentation.instrument_odefa e
+        in
+        (e, instrumented_e, instrument_map)
+      end
     in
     (* Decide what kind of analysis to perform. *)
     let module_choice = ref Default_stack in
     let obs = _observation filename in
     expectations_left :=
       obs !expectations_left (observe_analysis_stack_selection module_choice);
+    (* Configure the max number of input generation steps. *)
+    let gen_steps_ref = ref None in
+    expectations_left := obs !expectations_left
+      (observe_input_generation_steps gen_steps_ref);
+    let gen_steps =
+      Option.default 10000 !gen_steps_ref (* TODO: Increase from 10000 *)
+    in
     (* Perform tests *)
-    (* TODO: If no tests for a certain program exist, don't run said program. *)
     test_ddpa filename expectations_left !module_choice expr;
-    test_ddse filename expectations_left !module_choice expr;
-    test_sato filename expectations_left !module_choice instrument_map instrumented_expr;
+    test_ddse filename expectations_left !module_choice gen_steps expr;
+    test_sato filename expectations_left !module_choice gen_steps i_map i_expr;
     (* Now assert that every expectation has been addressed. *)
     match !expectations_left with
     | [] -> ()

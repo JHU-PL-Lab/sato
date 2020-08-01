@@ -1,6 +1,7 @@
 # EXPECT-WELL-FORMED
-# EXPECT-TYPE-ERROR ~result [0, 0] : [ "b = false" "sum1 = a + b" "int" "bool" ] [ "d = false" "sum2 = c + d" "int" "bool" ]
-# EXPECT-ALL-TYPE-ERRORS-FOUND
+# EXPECT-TYPE-ERROR-COUNT 2
+# EXPECT-TYPE-ERROR ~result [0, 0] : "match" "" "b = false" "sum1 = a + b" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [0, 0] : "match" "" "d = false" "sum2 = c + d" "int" "bool"
 
 a = input;
 b = false;

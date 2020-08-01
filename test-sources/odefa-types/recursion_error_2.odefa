@@ -1,8 +1,8 @@
 # EXPECT-WELL-FORMED
 # EXPECT-STUCK
 # EXPECT-ANALYSIS-STACK-IS 4ddpa
-# EXPECT-TYPE-ERROR ~result [] : [ "tru = true" "v = a - tru" "int" "bool" ]
-# EXPECT-ALL-TYPE-ERRORS-FOUND
+# EXPECT-TYPE-ERROR-COUNT 1
+# EXPECT-TYPE-ERROR ~result [] : "match" "" "tru = true" "v = a - tru" "int" "bool"
 
 tru = true;
 one = 1;

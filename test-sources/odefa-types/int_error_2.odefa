@@ -1,7 +1,7 @@
 # EXPECT-WELL-FORMED
 # EXPECT-STUCK
-# EXPECT-TYPE-ERROR ~result [] : [ "b = tru and fls" "c = a + b" "int" "bool" ]
-# EXPECT-ALL-TYPE-ERRORS-FOUND
+# EXPECT-TYPE-ERROR-COUNT 1
+# EXPECT-TYPE-ERROR ~result [] : "match" "" "b = tru and fls" "c = a + b" "int" "bool"
 
 zero = 0;
 one = 1;

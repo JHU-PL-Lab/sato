@@ -1,7 +1,5 @@
 # EXPECT-WELL-FORMED
 # EXPECT-STUCK
-# # EXPECT-TYPE-ERROR ~result [] [ "c = a / b" "b = 0" "nonzero" "int" ]
-# # EXPECT-ALL-TYPE-ERRORS-FOUND
 
 a = 2;
 b = 0;

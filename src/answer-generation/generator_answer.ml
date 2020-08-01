@@ -26,6 +26,8 @@ module type Answer = sig
   val count_list : t list -> int;;
   val generation_successful : t -> bool;;
   val remove_instrument_vars : var Var_map.t -> t -> t;;
+  val test_string : t list -> string -> bool;;
+  val test_mem : t list -> t -> bool;;
 end;;
 
 (* Utility to parse int sequences separated by commas. *)
@@ -106,6 +108,21 @@ module Input_sequence : Answer = struct
   ;;
 
   let remove_instrument_vars (_ : var Var_map.t) (inputs : t) = inputs;;
+
+  let test_string input_sequence_list input_seq_list =
+    let input_seq = parse_comma_separated_ints input_seq_list in
+    input_sequence_list
+    |> List.filter
+        (fun input_opt ->
+          match input_opt with
+          | Some input -> input = input_seq
+          | None -> false
+        )
+    |> List.is_empty
+    |> Bool.not
+  ;;
+
+  let test_mem input_seq_list input_seq = List.mem input_seq input_seq_list;;
 end;;
 
 (* **** Type Errors **** *)
@@ -143,12 +160,16 @@ module Type_errors : Answer = struct
     errs
   ;;
 
+  (* Ex: [0, 1] : "a = b" "c = 2" "sum = a or z" "int" "bool" *)
   let answer_from_string arg_str =
-    (* Split on square brackets *)
-    let (input_str, errors) = String.split ~by:":" arg_str in
-    let (input_str, errors) = (String.trim input_str, String.trim errors) in
+    let (input_str, error_str) =
+      arg_str
+      |> String.split ~by:":"
+      |> (fun (i_str, e_str) -> (String.trim i_str, String.trim e_str))
+    in
     let inputs = parse_comma_separated_ints input_str in
-    let err_tree = Error_tree.parse errors in
+    let error = parse_error error_str in
+    let err_tree = Error_tree.singleton error in
     {
       err_input_seq = inputs;
       err_errors = [err_tree];
@@ -169,7 +190,12 @@ module Type_errors : Answer = struct
     end
   ;;
 
-  let count errors = List.length errors.err_errors;;
+  let count errors =
+    List.fold_left
+      (fun count err_tree -> count + (Error_tree.count err_tree))
+      0
+      errors.err_errors
+  ;;
 
   let count_list error_list =
     error_list
@@ -232,5 +258,40 @@ module Type_errors : Answer = struct
       error with
       err_errors = error_list';
     }
+  ;;
+
+  let test_string error_list error_str =
+    let (input_str, error_str) = String.split ~by:":" error_str in
+    let input_seq = parse_comma_separated_ints input_str in
+    let error = parse_error error_str in
+    let error_assoc_list =
+      List.map
+        (fun errors -> (errors.err_input_seq, errors.err_errors))
+        error_list
+    in
+    let error_tree_list = List.assoc input_seq error_assoc_list in
+    error_tree_list
+    |> List.filter (Error_tree.mem error)
+    |> List.is_empty
+    |> Bool.not
+  ;;
+
+  let test_mem (error_list: t list) (error: t) =
+    let input_seq = error.err_input_seq in
+    let error_trees = error.err_errors in
+    let error_assoc_list =
+      List.map
+        (fun err -> (err.err_input_seq, err.err_errors))
+        error_list
+    in
+    let error_tree_list = List.assoc input_seq error_assoc_list in
+    match error_trees with
+    | [error_tree] ->
+      error_tree_list
+      |> List.filter (Error_tree.mem_singleton error_tree)
+      |> List.is_empty
+      |> Bool.not
+    | _ ->
+      failwith "test_mem can only test single error"
   ;;
 end;;

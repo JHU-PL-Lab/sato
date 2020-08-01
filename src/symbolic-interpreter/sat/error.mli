@@ -45,11 +45,15 @@ type error =
   | Error_match of error_match
 ;;
 
+val parse_error : string -> error;;
+
 module type Error_tree = sig
   type t;;
 
   (** Create an error tree that contains a single error leaf node. *)
   val singleton : error -> t;;
+
+  val is_singleton : t -> bool;;
 
   (** Merge two error trees as if they are part of an AND operation.
       In an AND operation, all values must be true for the op to return true.
@@ -79,6 +83,15 @@ module type Error_tree = sig
 
   (** Maps a function over the errors in an error tree. *)
   val map : (error -> error) -> t -> t;;
+
+  (** Returns true if an error exists in the error tree, false otherwise. *)
+  val mem : error -> t -> bool;;
+
+  (** Same as mem, except that the first argument is a singleton error tree. *)
+  val mem_singleton : t -> t -> bool;;
+
+  (** Count the number of errors in the error tree. *)
+  val count : t -> int;;
 end;;
 
 module Error_tree : Error_tree;;

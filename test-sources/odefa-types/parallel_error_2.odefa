@@ -1,6 +1,7 @@
 # EXPECT-WELL-FORMED
 # EXPECT-INPUT-SEQUENCES-REACH x [ 0 ]
-# EXPECT-TYPE-ERROR ~result [0] : [ "r = a = input" "p = r.lbl" "{lbl}" "int" ]
+# EXPECT-TYPE-ERROR-COUNT 1
+# EXPECT-TYPE-ERROR ~result [0] : "match" "r" "a = input" "p = r.lbl" "{lbl}" "int"
 # EXPECT-ALL-TYPE-ERRORS-FOUND
 
 a = input;

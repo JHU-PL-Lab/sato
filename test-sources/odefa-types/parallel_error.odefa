@@ -1,7 +1,7 @@
 # EXPECT-WELL-FORMED
-# EXPECT-TYPE-ERROR ~result [0] : [ "a = true" "rf = a + b" "int" "bool" ]
-# EXPECT-TYPE-ERROR ~result [1] : [ "b = 1" "rg = a or b" "bool" "int" ]
-# EXPECT-ALL-TYPE-ERRORS-FOUND
+# EXPECT-TYPE-ERROR-COUNT 2
+# EXPECT-TYPE-ERROR ~result [0] : "match" "" "a = true" "rf = a + b" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [1] : "match" "" "b = 1" "rg = a or b" "bool" "int"
 
 a = true;
 b = 1;

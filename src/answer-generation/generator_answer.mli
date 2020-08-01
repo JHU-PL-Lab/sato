@@ -31,6 +31,10 @@ module type Answer = sig
   val generation_successful : t -> bool;;
 
   val remove_instrument_vars : Ast.var Ast.Var_map.t -> t -> t;;
+
+  val test_string : t list -> string -> bool;;
+
+  val test_mem : t list -> t -> bool;;
 end;;
 
 (** An input sequence for a single program flow of symbolic evaluation. *)

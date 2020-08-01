@@ -1,8 +1,10 @@
 # EXPECT-WELL-FORMED
 # EXPECT-STUCK
-# EXPECT-TYPE-ERROR ~result [] : [ "x = false" "z = x + y" "int" "bool" ] [ "y = false" "z = x + y" "int" "bool" ]
-# EXPECT-TYPE-ERROR foo [] : [ "x = false" "z = x + y" "int" "bool" ] [ "y = false" "z = x + y" "int" "bool" ]
-# EXPECT-ALL-TYPE-ERRORS-FOUND
+# EXPECT-TYPE-ERROR-COUNT 4
+# EXPECT-TYPE-ERROR ~result [] : "match" "" "x = false" "z = x + y" "int" "bool" 
+# EXPECT-TYPE-ERROR ~result [] : "match" "" "y = false" "z = x + y" "int" "bool"
+# EXPECT-TYPE-ERROR foo [] : "match" "" "x = false" "z = x + y" "int" "bool" 
+# EXPECT-TYPE-ERROR foo [] : "match" "" "y = false" "z = x + y" "int" "bool"
 
 x = false;
 y = false;

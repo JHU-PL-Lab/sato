@@ -1,6 +1,9 @@
 # EXPECT-WELL-FORMED
-# EXPECT-TYPE-ERROR ~result [0, -1] : [ "b = false" "sum1 = a + b" "int" "bool" ] [ "x = t = true" "rf = x + o" "int" "bool" ]
-# EXPECT-TYPE-ERROR ~result [0, 0] : [ "b = false" "sum1 = a + b" "int" "bool" ] [ "y = z = 0" "rg = y and t" "bool" "int" ]
+# EXPECT-TYPE-ERROR-COUNT 4
+# EXPECT-TYPE-ERROR ~result [0, -1] : "match" "" "b = false" "sum1 = a + b" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [0, -1] : "match" "x" "t = true" "rf = x + o" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [0, 0] : "match" "" "b = false" "sum1 = a + b" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [0, 0] : "match" "y" "z = 0" "rg = y and t" "bool" "int"
 # EXPECT-ALL-TYPE-ERRORS-FOUND
 
 z = 0;
