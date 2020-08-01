@@ -33,15 +33,6 @@ type contradiction =
   | MatchContradiction of symbol * symbol * Ast.pattern
 ;;
 
-(* Information relating to errors *)
-
-type type_error = {
-  terr_ident : symbol;
-  terr_value : Constraint.value_source;
-  terr_expected_type : Ast.type_sig;
-  terr_actual_type : Ast.type_sig;
-}
-
 (** An exception which is raised if a contradiction appears in a constraint set
     during closure. *)
 exception Contradiction of contradiction;;

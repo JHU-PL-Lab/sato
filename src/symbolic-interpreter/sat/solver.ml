@@ -22,13 +22,6 @@ type contradiction =
   | MatchContradiction of symbol * symbol * pattern
 ;;
 
-type type_error = {
-  terr_ident : symbol;
-  terr_value : Constraint.value_source;
-  terr_expected_type : Ast.type_sig;
-  terr_actual_type : Ast.type_sig;
-}
-
 exception Contradiction of contradiction;;
 
 module Symbol_to_symbol_multimap = Jhupllib.Multimap.Make(Symbol)(Symbol);;
