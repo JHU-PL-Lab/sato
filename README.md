@@ -74,10 +74,13 @@ TODO
   - [x] Extract return values; retvs from true branches are what the abort constrains
 - [ ] More errors
   - [ ] ~~Add "Primitive" pattern/type for bool + int "=="~~ Use an `or` statement instead
-  - [ ] Divide by zero (new nonzero pattern + type vs. nested constraints)
+  - [ ] Divide by zero (new nonzero pattern + type vs. nested constraints) - refinement types!
   - [ ] Match errors (conjunction vs. disjunction)
   - [ ] Asserts (including fancier types/predicates) (encode in odefa)
 - [x] Deal with aborts in the (regular) interpreter environment
+- [ ] Heuristic to identify higher-level errors (as opposed to strictly lower-level ones)
+  - [ ] Incorrect data structures (e.g. using lists wrong)
+  - [ ] Applying an incorrect variable to a function
 - [ ] Add undefined value (replaces above bullet point)
 - [ ] Add odefa-to-natodefa mapping
   - [ ] Variants, lists, and other advanced data structures
