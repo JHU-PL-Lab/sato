@@ -271,8 +271,7 @@ and map_value_vars (fn : Var.t -> Var.t) (v : value) : value =
   | Value_record(Record_value m) ->
     Value_record(Record_value(Ident_map.map fn m))
   | Value_function f -> Value_function(map_function_vars fn f)
-  | Value_int _ -> v
-  | Value_bool _ -> v
+  | Value_int _ | Value_bool _ | Value_bottom -> v
 
 and map_function_vars (fn : Var.t -> Var.t) (f : function_value)
   : function_value =
@@ -310,8 +309,7 @@ and transform_exprs_in_value (fn : expr -> expr) (v : value) : value =
   match (v : value) with
   | Value_record _ -> v
   | Value_function f -> Value_function(transform_exprs_in_function fn f)
-  | Value_int _ -> v
-  | Value_bool _ -> v
+  | Value_int _ | Value_bool _ | Value_bottom -> v
 
 and transform_exprs_in_function (fn : expr -> expr) (fv : function_value)
   : function_value =

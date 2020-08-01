@@ -76,10 +76,11 @@ let rec pp_function_value formatter (Function_value(x,_)) =
 
 and pp_value formatter v =
   match v with
-  | Value_record(r) -> pp_record_value formatter r
-  | Value_function(f) -> pp_function_value formatter f
-  | Value_int(n) -> Format.pp_print_int formatter n
-  | Value_bool(b) -> Format.pp_print_bool formatter b
+  | Value_record r -> pp_record_value formatter r
+  | Value_function f -> pp_function_value formatter f
+  | Value_int n -> Format.pp_print_int formatter n
+  | Value_bool b -> Format.pp_print_bool formatter b
+  | Value_bottom -> Format.pp_print_string formatter "bottom"
 
 and pp_clause_body formatter b =
   match b with
@@ -104,7 +105,8 @@ and pp_clause_body formatter b =
 
 and pp_clause formatter c =
   match c with
-  | Clause(x,b) -> Format.fprintf formatter "%a = %a" pp_var x pp_clause_body b
+  | Clause (x,b) ->
+    Format.fprintf formatter "%a = %a" pp_var x pp_clause_body b
 
 and pp_expr formatter (Expr(cls)) =
   pp_concat_sep ";" pp_clause formatter @@ List.enum cls

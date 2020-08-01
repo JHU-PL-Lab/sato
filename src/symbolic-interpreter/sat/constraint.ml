@@ -33,6 +33,7 @@ type value =
   | Bool of bool
   | Function of function_value
   | Record of symbol Ident_map.t
+  | Bottom
 [@@deriving eq, ord, to_yojson]
 ;;
 
@@ -40,10 +41,11 @@ let pp_value formatter v =
   match v with
   | Int n -> Format.pp_print_int formatter n
   | Bool b -> Format.pp_print_bool formatter b
-  | Function(Function_value(x,_)) ->
+  | Function (Function_value(x,_)) ->
     Format.fprintf formatter "fun %a -> ..." pp_var x
-  | Record(m) ->
+  | Record m ->
     Pp_utils.pp_map pp_ident pp_symbol Ident_map.enum formatter m
+  | Bottom -> Format.pp_print_string formatter "bottom"
 ;;
 
 let show_value = Pp_utils.pp_to_string pp_value;;

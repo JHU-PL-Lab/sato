@@ -73,29 +73,30 @@ let rec pp_function_value formatter (Function_value(x,e)) =
 
 and pp_value formatter v =
   match v with
-  | Value_record(r) -> pp_record_value formatter r
-  | Value_function(f) -> pp_function_value formatter f
-  | Value_int(n) -> Format.pp_print_int formatter n
-  | Value_bool(b) -> Format.pp_print_bool formatter b
+  | Value_record r -> pp_record_value formatter r
+  | Value_function f -> pp_function_value formatter f
+  | Value_int n -> Format.pp_print_int formatter n
+  | Value_bool b -> Format.pp_print_bool formatter b
+  | Value_bottom -> Format.pp_print_string formatter "bottom"
 
 and pp_clause_body formatter b =
   match b with
-  | Var_body(x) -> pp_var formatter x
-  | Value_body(v) -> pp_value formatter v
+  | Var_body x -> pp_var formatter x
+  | Value_body v -> pp_value formatter v
   | Input_body ->
     Format.pp_print_string formatter "input"
-  | Appl_body(x1,x2) ->
+  | Appl_body (x1,x2) ->
     Format.fprintf formatter "%a %a" pp_var x1 pp_var x2
-  | Conditional_body(x,e1,e2) ->
+  | Conditional_body (x,e1,e2) ->
     Format.fprintf formatter
       "%a @[<4>? @[<2>(%a)@] : @[<2>(%a)@]@]"
       pp_var x pp_expr e1 pp_expr e2
-  | Match_body(x,p) ->
+  | Match_body (x,p) ->
     Format.fprintf formatter
       "%a ~ %a" pp_var x pp_pattern p
-  | Projection_body(x,l) ->
+  | Projection_body (x,l) ->
     Format.fprintf formatter "%a.%a" pp_var x pp_ident l
-  | Binary_operation_body(x1,op,x2) ->
+  | Binary_operation_body (x1,op,x2) ->
     Format.fprintf formatter "%a %a %a"
       pp_var x1 pp_binary_operator op pp_var x2
   | Abort_body vlist ->
@@ -103,7 +104,7 @@ and pp_clause_body formatter b =
 
 and pp_clause formatter c =
   match c with
-  | Clause(x,b) -> Format.fprintf formatter "%a = %a" pp_var x pp_clause_body b
+  | Clause (x,b) -> Format.fprintf formatter "%a = %a" pp_var x pp_clause_body b
 
 and pp_expr formatter (Expr(cls)) =
   pp_concat_sep ";" pp_clause formatter @@ List.enum cls

@@ -125,6 +125,7 @@ and value =
   | Value_function of function_value
   | Value_int of int
   | Value_bool of bool
+  | Value_bottom
 [@@deriving eq, ord, to_yojson]
 
 (** A type to represent the bodies of clauses. *)

@@ -85,8 +85,7 @@ and enum_all_functions_in_value value : function_value Enum.t =
   | Value_record _ -> Enum.empty ()
   | Value_function(Function_value(_,e) as f) ->
     Enum.append (Enum.singleton f) @@ enum_all_functions_in_expr e
-  | Value_int _
-  | Value_bool _ -> Enum.empty ()
+  | Value_int _ | Value_bool _ | Value_bottom -> Enum.empty ()
 ;;
 
 (* Enumerate all aborts in a program *)
@@ -117,7 +116,7 @@ and enum_all_aborts_in_value value : (ident * var list) Enum.t =
   match value with
   | Value_function (Function_value (_, e)) ->
     enum_all_aborts_in_expr e
-  | Value_int _ | Value_bool _ | Value_record _ ->
+  | Value_int _ | Value_bool _ | Value_record _ | Value_bottom ->
     Enum.empty ()
 ;;
 
@@ -507,6 +506,7 @@ struct
           | Value_function f -> return @@ Constraint.Function f
           | Value_int n -> return @@ Constraint.Int n
           | Value_bool b -> return @@ Constraint.Bool b
+          | Value_bottom -> return @@ Constraint.Bottom
         in
         let%bind () = record_constraint @@
           Constraint.Constraint_value(lookup_symbol, constraint_value)

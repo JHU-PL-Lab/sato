@@ -27,6 +27,7 @@ type value =
   | Bool of bool
   | Function of function_value
   | Record of symbol Ident_map.t
+  | Bottom
 [@@deriving eq, ord, show, to_yojson]
 ;;
 

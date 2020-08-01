@@ -81,19 +81,19 @@ struct
               (Unannotated_clause(Abs_clause(x,Abs_input_body))) = acl1
             in
             (* x = input *)
-            return (Value_lookup(x, Abs_value_int),
-                    Program_point_state(acl1, ctx))
+            let v = Abs_value_int in
+            return (Value_lookup(x, v), Program_point_state(acl1, ctx))
           end
           ;
           (* Variable Lookup Discovers Abort *)
           (*
           begin
             let%orzero
-              (Unannotated_clause(Abs_clause(x,Abs_abort_body))) = acl1
+              (Unannotated_clause(Abs_clause(x, Abs_abort_body _))) = acl1
             in
             (* x = abort *)
-            return (Value_lookup(x, Abs_value_int),
-                    Program_point_state(acl1, ctx))
+            let v = Abs_value_bottom in
+            return (Value_lookup(x, v), Program_point_state(acl1, ctx))
           end
           ;
           *)

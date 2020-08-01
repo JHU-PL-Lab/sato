@@ -225,6 +225,7 @@ let _symbolic_to_concrete_value (val_src : value_source) : clause_body =
     | Int n -> Value_body (Value_int n)
     | Bool b -> Value_body (Value_bool b)
     | Function f -> Value_body (Value_function f)
+    | Bottom -> Value_body (Value_bottom)
     | Record r ->
       (* Eliminate relative stack info *)
       let r' =
@@ -317,6 +318,7 @@ let rec _add_constraints_and_close
                   match Symbol_map.Exceptionless.find x
                           solver.type_constraints_by_symbol with
                   | None -> ();
+                  (* TODO: Bottom type should not cause a contradiction *)
                   | Some t' ->
                     if not (equal_symbol_type t t') then
                       raise @@ Contradiction(TypeContradiction(x,t,t'))
@@ -372,7 +374,7 @@ let rec _add_constraints_and_close
                     | Some x'' ->
                       Constraint_alias(x',x'')
                   )
-              | Int _ | Bool _ | Function _ ->
+              | Int _ | Bool _ | Function _ | Bottom ->
                 Enum.empty ()
             in
             let type_constraints =
@@ -382,6 +384,7 @@ let rec _add_constraints_and_close
                 | Bool _ -> BoolSymbol
                 | Record _ -> RecordSymbol
                 | Function _ -> FunctionSymbol
+                | Bottom -> BottomSymbol
               in
               Enum.singleton (Constraint_type(x,t))
             in
@@ -440,7 +443,7 @@ let rec _add_constraints_and_close
             in
             match record_val with
             | None -> new_const
-            | Some(Int _ | Bool _ | Function _) -> new_const
+            | Some(Int _ | Bool _ | Function _ | Bottom) -> new_const
             | Some(Record record_body) ->
               match Ident_map.Exceptionless.find lbl record_body with
               | None ->
@@ -568,11 +571,12 @@ let z3_expr_of_value
     (ctx : Z3.context)
     (value : Constraint.value)
   : Z3.Expr.expr option =
-  (match value with
-   | Constraint.Int n -> Some(Z3.Arithmetic.Integer.mk_numeral_i ctx n)
-   | Constraint.Bool b -> Some(Z3.Boolean.mk_val ctx b)
-   | Constraint.Function _ -> None
-   | Constraint.Record _ -> None)
+  match value with
+  | Constraint.Int n -> Some (Z3.Arithmetic.Integer.mk_numeral_i ctx n)
+  | Constraint.Bool b -> Some (Z3.Boolean.mk_val ctx b)
+  | Constraint.Function _ -> None
+  | Constraint.Record _ -> None
+  | Constraint.Bottom -> None
 ;;
 
 let z3_fn_of_operator
