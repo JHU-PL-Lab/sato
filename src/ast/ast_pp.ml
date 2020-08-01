@@ -98,7 +98,8 @@ and pp_clause_body formatter b =
   | Binary_operation_body(x1,op,x2) ->
     Format.fprintf formatter "%a %a %a"
       pp_var x1 pp_binary_operator op pp_var x2
-  | Abort_body -> Format.pp_print_string formatter "abort"
+  | Abort_body vlist ->
+    Format.fprintf formatter "abort %a" pp_variable_list vlist
 
 and pp_clause formatter c =
   match c with
@@ -128,6 +129,7 @@ let show_pattern = pp_to_string pp_pattern;;
 
 let pp_type_sig formatter type_sig =
   match type_sig with
+  | Top_type -> Format.pp_print_string formatter "top"
   | Int_type -> Format.pp_print_string formatter "int"
   | Bool_type -> Format.pp_print_string formatter "bool"
   | Fun_type -> Format.pp_print_string formatter "fun"

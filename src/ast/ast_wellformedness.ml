@@ -12,6 +12,7 @@ open Ast_tools;;
 type illformedness =
   | Duplicate_variable_binding of var
   | Variable_not_in_scope of var * var
+  | Invalid_variable_in_abort of var * var
   [@@deriving eq, ord, show]
 ;;
 
@@ -53,5 +54,16 @@ let check_wellformed_expr expression : unit =
         |> List.of_enum
       in
       raise @@ Illformedness_found illformednesses
+  end;
+  begin
+    let conditional_scope_violations = cond_scope_violations expression in
+    if not (List.is_empty conditional_scope_violations) then
+      let illformedness =
+        conditional_scope_violations
+        |> List.enum
+        |> Enum.map (fun (abort_prog_point, bad_var) -> Invalid_variable_in_abort (abort_prog_point, bad_var))
+        |> List.of_enum
+      in
+      raise @@ Illformedness_found illformedness
   end
 ;;

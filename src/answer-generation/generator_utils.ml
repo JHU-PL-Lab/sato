@@ -143,19 +143,21 @@ let input_sequence_from_result
         input_sequence
     in
     let abort_symbol_list =
-      List.map
+      List.filter_map
         (fun ab_var ->
           let (ab_x, ab_stack) = destructure_var ab_var in
           let ab_relstack = relativize_stack stop_stack ab_stack in
           let ab_symb = Symbol (ab_x, ab_relstack) in
-          if Symbol_map.mem ab_symb result.er_abort_points then
-            ab_symb
+          (* Some abort clauses that are encountered do not count as errors,
+             e.g. they are "knock-on" errors that only exist because of a
+             previous error in the program path, which was removed from the
+             result record at the end of symbolic evaluation. *)
+          if Symbol_map.mem ab_symb result.er_errors then
+            Some ab_symb
           else
-            raise @@ Utils.Invariant_failure
-              (Printf.sprintf "Encountered unknown abort clause %s"
-                (Ast_pp.show_var ab_var))
+            None
         )
         !abort_list
     in
-    (input_seq_ints, abort_symbol_list)
+    (input_seq_ints, List.rev abort_symbol_list)
 ;;

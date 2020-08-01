@@ -8,6 +8,8 @@ open Ast;;
 open Ast_pp;;
 open Pp_utils;;
 
+(* **** Symbol **** *)
+
 (** The type of a symbol in the symbolic interpreter.  This is essentially the
     type of a variable using a stack-costack pair rather than a freshening
     stack. *)
@@ -43,39 +45,20 @@ module Symbol_map = struct
   include Yojson_utils.Map_to_yojson(M)(Symbol);;
 end;;
 
-(** Information that is associated with a type abort clause, i.e. an abort that
-    is triggered upon a type error. *)
-type type_abort_info = {
-  (** The identifier for the abort clause. *)
-  abort_ident : ident;
+(* **** Abort info **** *)
 
-  (** The match clauses that constrain the type of the variables in the
-      operation.  For the abort to trigger, ANY one of the matches may be
-      false. *)
-  abort_matches : clause Ident_map.t;
+type abort_value = {
+  (** The sequence of conditional clauses that, if the false path is always
+      taken, lead to this abort point. *)
+  abort_conditional_clauses : clause list;
 
-  (** The operation that the abort conditions.  If the operation fails then the
-      abort is triggered. *)
-  abort_operation : clause;
+  (** The predicates of the conditional clauses, in the order that the clauses
+      are nested. *)
+  abort_predicate_idents : ident list;
+
+  (** The return clauses, ie. the last clauses of the expression, of the true
+      branches of the conditional clauses. *)
+  abort_return_clauses : clause list;
 }
-[@@ deriving eq, ord, show]
-;;
-
-(** Information that is associated with a match abort clause, i.e. an abort
-    that is triggered if a variable fails a pattern match expression. *)
-type match_abort_info = {
-  (** The identifier for the abort clause. *)
-  abort_ident : ident;
-
-  (** The match clauses that are part of the match expression.  For the abort
-      to trigger, ALL of the matches must be false. *)
-  abort_matches : clause Ident_map.t;
-}
-[@@ deriving eq, ord, show]
-;;
-
-type abort_info =
-  | Type_abort_info of type_abort_info
-  | Match_abort_info of match_abort_info
 [@@ deriving eq, ord, show]
 ;;

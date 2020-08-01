@@ -68,7 +68,7 @@ and var_replace_clause_body fn r =
   | Projection_body(x,l) ->
     Projection_body(fn x,l)
   | Binary_operation_body(x1,op,x2) -> Binary_operation_body(fn x1, op, fn x2)
-  | Abort_body -> Abort_body
+  | Abort_body vlist -> Abort_body (List.map fn vlist)
 
 and var_replace_value fn v =
   match v with
@@ -158,7 +158,7 @@ let rec evaluate
     env
     lastvar
     cls =
-  lazy_logger `debug (fun () ->
+  lazy_logger `trace (fun () ->
       Format.asprintf
         "\nEnvironment: @[%a@]\nLast var:    @[%a@]\nClauses:     @[%a@]\n"
         pp_evaluation_environment env
@@ -310,7 +310,7 @@ let rec evaluate
         in
         Environment.add env x (Some result);
         recurse t
-      | Abort_body ->
+      | Abort_body _ ->
         abort_policy c;
         (* Unreachable code with default abort policy *)
         Environment.add env x None;

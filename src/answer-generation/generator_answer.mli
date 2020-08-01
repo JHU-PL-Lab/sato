@@ -29,6 +29,14 @@ module type Answer = sig
   (** True if generating an answer from the result is successful, false
       otherwise. *)
   val generation_successful : t -> bool;;
+
+  (** Remove any variables from the alias chain or clauses that were added
+      during type constraint instrumentation. *)
+  val remove_instrument_vars : Ast.var Ast.Var_map.t -> t -> t;;
+
+  (** Test if an answer is a member of a collection of answers. (If the answer
+      is an error, it must be wrapped in a singleton error tree). *)
+  val test_mem : t list -> t -> bool;;
 end;;
 
 (** An input sequence for a single program flow of symbolic evaluation. *)

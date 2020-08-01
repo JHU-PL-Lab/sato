@@ -1,7 +1,9 @@
 open Batteries;;
 
 open Odefa_ast;;
-open Odefa_symbolic_interpreter.Interpreter_types;;
+(* open Odefa_symbolic_interpreter.Interpreter_types;; *)
+
+(* open On_to_odefa_types;; *)
 
 (* open On_to_odefa_types;; *)
 
@@ -10,7 +12,7 @@ type translation_context =
     tc_contextual_recursion : bool;
     mutable tc_fresh_name_counter : int;
     (* mutable tc_odefa_natodefa_info : odefa_natodefa_info; *)
-    mutable tc_odefa_aborts : abort_info Ast.Ident_map.t;
+    mutable tc_instrumented_var_map : Ast.var Ast.Var_map.t;
   }
 [@@deriving eq, ord (*, show *)]
 ;;
@@ -23,11 +25,11 @@ let new_translation_context
   { tc_fresh_name_counter = 0;
     tc_fresh_suffix_separator = suffix;
     tc_contextual_recursion = contextual_recursion;
+    tc_instrumented_var_map = Ast.Var_map.empty;
     (* tc_odefa_natodefa_info = {
       odefa_aborts = Ast.Var_map.empty;
       natodefa_exprs = Ast.Var_map.empty;
     }; *)
-    tc_odefa_aborts = Ast.Ident_map.empty;
   }
 ;;
 
@@ -36,12 +38,11 @@ module TranslationMonad : sig
   val run : translation_context -> 'a m -> 'a
   val fresh_name : string -> string m
   val fresh_var : string -> Ast.var m
+  val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
+  val instrument_map : Ast.var Ast.Var_map.t m
   (* val add_natodefa_expr : Ast.var -> On_ast.expr -> unit m *)
-  val add_type_abort : Ast.var -> Ast.clause list -> Ast.clause -> unit m
-  val add_match_abort : Ast.var -> Ast.clause list -> unit m
   val freshness_string : string m
   val acontextual_recursion : bool m
-  val get_aborts : (abort_info Ast.Ident_map.t) m
   val sequence : 'a m list -> 'a list m
   val list_fold_left_m : ('acc -> 'el -> 'acc m) -> 'acc -> 'el list -> 'acc m
   val list_fold_right_m : ('el -> 'acc -> 'acc m) -> 'el list -> 'acc -> 'acc m
@@ -72,48 +73,14 @@ end = struct
     Ast.Var(Ast.Ident name', None)
   ;;
 
-  let add_type_abort abort_var match_clauses op_clause ctx =
-    let Ast.Var(abort_ident, _) = abort_var in
-    let m_map = begin
-      List.fold_left
-        (fun accum m_clause ->
-          let Ast.Clause(m_var, _) = m_clause in
-          let Ast.Var(m_ident, _) = m_var in
-          Ast.Ident_map.add m_ident m_clause accum)
-        Ast.Ident_map.empty
-        match_clauses
-    end
-    in
-    let type_ab_rec : type_abort_info = {
-      abort_ident = abort_ident;
-      abort_matches = m_map;
-      abort_operation = op_clause;
-    }
-    in
-    let abort_info = (Type_abort_info type_ab_rec) in
-    ctx.tc_odefa_aborts <-
-      (Ast.Ident_map.add abort_ident abort_info ctx.tc_odefa_aborts)
+  let add_instrument_var_pair v_key v_val ctx =
+    ctx.tc_instrumented_var_map
+      <- Ast.Var_map.add v_key v_val ctx.tc_instrumented_var_map;
+    ()
   ;;
 
-  let add_match_abort abort_var match_clauses ctx =
-    let Ast.Var(abort_ident, _) = abort_var in
-    let m_map =
-      List.fold_left
-        (fun accum m_clause ->
-          let Ast.Clause(m_var, _) = m_clause in
-          let Ast.Var(m_ident, _) = m_var in
-          Ast.Ident_map.add m_ident m_clause accum)
-        Ast.Ident_map.empty
-        match_clauses
-    in
-    let match_ab_rec = {
-      abort_ident = abort_ident;
-      abort_matches = m_map;
-    }
-    in
-    let abort_info = Match_abort_info match_ab_rec in
-    ctx.tc_odefa_aborts <-
-      (Ast.Ident_map.add abort_ident abort_info ctx.tc_odefa_aborts)
+  let instrument_map ctx =
+    ctx.tc_instrumented_var_map
   ;;
 
   let freshness_string ctx =
@@ -123,8 +90,6 @@ end = struct
   let acontextual_recursion ctx =
     not ctx.tc_contextual_recursion
   ;;
-
-  let get_aborts ctx = ctx.tc_odefa_aborts;;
 
   let rec sequence ms =
     match ms with

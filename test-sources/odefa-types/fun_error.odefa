@@ -1,7 +1,7 @@
 # EXPECT-WELL-FORMED
 # EXPECT-STUCK
-# EXPECT-TYPE-ERROR ~result [] [ "ans = zero zero" "zero = 0" "fun" "int" ]
-# EXPECT-ALL-TYPE-ERRORS-FOUND
+# EXPECT-TYPE-ERROR-COUNT 1
+# EXPECT-TYPE-ERROR ~result [] : "match" "" "zero = 0" "ans = zero zero" "fun" "int"
 
 zero = 0;
 ans = zero zero;

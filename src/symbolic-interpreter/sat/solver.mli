@@ -10,6 +10,7 @@ open Jhupllib;;
 
 open Odefa_ast;;
 
+open Error;;
 open Interpreter_types;;
 open Pp_utils;;
 
@@ -31,15 +32,6 @@ type contradiction =
   | ProjectionContradiction of symbol * symbol * Ast.ident
   | MatchContradiction of symbol * symbol * Ast.pattern
 ;;
-
-(* Information relating to errors *)
-
-type type_error = {
-  terr_ident : symbol;
-  terr_value : Constraint.value_source;
-  terr_expected_type : Ast.type_sig;
-  terr_actual_type : Ast.type_sig;
-}
 
 (** An exception which is raised if a contradiction appears in a constraint set
     during closure. *)
@@ -72,8 +64,8 @@ val solve : t -> solution option;;
 (** Determines whether a solution exists for a given solver. *)
 val solvable : t -> bool;;
 
-(** Find a type error associated with a pattern match symbol. *)
-val find_type_error : t -> symbol -> type_error option;;
+(** Find errors associated with a particular abort clause. *)
+val find_errors : t -> symbol -> Ast.clause -> Error_tree.t;;
 
 (** Enumerates the constraints in a solver. *)
 val enum : t -> Constraint.t Enum.t;;

@@ -1,7 +1,7 @@
 # EXPECT-WELL-FORMED
 # EXPECT-STUCK
-# EXPECT-TYPE-ERROR ~result [] [ "r = x and tru" "zero = 0" "bool" "int" ]
-# EXPECT-ALL-TYPE-ERRORS-FOUND
+# EXPECT-TYPE-ERROR-COUNT 1
+# EXPECT-TYPE-ERROR ~result [] : "match" "x" "zero = 0" "r = x and tru" "bool" "int"
 
 zero = 0;
 one = 1;
@@ -10,4 +10,4 @@ tru = true;
 f = fun x -> ( r = x and tru );
 fans = f zero;
 
-z = fans + one;
+z = fans + one; # knock-on error!

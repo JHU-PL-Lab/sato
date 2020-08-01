@@ -87,7 +87,7 @@ let use_occurrences expression =
         Var_set.singleton subject
       | Binary_operation_body (left_operand, _, right_operand) ->
         Var_set.of_list [left_operand; right_operand]
-      | Abort_body -> Var_set.empty
+      | Abort_body vlist -> Var_set.of_list vlist
   )
   |> List.fold_left Var_set.union Var_set.empty
 ;;
@@ -106,6 +106,8 @@ let non_unique_bindings expression =
   )
   |> Var_set.of_list
 ;;
+
+(* Check variable scope *)
 
 let _bind_filter bound site_x vars =
   vars
@@ -157,7 +159,7 @@ and check_scope_clause_body
   | Projection_body (Var(x,_), _) -> _bind_filter bound site_x [x]
   | Binary_operation_body (Var(x1,_), _, Var(x2,_)) ->
     _bind_filter bound site_x [x1;x2]
-  | Abort_body -> []
+  | Abort_body _ -> [] (* Variables in abort bodies are treated separately *)
 ;;
 
 (** Returns a list of pairs of variables. The pair represents a violation on the
@@ -167,6 +169,67 @@ and check_scope_clause_body
 let scope_violations expression =
   check_scope_expr Ident_set.empty expression
   |> List.map (fun (i1,i2) -> (Var(i1,None)),Var(i2,None))
+;;
+
+(* Abort variable well-formedness *)
+
+let abort_var_lists_eq cond_list var_list =
+  let rec v_list_eq c_list v_list =
+    match c_list, v_list with
+    | id1 :: tl1, id2 :: tl2 ->
+      if Ident.equal id1 id2 then
+        v_list_eq tl1 tl2
+      else
+        Some id2
+    | [], [] -> None
+    | _ :: _, [] -> None
+    | [], id2 :: _ -> Some id2
+  in
+  v_list_eq cond_list (List.rev var_list)
+;;
+
+let rec check_abort_vars_in_expr
+    (cond_idents : Ident.t list) (e : expr)
+  : (ident * ident) list =
+  let Expr(clauses) = e in
+  List.fold_left
+    (fun results clause ->
+       results @ check_abort_vars_in_clause cond_idents clause
+    )
+    []
+    clauses
+
+and check_abort_vars_in_clause
+    (cond_idents : Ident.t list) (cls : clause)
+  : (ident * ident) list =
+  let (Clause (Var (site_x, _), body)) = cls in
+  match body with
+  | Abort_body v_list ->
+    begin
+      let i_list = List.map (fun (Var (id, _)) -> id) v_list in
+      match abort_var_lists_eq cond_idents i_list with
+      | Some id -> [(site_x, id)]
+      | None -> []
+    end
+  | Conditional_body (_, e1, e2) ->
+    begin
+      let cond_idents' = site_x :: cond_idents in
+      check_abort_vars_in_expr cond_idents' e1 @
+      check_abort_vars_in_expr cond_idents' e2
+    end
+  | Value_body v ->
+    begin
+      match v with
+      | Value_function (Function_value (_, e)) ->
+        check_abort_vars_in_expr cond_idents e
+      | _ -> []
+    end
+  | _ -> []
+;;
+
+let cond_scope_violations expression =
+  check_abort_vars_in_expr [] expression
+  |> List.map (fun (i1,i2) -> (Var (i1,None)), Var (i2,None))
 ;;
 
 (** Returns the last defined variable in a list of clauses. *)
@@ -201,7 +264,7 @@ and map_clause_body_vars (fn : Var.t -> Var.t) (b : clause_body)
     Projection_body(fn x, l)
   | Binary_operation_body (x1, op, x2) ->
     Binary_operation_body (fn x1, op, fn x2)
-  | Abort_body -> Abort_body
+  | Abort_body vlist -> Abort_body (List.map fn vlist)
 
 and map_value_vars (fn : Var.t -> Var.t) (v : value) : value =
   match (v : value) with
@@ -241,7 +304,7 @@ and transform_exprs_in_clause_body (fn : expr -> expr) (body : clause_body)
     Match_body(x, p)
   | Projection_body (_, _) -> body
   | Binary_operation_body (_, _, _) -> body
-  | Abort_body -> body
+  | Abort_body _ -> body
 
 and transform_exprs_in_value (fn : expr -> expr) (v : value) : value =
   match (v : value) with
