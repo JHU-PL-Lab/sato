@@ -50,10 +50,14 @@ val parse_error : string -> error;;
 module type Error_tree = sig
   type t;;
 
+  (** Create a new, empty error tree (i.e. has no errors at all). *)
+  val empty : t;;
+
+  (** Returns true if the error tree is empty, false otherwise. *)
+  val is_empty : t -> bool;;
+
   (** Create an error tree that contains a single error leaf node. *)
   val singleton : error -> t;;
-
-  val is_singleton : t -> bool;;
 
   (** Merge two error trees as if they are part of an AND operation.
       In an AND operation, all values must be true for the op to return true.
@@ -71,15 +75,6 @@ module type Error_tree = sig
 
   (** String representation of the error tree. *)
   val to_string : t -> string;;
-
-  (** Create a new, empty error tree (i.e. has no errors at all). *)
-  val empty : t;;
-
-  (** Returns true if the error tree is empty, false otherwise. *)
-  val is_empty : t -> bool;;
-
-  (** Parses a string into an error tree *)
-  val parse : string -> t;;
 
   (** Maps a function over the errors in an error tree. *)
   val map : (error -> error) -> t -> t;;

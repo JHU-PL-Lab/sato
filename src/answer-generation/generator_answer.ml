@@ -26,7 +26,6 @@ module type Answer = sig
   val count_list : t list -> int;;
   val generation_successful : t -> bool;;
   val remove_instrument_vars : var Var_map.t -> t -> t;;
-  val test_string : t list -> string -> bool;;
   val test_mem : t list -> t -> bool;;
 end;;
 
@@ -80,15 +79,6 @@ module Input_sequence : Answer = struct
     | None -> "???"
   ;;
 
-  (*
-  let empty = Some [];;
-
-  let is_empty inputs_opt =
-    match inputs_opt with
-    | Some inputs -> List.is_empty inputs
-    | None -> raise @@ Jhupllib.Utils.Invariant_failure "Undefined"
-  *)
-
   let count inputs_opt =
     match inputs_opt with
     | Some _ -> 1
@@ -108,19 +98,6 @@ module Input_sequence : Answer = struct
   ;;
 
   let remove_instrument_vars (_ : var Var_map.t) (inputs : t) = inputs;;
-
-  let test_string input_sequence_list input_seq_list =
-    let input_seq = parse_comma_separated_ints input_seq_list in
-    input_sequence_list
-    |> List.filter
-        (fun input_opt ->
-          match input_opt with
-          | Some input -> input = input_seq
-          | None -> false
-        )
-    |> List.is_empty
-    |> Bool.not
-  ;;
 
   let test_mem input_seq_list input_seq = List.mem input_seq input_seq_list;;
 end;;
@@ -258,22 +235,6 @@ module Type_errors : Answer = struct
       error with
       err_errors = error_list';
     }
-  ;;
-
-  let test_string error_list error_str =
-    let (input_str, error_str) = String.split ~by:":" error_str in
-    let input_seq = parse_comma_separated_ints input_str in
-    let error = parse_error error_str in
-    let error_assoc_list =
-      List.map
-        (fun errors -> (errors.err_input_seq, errors.err_errors))
-        error_list
-    in
-    let error_tree_list = List.assoc input_seq error_assoc_list in
-    error_tree_list
-    |> List.filter (Error_tree.mem error)
-    |> List.is_empty
-    |> Bool.not
   ;;
 
   let test_mem (error_list: t list) (error: t) =

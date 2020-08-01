@@ -37,15 +37,13 @@ exception Parse_failure of string;;
 
 module type Error_tree = sig
   type t;;
+  val empty : t;;
+  val is_empty : t -> bool;;
   val singleton : error -> t;;
-  val is_singleton : t -> bool;;
   val add_and : t -> t -> t;;
   val add_or : t -> t -> t;;
   val tree_from_error_list : t list -> t;;
   val to_string : t -> string;;
-  val empty : t;;
-  val is_empty : t -> bool;;
-  val parse : string -> t;;
   val map : (error -> error) -> t -> t;;
   val mem : error -> t -> bool;;
   val mem_singleton : t -> t -> bool;;
@@ -63,12 +61,6 @@ module Error_tree : Error_tree = struct
   let _ = show;;
 
   let singleton error = Error error;;
-
-  let is_singleton error_tree =
-    match error_tree with
-    | Error _ -> true
-    | Node (_, _) | Empty -> false
-  ;;
 
   let add_and et1 et2 =
     match (et1, et2) with
@@ -102,9 +94,9 @@ module Error_tree : Error_tree = struct
     add_to_tree err_trees
   ;;
 
-  let rec flatten_tree error_tree =
+  let rec _flatten_tree error_tree =
     match error_tree with
-    | Node (et1, et2) -> (flatten_tree et1) @ (flatten_tree et2)
+    | Node (et1, et2) -> (_flatten_tree et1) @ (_flatten_tree et2)
     | Error error -> [error]
     | Empty -> []
   ;;
@@ -148,7 +140,7 @@ module Error_tree : Error_tree = struct
   ;;
 
   let to_string error_tree =
-    let error_list = flatten_tree error_tree in
+    let error_list = _flatten_tree error_tree in
     let string_list = List.map error_to_string error_list in
     String.join "\n---------------\n" string_list
   ;;
@@ -169,171 +161,6 @@ module Error_tree : Error_tree = struct
       | Empty -> Empty
     in
     walk fn error_tree
-  ;;
-
-  (* The following s-expression code is taken from Martin Josefsson at
-     http://www.martinjosefsson.com/parser/compiler/interpreter/programming/language/2019/04/03/Simple-S_expression_parser_in_OCaml.html
-     and is used under the MIT license, with some modifications for Str.split_result
-  *)
-
-  (* **** Begin s-expression code **** *)
-
-  type s_expression =
-    | Atom of string
-    | SexpList of s_expression list
-  ;;
-
-  type ('i, 'e) parse_result =
-    | ParseNext of 'i * 'e
-    | ParseOut of 'i
-    | ParseEnd
-  ;;
-
-  let parse_list iterator parse_s_expressions =
-    match parse_s_expressions iterator [] with next_iterator, expressions ->
-      ParseNext (next_iterator, SexpList expressions)
-  ;;
-
-  let parse_expression (iterator: int * Str.split_result list) parse_s_expressions =
-    let index, tokens = iterator in
-    if List.length tokens = index then begin
-      ParseEnd
-    end else begin
-      let current_token = List.nth tokens index in
-      match current_token with
-      | Str.Delim d when String.equal d "[" ->
-        parse_list (index + 1, tokens) parse_s_expressions
-      | Str.Delim d when String.equal d "]" ->
-        ParseOut (index + 1, tokens)
-      | Str.Text t -> ParseNext ((index + 1, tokens), Atom t)
-      | Str.Delim _ -> raise @@ Parse_failure "unknown delimiter"
-    end
-  ;;
-
-  let s_expression_of_token_list
-    : Str.split_result list -> s_expression =
-    fun tokens ->
-      let rec parse_s_expressions
-          (iterator: int * Str.split_result list)
-          (expressions: s_expression list) =
-        match parse_expression iterator parse_s_expressions with
-        | ParseEnd -> (iterator, List.rev expressions)
-        | ParseOut iterator -> (iterator, List.rev expressions)
-        | ParseNext (iterator, result) ->
-          parse_s_expressions iterator (result :: expressions)
-      in
-      match parse_s_expressions (0, tokens) [] with
-      | _, [first] -> first
-      | _, lst -> SexpList lst
-  ;;
-
-  (* **** End s-expression code **** *)
-
-  let _parse_alias alias_str = Ident (alias_str);;
-
-  let _parse_clause cl_str =
-    let expr_lst =
-      try
-        Odefa_parser.Parser.parse_expression_string cl_str
-      with Odefa_parser.Parser.Parse_error (_, _, _, _) ->
-        raise @@ Parse_failure ("cannot parse clause " ^ cl_str)
-    in
-    match expr_lst with
-    | [expr] ->
-      begin
-        let Expr clist = expr in
-        match clist with
-        | [clause] -> clause
-        | _ -> raise @@ Parse_failure "expression contains more than one clause"
-      end
-    | _ -> raise @@ Parse_failure "more than one expression"
-  ;;
-
-  let _parse_vars_str vars_str =
-    let var_strs = Str.split (Str.regexp "[ ]*=[ ]*") vars_str in
-    let (alias_strs, clause_str) =
-      match List.rev var_strs with
-      | hd1 :: hd2 :: tl -> (tl, hd2 ^ "=" ^ hd1)
-      | _ -> raise @@ Parse_failure "cannot parse vars"
-    in
-    (List.map _parse_alias alias_strs, _parse_clause clause_str)
-  ;;
-
-  let _parse_type type_str =
-    match type_str with
-    | "int" | "integer" -> Int_type
-    | "bool" | "boolean" -> Bool_type
-    | "fun" | "function" -> Fun_type
-    | _ ->
-      let is_rec_str =
-        Str.string_match (Str.regexp "{.*}") type_str 0 in
-      if is_rec_str then begin
-        let lbl_set =
-          type_str
-          |> String.lchop
-          |> String.rchop
-          |> Str.split (Str.regexp ",")
-          |> List.map String.trim
-          |> List.map (fun lbl -> Ident lbl)
-          |> Ident_set.of_list
-        in
-        Rec_type lbl_set
-      end else begin
-        raise @@ Parse_failure "cannot parse type"
-      end
-  ;;
-
-  let rec s_expr_to_err_tree s_expr =
-    match s_expr with
-    | Atom err_str ->
-      begin
-        let err_str_list =
-          err_str
-          |> Str.split (Str.regexp "[\"]")
-          |> List.map String.trim
-          |> List.filter (fun s -> not @@ String.is_empty s)
-        in
-        match err_str_list with
-        | [vars; clause; expected; actual] ->
-          let (aliases, val_clause) = _parse_vars_str vars in
-          Error (Error_match {
-            err_match_aliases = aliases;
-            err_match_value = val_clause;
-            err_match_clause = _parse_clause clause;
-            err_match_expected_type = _parse_type expected;
-            err_match_actual_type = _parse_type actual;
-          })
-        | _ -> raise @@ Parse_failure "missing or spurious match error args"
-      end
-    | SexpList s_expr_lst ->
-      begin
-        match s_expr_lst with
-        | [] -> Empty
-        | [s_expr] -> s_expr_to_err_tree s_expr
-        | [s_expr; s_expr'] ->
-          Node (s_expr_to_err_tree s_expr, s_expr_to_err_tree s_expr')
-        | _ -> raise @@ Parse_failure "sexpr has more than two nodes"
-      end
-  ;;
-
-  let parse err_str =
-    let err_str_tokenized =
-      err_str
-      |> Str.full_split (Str.regexp "[][]")
-      |> List.filter
-        (fun token ->
-          match token with
-          | Str.Text txt ->
-            txt
-            |> String.trim
-            |> (fun s -> not @@ String.is_empty s)
-          | Str.Delim _ ->
-            true
-        )
-    in
-    let s_expr = s_expression_of_token_list err_str_tokenized in
-    let e_tree = s_expr_to_err_tree s_expr in
-    e_tree
   ;;
 
   let mem error error_tree =
