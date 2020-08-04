@@ -532,6 +532,7 @@ struct
             return @@ wire_function cl fn x3 x1 analysis_2.ddpa_graph
           | Unannotated_clause(
               Abs_clause(x1,Abs_conditional_body(x2,e1,e2)) as cl) ->
+              let _ = x2 in
             lazy_logger `trace
               (fun () ->
                  Printf.sprintf "Considering conditional closure for clause %s"
@@ -545,6 +546,7 @@ struct
             |> List.enum
             |> Enum.filter_map
               (fun (then_branch, body_expr) ->
+                 (*
                  let pred = function
                    | Abs_value_bool n -> n = then_branch
                    | _ -> false
@@ -553,6 +555,8 @@ struct
                    Some (body_expr, then_branch)
                  else
                    None
+                  *)
+                 Some (body_expr, then_branch)
               )
             |> Enum.map (fun (Abs_expr(body), then_branch) ->
                 wire_conditional
