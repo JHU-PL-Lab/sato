@@ -65,13 +65,15 @@ TODO
   - [x] Remove #true# clauses
   - [x] Add appropriate variant type for input values
   - [x] DON'T add new types for inputs
-- [ ] Fix bug where record projection errors are not caught
-  - [ ] Idea - introduce value of type Bottom to AST/Abstract AST
-- [ ] Encode aborts with the relevant conditional identifiers
+- [x] Fix bug where record projection errors are not caught
+  - [x] Idea - introduce value of type Bottom to AST/Abstract AST
+- [x] Encode aborts with the relevant conditional identifiers
   - [x] Check to ensure that conditionals are valid (ie. are nested and include the abort as the final retv), either before or during lookup.
   - [x] Extract predicate and use constraint set to extract patterns + boolean operators
   - [ ] Continue to refine predicate tree construction
   - [x] Extract return values; retvs from true branches are what the abort constrains
+- [ ] Report potential errors that may arise in dead code
+  - [ ] Prove the soundness of reporting such potential errors
 - [ ] More errors
   - [ ] ~~Add "Primitive" pattern/type for bool + int "=="~~ Use an `or` statement instead
   - [ ] Divide by zero (new nonzero pattern + type vs. nested constraints) - refinement types!

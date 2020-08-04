@@ -119,13 +119,22 @@ module Type_errors : Answer = struct
     let (input_seq, abort_list) =
       Generator_utils.input_sequence_from_result e x result
     in
+    (* For now, we only report the error associated with the first we encounter
+       on a program path, since (during forward evaluation) only code up to
+       that abort is "live;" all code afterwards is "dead" code that is
+       unreachable in the non-instrumented code.  In the future we can report
+       potential errors in "dead" code as well, but only after we prove
+       soundness. *)
+    let abort_list_singleton =
+      if List.is_empty abort_list then [] else [List.first abort_list]
+    in
     let error_tree_list =
       List.fold_right
         (fun abort_symb et_list ->
           let et = Symbol_map.find abort_symb error_tree_map in
           et :: et_list
         )
-        abort_list
+        abort_list_singleton
         []
     in
     let errs =

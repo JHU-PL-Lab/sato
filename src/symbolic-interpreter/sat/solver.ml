@@ -814,18 +814,18 @@ let rec _find_errors solver symbol constrained_clause =
           | Any_pattern -> Top_type
         in
         let actual_type = _get_type solver match_symb in
+        let match_val_source =
+          match _get_value_source solver match_symb with
+          | Some vs -> Ast.Clause (Var (v, None), _symbolic_to_concrete_value vs)
+          | None -> raise @@ Utils.Invariant_failure
+            (Printf.sprintf "%s has no value in constraint set!"
+              (show_symbol match_symb))
+        in
         if not (Ast.Type_signature.subtype actual_type expected_type) then begin
           let match_error = {
             err_match_aliases = List.map (fun (Symbol(x, _)) -> x) alias_chain;
             err_match_clause = constrained_clause;
-            err_match_value =
-              begin
-                match _get_value_source solver match_symb with
-                | Some vs -> Ast.Clause (Var (v, None), _symbolic_to_concrete_value vs)
-                | None -> raise @@ Utils.Invariant_failure
-                  (Printf.sprintf "%s has no value in constraint set!"
-                    (show_symbol match_symb))
-              end;
+            err_match_value = match_val_source;
             err_match_expected_type = expected_type;
             err_match_actual_type = actual_type;
           }
