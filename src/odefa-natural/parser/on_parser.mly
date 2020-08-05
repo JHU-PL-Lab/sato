@@ -231,28 +231,28 @@ pattern:
   | BOOL_KEYWORD { BoolPat }
   | FUNCTION { FunPat }
   | IDENTIFIER { VarPat(Ident($1)) }
-  | BACKTICK variant_label pattern { VariantPat(Variant($2, $3)) } %prec prec_variant
+  | BACKTICK variant_label ident_decl { VariantPat($2, $3) } %prec prec_variant
   | OPEN_BRACE rec_pattern_body CLOSE_BRACE { RecPat $2 }
   | OPEN_BRACE CLOSE_BRACE { RecPat (Ident_map.empty) }
-  | RECORD { RecPat (Ident_map.empty) }
+  | RECORD { RecPat (Ident_map.empty) } /* TODO: Remove? */
   | OPEN_BRACKET CLOSE_BRACKET { EmptyLstPat }
-  | pattern DOUBLE_COLON pattern { LstDestructPat($1, $3) }
+  | ident_decl DOUBLE_COLON ident_decl { LstDestructPat($1, $3) }
   | OPEN_PAREN pattern CLOSE_PAREN { $2 }
 ;
 
 rec_pattern_body:
-  | label EQUALS pattern
+  | label EQUALS ident_decl
       { let (Label k) = $1 in
         let key = Ident k in
-        Ident_map.singleton key $3 }
-  | label EQUALS pattern COMMA rec_pattern_body
+        Ident_map.singleton key (Some $3) }
+  | label EQUALS ident_decl COMMA rec_pattern_body
       { let (Label k) = $1 in
         let key = Ident k in
         let old_map = $5 in
         let dup_check = Ident_map.mem key old_map in
         if dup_check then raise (On_Parse_error "Duplicate label names in record!")
         else
-        let new_map = Ident_map.add key $3 old_map in
+        let new_map = Ident_map.add key (Some $3) old_map in
         new_map
       }
 ;

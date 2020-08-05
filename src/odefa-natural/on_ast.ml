@@ -34,12 +34,13 @@ type variant_label = Variant_label of string [@@deriving eq, ord, show]
 
 type funsig = Funsig of ident * ident list * expr
 
-and variant_content = Variant of variant_label * pattern
+(* and variant_content = Variant of variant_label * pattern *)
 
-and pattern = AnyPat | IntPat | BoolPat
-            | RecPat of pattern Ident_map.t
-            | VariantPat of variant_content | VarPat of ident
-            | FunPat | EmptyLstPat | LstDestructPat of pattern * pattern
+and pattern = AnyPat | IntPat | BoolPat | FunPat
+            | RecPat of (ident option) Ident_map.t
+            | VariantPat of variant_label * ident
+            | VarPat of ident
+            | EmptyLstPat | LstDestructPat of ident * ident
 
 and expr =
   | Int of int | Bool of bool
