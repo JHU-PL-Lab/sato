@@ -89,6 +89,7 @@ type binary_operator =
   | Binary_operator_less_than
   | Binary_operator_less_than_or_equal_to
   | Binary_operator_equal_to
+  | Binary_operator_not_equal_to
   | Binary_operator_and
   | Binary_operator_or
   | Binary_operator_xor
@@ -103,7 +104,8 @@ let binary_operator_to_yojson = function
   | Binary_operator_modulus -> `String "%"
   | Binary_operator_less_than -> `String "<"
   | Binary_operator_less_than_or_equal_to -> `String "<="
-  | Binary_operator_equal_to -> `String "="
+  | Binary_operator_equal_to -> `String "=="
+  | Binary_operator_not_equal_to -> `String "<>"
   | Binary_operator_and -> `String "and"
   | Binary_operator_or -> `String "or"
   | Binary_operator_xor -> `String "xor"

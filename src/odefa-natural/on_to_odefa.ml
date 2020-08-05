@@ -742,6 +742,19 @@ and flatten_record_match
   in
   return @@ [proj_clause; match_clause; if_clause]
 
+(*
+and flatten_pattern_match_2
+    (rec_pat : On_ast.pattern On_ast.Ident_map.t)
+    (rec_match_expr : On_ast.expr) =
+  let rec_labels =
+    rec_pat
+    |> On_ast.Ident_map.keys
+    |> Enum.map (fun (On_ast.Ident id) -> Ast.Ident id)
+    |> Ast.Ident_set.of_enum
+  in
+  let rec_pat' = Ast.Rec_pattern rec_labels in
+*)
+
 (** Flatten an entire expression (i.e. convert natodefa into odefa code) *)
 and flatten_expr
     (e : On_ast.expr)
@@ -914,52 +927,42 @@ and flatten_expr
         : Ast.expr m =
         match match_list with
         | curr_match :: remain_matches ->
-        begin
-          let (curr_pat, curr_pat_expr) = curr_match in
-          let%bind match_var = fresh_var "match" in
-          let%bind cond_var = fresh_var "m_cond" in
-          (* let%bind () = add_natodefa_expr match_var e in *)
-          (* let%bind () = add_natodefa_expr cond_var e in *)
-          let%bind flat_curr_clauses =
-            begin
-              match curr_pat with
-              | On_ast.RecPat rec_pat ->
-                (* 
-                  match rec with
-                  | {lbl = int} -> ...
-                  ==>
-                  match = rec ~ {lbl};
-                  m_cond = match ? (proj = rec.hd;
-                                    match = proj ~ int;
-                                    ...)
-                                  : (ab = abort)
-                *)
-                let%bind flat_rec_pat = record_pat_to_list rec_pat subj_var in
-                if List.is_empty flat_rec_pat
-                then
+          begin
+            let (curr_pat, curr_pat_expr) = curr_match in
+            let%bind match_var = fresh_var "match" in
+            let%bind cond_var = fresh_var "m_cond" in
+            (* let%bind () = add_natodefa_expr match_var e in *)
+            (* let%bind () = add_natodefa_expr cond_var e in *)
+            let%bind flat_curr_clauses =
+              begin
+                match curr_pat with
+                | On_ast.RecPat rec_pat ->
+                  let%bind flat_rec_pat = record_pat_to_list rec_pat subj_var in
+                  if List.is_empty flat_rec_pat
+                  then
+                    let%bind (clause_list, _) = flatten_expr curr_pat_expr in
+                    return clause_list
+                  else
+                    flatten_record_match e flat_rec_pat [] curr_pat_expr
+                | _ ->
                   let%bind (clause_list, _) = flatten_expr curr_pat_expr in
                   return clause_list
-                else
-                  flatten_record_match e flat_rec_pat [] curr_pat_expr
-              | _ ->
-                let%bind (clause_list, _) = flatten_expr curr_pat_expr in
-                return clause_list
-            end
-          in
-          let flat_curr_expr = Ast.Expr (flat_curr_clauses) in
-          let%bind flat_remain_expr =
-            convert_matches remain_matches (match_var :: match_vars)
-          in
-          let odefa_pat = flatten_pattern curr_pat in
-          let match_clause =
-            Ast.Clause(match_var, Match_body(subj_var, odefa_pat))
-          in
-          let if_clause =
-            Ast.Clause(cond_var,
-              Conditional_body(match_var, flat_curr_expr, flat_remain_expr))
-          in
-          return @@ Ast.Expr([match_clause; if_clause])
-        end
+              end
+            in
+            let flat_curr_expr = Ast.Expr (flat_curr_clauses) in
+            let%bind flat_remain_expr =
+              convert_matches remain_matches (match_var :: match_vars)
+            in
+            let odefa_pat = flatten_pattern curr_pat in
+            let match_clause =
+              Ast.Clause(match_var, Match_body(subj_var, odefa_pat))
+            in
+            let if_clause =
+              Ast.Clause(cond_var,
+                Conditional_body(match_var, flat_curr_expr, flat_remain_expr))
+            in
+            return @@ Ast.Expr([match_clause; if_clause])
+          end
         | [] ->
           get_abort_expr match_vars
       in

@@ -222,7 +222,8 @@ let abstract_binary_operation
   | Binary_operator_or
   | Binary_operator_xor ->
     Some (List.enum [Abs_value_bool true; Abs_value_bool false])
-  | Binary_operator_equal_to ->
+  | Binary_operator_equal_to
+  | Binary_operator_not_equal_to ->
     Some (List.enum [Abs_value_int; Abs_value_bool true; Abs_value_bool false])
 ;;
 

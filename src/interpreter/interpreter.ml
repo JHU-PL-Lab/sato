@@ -290,12 +290,17 @@ let rec evaluate
                   Value_bool (n1 = n2)
                 | (Value_bool b1, Binary_operator_equal_to, Value_bool b2) ->
                   Value_bool (b1 = b2)
+                | (Value_int n1, Binary_operator_not_equal_to, Value_int n2) ->
+                  Value_bool (n1 <> n2)
+                | (Value_bool b1, Binary_operator_not_equal_to, Value_bool b2) ->
+                  Value_bool (b1 <> b2)
                 | (Value_bool b1, Binary_operator_and, Value_bool b2) ->
                   Value_bool (b1 && b2)
                 | (Value_bool b1, Binary_operator_or, Value_bool b2) ->
                   Value_bool (b1 || b2)
                 | (Value_bool b1, Binary_operator_xor, Value_bool b2) ->
                   Value_bool (b1 <> b2)
+                
                 | _, _, _ ->
                   raise @@ Evaluation_failure
                     (Printf.sprintf

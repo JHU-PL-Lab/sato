@@ -126,7 +126,8 @@ let _binop_types (op : binary_operator)
   | Binary_operator_modulus -> (IntSymbol, IntSymbol, IntSymbol)
   | Binary_operator_less_than
   | Binary_operator_less_than_or_equal_to
-  | Binary_operator_equal_to -> (IntSymbol, IntSymbol, BoolSymbol) (* TODO: Accomodate both bool and int equal *)
+  | Binary_operator_equal_to
+  | Binary_operator_not_equal_to -> (IntSymbol, IntSymbol, BoolSymbol) (* TODO: Accomodate both bool and int equal *)
   | Binary_operator_and
   | Binary_operator_or
   | Binary_operator_xor -> (BoolSymbol, BoolSymbol, BoolSymbol)
@@ -582,6 +583,9 @@ let z3_fn_of_operator
   let z3_listop_to_binop f =
     fun arg1 arg2 -> f ctx [arg1;arg2]
   in
+  let z3_negate_binop f =
+    fun arg1 arg2 -> Z3.Boolean.mk_not ctx (f ctx arg1 arg2)
+  in
   match operator with
   | Binary_operator_plus -> Some(z3_listop_to_binop Z3.Arithmetic.mk_add)
   | Binary_operator_minus -> Some(z3_listop_to_binop Z3.Arithmetic.mk_sub)
@@ -591,6 +595,7 @@ let z3_fn_of_operator
   | Binary_operator_less_than -> Some(Z3.Arithmetic.mk_lt ctx)
   | Binary_operator_less_than_or_equal_to -> Some(Z3.Arithmetic.mk_le ctx)
   | Binary_operator_equal_to -> Some(Z3.Boolean.mk_eq ctx)
+  | Binary_operator_not_equal_to -> Some(z3_negate_binop Z3.Boolean.mk_eq)
   | Binary_operator_and -> Some(z3_listop_to_binop Z3.Boolean.mk_and)
   | Binary_operator_or -> Some(z3_listop_to_binop Z3.Boolean.mk_or)
   | Binary_operator_xor -> Some(Z3.Boolean.mk_xor ctx)
@@ -748,7 +753,8 @@ let rec _find_errors solver symbol constrained_clause =
       | Binary_operator_modulus
       | Binary_operator_less_than
       | Binary_operator_less_than_or_equal_to
-      | Binary_operator_equal_to ->
+      | Binary_operator_equal_to
+      | Binary_operator_not_equal_to ->
         let binop_value =
           try
             Symbol_map.find symbol solver.value_constraints_by_symbol
