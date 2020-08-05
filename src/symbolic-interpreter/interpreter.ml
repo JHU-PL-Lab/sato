@@ -200,6 +200,7 @@ let prepare_environment
     enum_all_aborts_in_expr e
     |> Enum.map
         (fun ((abort_ident: ident), (cond_vars : var list)) ->
+          let cond_vars = List.rev cond_vars in
           let cond_clauses =
             List.map
               (fun (Var (k, _)) -> Ident_map.find k clause_mapping)

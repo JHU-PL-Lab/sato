@@ -19,10 +19,8 @@ open Translator_utils;;
     * Desugar let rec
     * Desugar lists
     * Desugar variants
-    * Desugar pattern vars
-    * Desugar pattern matching
-    * Alphatize program again (to allow above transformations to introduce
-      dupes)
+    * Alphatize program again (to allow above to introduce dupes)
+    * Flatten odefa-natural expressions to odefa expressions
 *)
 
 open TranslationMonad;;
@@ -729,7 +727,6 @@ and flatten_expr
     return (fun_clauses @ [assignment_clause] @ e_clist, e_var)
     end
   | LetRecFun (_, _) ->
-    (* | LetRecFun (sig_list, e) ->  *)
     raise @@
       Utils.Invariant_failure "LetRecFun should not have been passed to flatten_expr"
   | Plus (e1, e2) ->
@@ -855,7 +852,7 @@ and flatten_expr
             in
             let%bind flat_curr_expr = return @@ Ast.Expr (c_list') in
             let%bind flat_remain_expr =
-              convert_matches remain_matches (match_vars @ [cond_var])
+              convert_matches remain_matches (cond_var :: match_vars)
             in
             let cond_body =
               Ast.Conditional_body(bool_var, flat_curr_expr, flat_remain_expr)

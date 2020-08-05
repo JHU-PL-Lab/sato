@@ -31,11 +31,15 @@ let get_ast (args : Type_checker_parser.type_checker_args)
       let (odefa_ast, var_map) =
         On_to_odefa.translate ~is_instrumented:true natodefa_ast
       in
+      lazy_logger `debug (fun () ->
+        Printf.sprintf "Translated program:\n%s" (Ast_pp.show_expr odefa_ast));
       Ast_wellformedness.check_wellformed_expr odefa_ast;
       (odefa_ast, var_map)
     end else if is_odefa then begin
       let odefa_ast = File.with_file_in filename Parser.parse_program in
       let (odefa_ast', var_map) = Type_instrumentation.instrument_odefa odefa_ast in
+      lazy_logger `debug (fun () ->
+        Printf.sprintf "Translated program:\n%s" (Ast_pp.show_expr odefa_ast'));
       let () = Ast_wellformedness.check_wellformed_expr odefa_ast' in
       (odefa_ast', var_map)
     end else begin
@@ -63,7 +67,6 @@ let get_ast (args : Type_checker_parser.type_checker_args)
 let () =
   let args = Type_checker_parser.parse_args () in
   let (ast, var_map) = get_ast args in
-  lazy_logger `debug (fun () -> Printf.sprintf "Translated program:\n%s" (Ast_pp.show_expr ast));
   try
     let results_remaining = ref args.tc_maximum_results in
     let total_errors = ref 0 in
