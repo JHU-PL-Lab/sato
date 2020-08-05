@@ -1,9 +1,12 @@
 open Batteries;;
+open Jhupllib;;
 
 open Odefa_ast;;
 open Ast;;
 
 open Translator_utils.TranslationMonad;;
+
+let lazy_logger = Logger_utils.make_lazy_logger "Type_instrumentation";;
 
 let add_abort_expr cond_var =
   let%bind abort_var = fresh_var "ab" in
@@ -107,6 +110,9 @@ let rec instrument_clauses
   | clause :: clauses' ->
     begin
       let Clause(v, body) = clause in
+      (* Add var-clause pair to side mapping before instrumentation *)
+      let%bind () = add_var_clause_pair v clause in
+      (* Instrument depending on clause body type *)
       match body with
       | Value_body value ->
         begin
@@ -321,6 +327,8 @@ let instrument_odefa (odefa_ast : expr) : (expr * var Var_map.t) =
     let result_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
     let result_clause = Ast.Clause(result_var, Ast.Var_body(last_var)) in
     let%bind inst_map = instrument_map in
+    (* let%bind inst_map_2 = var_clause_mapping in *)
+    (* lazy_logger `debug (fun () -> Printf.sprintf "Map size: %d" (Ident_map.cardinal inst_map_2)); *)
     return (Expr(trans_clist @ [result_clause]), inst_map)
   in
   let context = Translator_utils.new_translation_context () in

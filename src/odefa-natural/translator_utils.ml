@@ -1,6 +1,7 @@
 open Batteries;;
 
 open Odefa_ast;;
+open On_to_odefa_types;;
 (* open Odefa_symbolic_interpreter.Interpreter_types;; *)
 
 (* open On_to_odefa_types;; *)
@@ -10,9 +11,10 @@ open Odefa_ast;;
 type translation_context =
   { tc_fresh_suffix_separator : string;
     tc_contextual_recursion : bool;
+    mutable tc_current_natodefa_expr : On_ast.expr option;
     mutable tc_fresh_name_counter : int;
-    (* mutable tc_odefa_natodefa_info : odefa_natodefa_info; *)
     mutable tc_instrumented_var_map : Ast.var Ast.Var_map.t;
+    mutable tc_odefa_natodefa_mappings : Odefa_natodefa_mappings.t;
   }
 [@@deriving eq, ord (*, show *)]
 ;;
@@ -25,11 +27,9 @@ let new_translation_context
   { tc_fresh_name_counter = 0;
     tc_fresh_suffix_separator = suffix;
     tc_contextual_recursion = contextual_recursion;
+    tc_current_natodefa_expr = None;
     tc_instrumented_var_map = Ast.Var_map.empty;
-    (* tc_odefa_natodefa_info = {
-      odefa_aborts = Ast.Var_map.empty;
-      natodefa_exprs = Ast.Var_map.empty;
-    }; *)
+    tc_odefa_natodefa_mappings = Odefa_natodefa_mappings.empty;
   }
 ;;
 
@@ -39,8 +39,11 @@ module TranslationMonad : sig
   val fresh_name : string -> string m
   val fresh_var : string -> Ast.var m
   val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
+  val add_var_clause_pair : Ast.var -> Ast.clause -> unit m
+  val update_natodefa_expr : On_ast.expr -> unit m
   val instrument_map : Ast.var Ast.Var_map.t m
-  (* val add_natodefa_expr : Ast.var -> On_ast.expr -> unit m *)
+  val var_clause_mapping : Ast.clause Ast.Ident_map.t m
+  val add_odefa_natodefa_mapping : Ast.var -> unit m
   val freshness_string : string m
   val acontextual_recursion : bool m
   val sequence : 'a m list -> 'a list m
@@ -76,11 +79,37 @@ end = struct
   let add_instrument_var_pair v_key v_val ctx =
     ctx.tc_instrumented_var_map
       <- Ast.Var_map.add v_key v_val ctx.tc_instrumented_var_map;
-    ()
+  ;;
+
+  let add_var_clause_pair v_key cls_val ctx =
+    let (Ast.Var (i_key, _)) = v_key in
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- Odefa_natodefa_mappings.add_var_clause_mapping odefa_on_maps i_key cls_val
+  ;;
+
+  let add_odefa_natodefa_mapping v_key ctx =
+    let (Ast.Var (i_key, _)) = v_key in
+    let expr_val_opt = ctx.tc_current_natodefa_expr in
+    match expr_val_opt with
+    | Some expr_val ->
+      let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+      ctx.tc_odefa_natodefa_mappings
+        <- Odefa_natodefa_mappings.add_natodefa_mapping odefa_on_maps i_key expr_val
+    | None ->
+      failwith (Printf.sprintf "Tried to add mapping of %s to a natodefa expr, but no expr was available!" (Ast.show_ident i_key))
+  ;;
+
+  let update_natodefa_expr expr ctx =
+    ctx.tc_current_natodefa_expr <- Some expr;
   ;;
 
   let instrument_map ctx =
     ctx.tc_instrumented_var_map
+  ;;
+
+  let var_clause_mapping ctx =
+    ctx.tc_odefa_natodefa_mappings.odefa_pre_instrument_clause_mapping
   ;;
 
   let freshness_string ctx =

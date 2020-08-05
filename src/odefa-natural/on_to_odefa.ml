@@ -90,6 +90,7 @@ let rec pat_rename_vars
 (** Transform an expression to eliminate "let rec" expressions by encoding with
    self-passing. *)
 let rec_transform (e : On_ast.expr) : On_ast.expr m =
+  let%bind () = update_natodefa_expr e in
   begin
   let transformer recurse e =
     match e with
@@ -279,6 +280,7 @@ let rec rename_variable
 let alphatize (e : On_ast.expr) : On_ast.expr m =
   let open TranslationMonad in
   let open On_ast in
+  let%bind () = update_natodefa_expr e in
   (* Given a list of identifiers, a list of expressions, and a list of
      previously declared identifiers, this helper routine renames all previously
      declared identifiers which appear in the list within all of the
@@ -565,6 +567,7 @@ let nonempty_body ((body : Ast.clause list), (var : Ast.var))
   match body with
   | [] ->
     let%bind x = fresh_var "var" in
+    let%bind () = add_odefa_natodefa_mapping x in
     return @@ ([Ast.Clause(x, Var_body var)], x)
   | _ ->
     return (body, var)
@@ -573,6 +576,7 @@ let nonempty_body ((body : Ast.clause list), (var : Ast.var))
 (** Create a new abort clause with multiple conditional clause variables *)
 let add_abort_expr (cond_vars : Ast.var list) =
   let%bind abort_var = fresh_var "ab" in
+  let%bind () = add_odefa_natodefa_mapping abort_var in
   let abort_clause = Ast.Clause(abort_var, Abort_body cond_vars) in
   return @@ Ast.Expr([abort_clause]);
 ;;
@@ -585,12 +589,12 @@ let on_to_odefa_ident (On_ast.Ident (id)) = Ast.Ident (id);;
 let flatten_pattern
     (pat_var : Ast.var)
     (pattern : On_ast.pattern)
-  : (Ast.pattern * Ast.clause list) =
+  : (Ast.pattern * Ast.clause list) m =
   match pattern with
-  | On_ast.AnyPat -> (Ast.Any_pattern, [])
-  | On_ast.IntPat -> (Ast.Int_pattern, [])
-  | On_ast.BoolPat -> (Ast.Bool_pattern , [])
-  | On_ast.FunPat -> (Ast.Fun_pattern, [])
+  | On_ast.AnyPat -> return (Ast.Any_pattern, [])
+  | On_ast.IntPat -> return (Ast.Int_pattern, [])
+  | On_ast.BoolPat -> return (Ast.Bool_pattern , [])
+  | On_ast.FunPat -> return (Ast.Fun_pattern, [])
   | On_ast.RecPat rec_pat ->
     let rec_pat' =
       rec_pat
@@ -598,29 +602,32 @@ let flatten_pattern
       |> Enum.map on_to_odefa_ident
       |> Ast.Ident_set.of_enum
     in
-    let projections =
+    let%bind projections =
       rec_pat
       |> On_ast.Ident_map.enum
-      |> Enum.fold
+      |> List.of_enum
+      |> list_fold_left_m
           (fun acc (lbl, var) ->
             match var with
             | Some v ->
               let v' = on_to_odefa_ident v in
               let lbl' = on_to_odefa_ident lbl in
-              let ast_var = Ast.Var(v', None) in
+              let ast_var = Ast.Var (v', None) in
+              let%bind () = add_odefa_natodefa_mapping ast_var in
               let ast_body = Ast.Projection_body(pat_var, lbl') in
-              acc @ [(Ast.Clause (ast_var, ast_body))]
-            | None -> acc
+              return @@ acc @ [(Ast.Clause (ast_var, ast_body))]
+            | None -> return acc
           )
           []
     in
-    (Ast.Rec_pattern rec_pat', projections)
+    return (Ast.Rec_pattern rec_pat', projections)
   | On_ast.VarPat var_pat ->
     let (On_ast.Ident (var_id)) = var_pat in
     let ast_var = Ast.Var (Ident var_id, None) in
+    let%bind () = add_odefa_natodefa_mapping ast_var in
     let ast_body = Ast.Var_body pat_var in
     let clause = Ast.Clause (ast_var, ast_body) in
-    (Ast.Any_pattern, [clause])
+    return (Ast.Any_pattern, [clause])
   | On_ast.VariantPat (_) ->
     raise @@ Utils.Invariant_failure
     "match_converter: Variants patterns should have been encoded!"
@@ -643,6 +650,7 @@ let flatten_fun
         | None -> fresh_var "flatten_fun"
         | Some (Ident(s)) -> fresh_var s
       in
+      let%bind () = add_odefa_natodefa_mapping new_var in
       let fun_val = Ast.Value_function (Function_value(Var(id, None), expr)) in
       let fun_body = Ast.Value_body (fun_val) in
       let new_clause = Ast.Clause(new_var, fun_body) in
@@ -655,7 +663,6 @@ let flatten_fun
 
 (** Flatten a binary operation *)
 let rec flatten_binop
-    (_ : On_ast.expr)
     (e1 : On_ast.expr)
     (e2 : On_ast.expr)
     (binop : Ast.binary_operator)
@@ -663,7 +670,7 @@ let rec flatten_binop
   let%bind (e1_clist, e1_var) = flatten_expr e1 in
   let%bind (e2_clist, e2_var) = flatten_expr e2 in
   let%bind binop_var = fresh_var "binop" in
-  (* let%bind () = add_natodefa_expr binop_var binop_expr in *)
+  let%bind () = add_odefa_natodefa_mapping binop_var in
   let binop_body = Ast.Binary_operation_body (e1_var, binop, e2_var) in
   let new_clause = Ast.Clause (binop_var, binop_body) in
   return (e1_clist @ e2_clist @ [new_clause], binop_var)
@@ -672,16 +679,18 @@ let rec flatten_binop
 and flatten_expr
     (e : On_ast.expr)
   : (Ast.clause list * Ast.var) m =
+  let%bind () = update_natodefa_expr e in
   match e with
   | Var (id) ->
     let%bind alias_var = fresh_var "var" in
-    (* let%bind () = add_natodefa_expr alias_var e in *)
     let Ident(i_string) = id in
     let id_var = Ast.Var(Ast.Ident(i_string), None) in
+    let%bind () = add_odefa_natodefa_mapping alias_var in
+    let%bind () = add_odefa_natodefa_mapping id_var in
     return ([Ast.Clause(alias_var, Ast.Var_body(id_var))], alias_var)
   | Input ->
     let%bind input_var = fresh_var "input" in
-    (* let%bind () = add_natodefa_expr input_var e in *)
+    let%bind () = add_odefa_natodefa_mapping input_var in
     return ([Ast.Clause(input_var, Ast.Input_body)], input_var)
   | Function (id_list, e) ->
     let%bind (fun_c_list, _) = nonempty_body @@@ flatten_expr e in
@@ -692,7 +701,7 @@ and flatten_expr
     let%bind (e1_clist, e1_var) = flatten_expr e1 in
     let%bind (e2_clist, e2_var) = flatten_expr e2 in
     let%bind appl_var = fresh_var "appl" in
-    (* let%bind () = add_natodefa_expr appl_var e in *)
+    let%bind () = add_odefa_natodefa_mapping appl_var in
     let new_clause =
       Ast.Clause (
         appl_var,
@@ -705,8 +714,9 @@ and flatten_expr
     let%bind (e1_clist, e1_var) = flatten_expr e1 in
     let%bind (e2_clist, e2_var) = flatten_expr e2 in
     let Ident(var_name) = var_ident in
-    let letvar = Ast.Var(Ast.Ident(var_name), None) in
-    let assignment_clause = Ast.Clause(letvar, Ast.Var_body(e1_var)) in
+    let lt_var = Ast.Var (Ast.Ident(var_name), None) in
+    let%bind () = add_odefa_natodefa_mapping lt_var in
+    let assignment_clause = Ast.Clause(lt_var, Ast.Var_body(e1_var)) in
     return (e1_clist @ [assignment_clause] @ e2_clist, e2_var)
     end
   | LetFun (sign, e) ->
@@ -722,43 +732,44 @@ and flatten_expr
     let%bind (e_clist, e_var) = flatten_expr e in
     (* Assigning the function to the given function name... *)
     let On_ast.Ident(var_name) = fun_name in
-    let letvar = Ast.Var(Ast.Ident(var_name), None) in
-    let assignment_clause = Ast.Clause(letvar, Ast.Var_body(return_var)) in
+    let lt_var = Ast.Var(Ast.Ident(var_name), None) in
+    let%bind () = add_odefa_natodefa_mapping lt_var in
+    let assignment_clause = Ast.Clause(lt_var, Ast.Var_body(return_var)) in
     return (fun_clauses @ [assignment_clause] @ e_clist, e_var)
     end
   | LetRecFun (_, _) ->
     raise @@
       Utils.Invariant_failure "LetRecFun should not have been passed to flatten_expr"
   | Plus (e1, e2) ->
-    flatten_binop e e1 e2 Ast.Binary_operator_plus
+    flatten_binop e1 e2 Ast.Binary_operator_plus
   | Minus (e1, e2) ->
-    flatten_binop e e1 e2 Ast.Binary_operator_minus
+    flatten_binop e1 e2 Ast.Binary_operator_minus
   | Times (e1, e2) ->
-    flatten_binop e e1 e2 Ast.Binary_operator_times
+    flatten_binop e1 e2 Ast.Binary_operator_times
   | Divide (e1, e2) ->
-    flatten_binop e e1 e2 Ast.Binary_operator_divide
+    flatten_binop e1 e2 Ast.Binary_operator_divide
   | Modulus (e1, e2) ->
-    flatten_binop e e1 e2 Ast.Binary_operator_modulus
+    flatten_binop e1 e2 Ast.Binary_operator_modulus
   | Equal (e1, e2) ->
-    flatten_binop e e1 e2 Ast.Binary_operator_equal_to
+    flatten_binop e1 e2 Ast.Binary_operator_equal_to
   | LessThan (e1, e2) ->
-    flatten_binop e e1 e2 Ast.Binary_operator_less_than
+    flatten_binop e1 e2 Ast.Binary_operator_less_than
   | Leq (e1, e2) ->
-    flatten_binop e e1 e2 Ast.Binary_operator_less_than_or_equal_to
+    flatten_binop e1 e2 Ast.Binary_operator_less_than_or_equal_to
   | GreaterThan (e1, e2) -> (* Reverse e1 and e2 *)
-    flatten_binop e e2 e1 Ast.Binary_operator_less_than
+    flatten_binop e2 e1 Ast.Binary_operator_less_than
   | Geq (e1, e2) -> (* Reverse e1 and e2 *)
-    flatten_binop e e2 e1 Ast.Binary_operator_less_than_or_equal_to
+    flatten_binop e2 e1 Ast.Binary_operator_less_than_or_equal_to
   | And (e1, e2) ->
-    flatten_binop e e1 e2 Ast.Binary_operator_and
+    flatten_binop e1 e2 Ast.Binary_operator_and
   | Or (e1, e2) ->
-    flatten_binop e e1 e2 Ast.Binary_operator_or
+    flatten_binop e1 e2 Ast.Binary_operator_or
   | Not (e) ->
     let%bind (e_clist, e_var) = flatten_expr e in
     let%bind true_var = fresh_var "true" in
     let%bind binop_var = fresh_var "binop" in
-    (* let%bind () = add_natodefa_expr true_var e in *)
-    (* let%bind () = add_natodefa_expr binop_var e in *)
+    let%bind () = add_odefa_natodefa_mapping true_var in
+    let%bind () = add_odefa_natodefa_mapping binop_var in
     let binop = Ast.Binary_operator_xor in
     let true_body = Ast.Value_body(Value_bool true) in
     let binop_body = Ast.Binary_operation_body(e_var, binop, true_var) in
@@ -774,18 +785,18 @@ and flatten_expr
     let%bind (e2_clst, _) = nonempty_body @@@ flatten_expr e2 in
     let%bind (e3_clst, _) = nonempty_body @@@ flatten_expr e3 in
     let%bind if_var = fresh_var "if" in
-    (* let%bind () = add_natodefa_expr if_var e in *)
+    let%bind () = add_odefa_natodefa_mapping if_var in
     let if_body = Ast.Conditional_body(e1_var, Expr(e2_clst), Expr(e3_clst)) in
     let if_clause = Ast.Clause(if_var, if_body) in
     return (e1_clst @ [if_clause], if_var)
   | Int (n) ->
     let%bind int_var = fresh_var "int" in
-    (* let%bind () = add_natodefa_expr int_var e in *)
+    let%bind () = add_odefa_natodefa_mapping int_var in
     let new_clause = Ast.Clause(int_var, Ast.Value_body(Ast.Value_int(n))) in
     return ([new_clause], int_var)
   | Bool (b) ->
     let%bind bool_var = fresh_var "bool" in
-    (* let%bind () = add_natodefa_expr bool_var e in *)
+    let%bind () = add_odefa_natodefa_mapping bool_var in
     let new_clause = Ast.Clause(bool_var, Ast.Value_body(Ast.Value_bool(b))) in
     return ([new_clause], bool_var)
   | Record (recexpr_map) ->
@@ -809,7 +820,7 @@ and flatten_expr
       |> list_fold_left_m flatten_and_map empty_acc
     in
     let%bind rec_var = fresh_var "record" in
-    (* let%bind () = add_natodefa_expr rec_var e in *)
+    let%bind () = add_odefa_natodefa_mapping rec_var in
     let new_clause = Ast.Clause(rec_var,
                                 Ast.Value_body(Ast.Value_record(
                                     Ast.Record_value (map)
@@ -820,7 +831,7 @@ and flatten_expr
     let On_ast.Label(l_string) = lab in
     let l_ident = Ast.Ident(l_string) in
     let%bind proj_var = fresh_var "proj" in
-    (* let%bind () = add_natodefa_expr proj_var e in *)
+    let%bind () = add_odefa_natodefa_mapping proj_var in
     let new_clause =
       Ast.Clause(proj_var, Ast.Projection_body(e_var, l_ident))
     in
@@ -842,20 +853,22 @@ and flatten_expr
             let (curr_pat, curr_pat_expr) = curr_match in
             let%bind bool_var = fresh_var "m_bool" in
             let%bind cond_var = fresh_var "m_cond" in
-            (* let%bind () = add_natodefa_expr match_var e in *)
-            (* let%bind () = add_natodefa_expr cond_var e in *)
-            let (flat_pat, new_clauses) = flatten_pattern subj_var curr_pat in
+            let%bind () = add_odefa_natodefa_mapping bool_var in
+            let%bind () = add_odefa_natodefa_mapping cond_var in
+            let%bind (flat_pat, new_clauses) =
+              flatten_pattern subj_var curr_pat
+            in
             let%bind (c_list, _) = flatten_expr curr_pat_expr in
             let c_list' = new_clauses @ c_list in
             let match_clause =
-              Ast.Clause(bool_var, Match_body(subj_var, flat_pat))
+              Ast.Clause (bool_var, Match_body(subj_var, flat_pat))
             in
             let%bind flat_curr_expr = return @@ Ast.Expr (c_list') in
             let%bind flat_remain_expr =
               convert_matches remain_matches (cond_var :: match_vars)
             in
             let cond_body =
-              Ast.Conditional_body(bool_var, flat_curr_expr, flat_remain_expr)
+              Ast.Conditional_body (bool_var, flat_curr_expr, flat_remain_expr)
             in
             let cond_clause = Ast.Clause(cond_var, cond_body) in
             return (Ast.Expr([match_clause; cond_clause]))
