@@ -572,33 +572,18 @@ let nonempty_body ((body : Ast.clause list), (var : Ast.var))
     return (body, var)
 ;;
 
-(** Create a new abort clause *)
-
-(* TODO: Remove *)
-let get_abort_expr (_ : Ast.var list) : (Ast.expr) m =
-  let%bind abort_expr =
-    begin
-      let%bind abort_var = fresh_var "ab" in
-      let abort_clause =
-        Ast.Clause(abort_var, Ast.Abort_body [])
-      in
-      return @@ Ast.Expr([abort_clause]);
-    end
-  in
-  return abort_expr
-;;
-
-let add_match_ab =
+(** Create a new abort clause with multiple conditional clause variables *)
+let add_abort_expr (cond_vars : Ast.var list) =
   let%bind abort_var = fresh_var "ab" in
-  let abort_clause = Ast.Clause(abort_var, Ast.Abort_body []) in
+  let abort_clause = Ast.Clause(abort_var, Abort_body cond_vars) in
   return @@ Ast.Expr([abort_clause]);
 ;;
 
 let on_to_odefa_ident (On_ast.Ident (id)) = Ast.Ident (id);;
 
-(* Flatten a pattern. The second value in the pair is a list of projection
-   clauses associated with a record or variable pattern; these will be
-   appended to the front of the pattern's expression. *)
+(** Flatten a pattern. The second value in the pair is a list of projection
+    clauses associated with a record or variable pattern; these will be
+    appended to the front of the pattern's expression. *)
 let flatten_pattern
     (pat_var : Ast.var)
     (pattern : On_ast.pattern)
@@ -654,21 +639,17 @@ let flatten_fun
   : (Ast.expr * Ast.var) m =
   list_fold_right_m
     (fun (param : On_ast.Ident.t) ((expr : Ast.expr), (_ : Ast.Var.t)) ->
-       let On_ast.Ident(param_name : string) = param in
-       let odefa_ident : Ast.Ident.t = Ast.Ident(param_name) in
-       let%bind (new_var : Ast.var) =
-         match binding_name with
-         | None -> fresh_var "flatten_fun"
-         | Some(Ident(s)) -> fresh_var s
-       in
-       let new_clause : Ast.clause =
-         Ast.Clause(new_var,
-                    Ast.Value_body(Ast.Value_function(
-                        Ast.Function_value(Ast.Var(odefa_ident, None), expr)
-                      )))
-       in
-       let expr' : Ast.expr = Ast.Expr([new_clause]) in
-       return (expr', new_var)
+      let id = on_to_odefa_ident param in
+      let%bind (new_var : Ast.var) =
+        match binding_name with
+        | None -> fresh_var "flatten_fun"
+        | Some (Ident(s)) -> fresh_var s
+      in
+      let fun_val = Ast.Value_function (Function_value(Var(id, None), expr)) in
+      let fun_body = Ast.Value_body (fun_val) in
+      let new_clause = Ast.Clause(new_var, fun_body) in
+      let expr' : Ast.expr = Ast.Expr([new_clause]) in
+      return (expr', new_var)
     )
     param_names
     (body, retv body)
@@ -685,12 +666,8 @@ let rec flatten_binop
   let%bind (e2_clist, e2_var) = flatten_expr e2 in
   let%bind binop_var = fresh_var "binop" in
   (* let%bind () = add_natodefa_expr binop_var binop_expr in *)
-  let new_clause =
-    Ast.Clause (
-      binop_var,
-      Ast.Binary_operation_body (e1_var, binop, e2_var)
-    )
-  in
+  let binop_body = Ast.Binary_operation_body (e1_var, binop, e2_var) in
+  let new_clause = Ast.Clause (binop_var, binop_body) in
   return (e1_clist @ e2_clist @ [new_clause], binop_var)
 
 (** Flatten an entire expression (i.e. convert natodefa into odefa code) *)
@@ -859,8 +836,8 @@ and flatten_expr
          into nested conditional expressions. The base case is when we reach
          the end of the list, at which we add an abort clause. *)
       let rec convert_matches
-          (match_list: (On_ast.pattern * On_ast.expr) list)
-          (match_vars: Ast.var list)
+          (match_list : (On_ast.pattern * On_ast.expr) list)
+          (match_vars : Ast.var list)
         : Ast.expr m =
         match match_list with
         | curr_match :: remain_matches ->
@@ -878,16 +855,16 @@ and flatten_expr
             in
             let%bind flat_curr_expr = return @@ Ast.Expr (c_list') in
             let%bind flat_remain_expr =
-              convert_matches remain_matches (bool_var :: match_vars)
+              convert_matches remain_matches (match_vars @ [cond_var])
             in
             let cond_body =
               Ast.Conditional_body(bool_var, flat_curr_expr, flat_remain_expr)
             in
             let cond_clause = Ast.Clause(cond_var, cond_body) in
-            return @@ Ast.Expr([match_clause; cond_clause])
+            return (Ast.Expr([match_clause; cond_clause]))
           end
         | [] ->
-          get_abort_expr match_vars
+          add_abort_expr match_vars
       in
       let%bind match_expr = convert_matches pat_expr_list [] in
       let Ast.Expr match_clauses = match_expr in
@@ -930,7 +907,6 @@ let translate
       >>= debug_transform "encode recursion" rec_transform
       >>= debug_transform "encode lists" list_transform
       >>= debug_transform "encode variants" encode_variant
-      (* >>= debug_transform "encode variable patterns" eliminate_var_pat *)
       >>= debug_transform "post-alphatize" alphatize
     in
     let%bind (c_list, _) = flatten_expr transformed_e in
