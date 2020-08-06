@@ -6,11 +6,12 @@ module Odefa_natodefa_mappings : sig
   type t = {
     (** A set of odefa variables that were added during instrumentation
         (as opposed to being in the original code or added during pre-
-        instrumentation translation).  This also includes variables added
-        when translating natodefa match clauses, so that they aren't
-        unnecessarily constrained (since the match conditionals already
-        instrument their respective expressions). *)
-    odefa_instrument_vars : Ast.Ident_set.t;
+        instrumentation translation).  The instrumentation variable
+        is the key; the value is the pre-instrumentation variable
+        it aliases.  Note that the value is an Option; it is none if
+        the variable has no associated pre-instrumentation alias (namely
+        if it was added as a pattern match conditional var). *)
+    odefa_instrument_vars_map : (Ast.ident option) Ast.Ident_map.t;
 
     (** Mapping between variables that were added during instrumentation
         with the variables whose clauses the instrumenting clause is
@@ -32,7 +33,7 @@ module Odefa_natodefa_mappings : sig
 
   val empty : t;;
 
-  val add_odefa_instrument_var : t -> Ast.ident -> t;;
+  val add_odefa_instrument_var : t -> Ast.ident -> Ast.ident option -> t;;
 
   val add_odefa_var_clause_mapping : t -> Ast.ident -> Ast.clause -> t;;
 
@@ -40,13 +41,18 @@ module Odefa_natodefa_mappings : sig
 
   val add_on_expr_to_expr_mapping : t -> On_ast.expr -> On_ast.expr -> t;;
 
+  (** Get an odefa clause that existed before the odefa program was
+      instrumented.  If the odefa var was added during type instrumentation,
+      it will return the clause representing the constrained operation.
+      If the var was added before, it will return the clause it identified
+      before instrumentation. *)
   val get_pre_inst_equivalent_clause : t -> Ast.ident -> Ast.clause;;
 
   val get_natodefa_equivalent_expr : t -> Ast.ident -> On_ast.expr;;
 
 end = struct
   type t = {
-    odefa_instrument_vars : Ast.Ident_set.t;
+    odefa_instrument_vars_map : (Ast.ident option) Ast.Ident_map.t;
     odefa_pre_instrument_clause_mapping : Ast.clause Ast.Ident_map.t;
     odefa_var_to_natodefa_expr : On_ast.expr Ast.Ident_map.t;
     natodefa_expr_to_expr : On_ast.expr On_ast.Expr_map.t;
@@ -55,17 +61,18 @@ end = struct
   ;;
 
   let empty = {
-    odefa_instrument_vars = Ast.Ident_set.empty;
+    odefa_instrument_vars_map = Ast.Ident_map.empty;
     odefa_pre_instrument_clause_mapping = Ast.Ident_map.empty;
     odefa_var_to_natodefa_expr = Ast.Ident_map.empty;
     natodefa_expr_to_expr = On_ast.Expr_map.empty;
   }
   ;;
 
-  let add_odefa_instrument_var mappings inst_ident =
-    let instrument_set = mappings.odefa_instrument_vars in
+  let add_odefa_instrument_var mappings inst_ident ident_opt =
+    let instrument_set = mappings.odefa_instrument_vars_map in
     { mappings with
-      odefa_instrument_vars = Ast.Ident_set.add inst_ident instrument_set;
+      odefa_instrument_vars_map =
+        Ast.Ident_map.add inst_ident ident_opt instrument_set;
     }
   ;;
 
@@ -92,41 +99,46 @@ end = struct
     }
 
   let get_pre_inst_equivalent_clause mappings odefa_ident =
-    let instrument_map = mappings.odefa_pre_instrument_clause_mapping in
-    try
-      Ast.Ident_map.find odefa_ident instrument_map
-    with Not_found ->
-      begin
-        if Ast.Ident_set.mem odefa_ident mappings.odefa_instrument_vars then
-          raise @@ Utils.Invariant_failure
-            (Printf.sprintf "%s was added during instrumentation."
-              (Ast.show_ident odefa_ident))
-        else
-          raise @@ Utils.Invariant_failure
-            (Printf.sprintf "%s should have associated clause!"
-              (Ast.show_ident odefa_ident))
-      end
+    let inst_map = mappings.odefa_instrument_vars_map in
+    let clause_map = mappings.odefa_pre_instrument_clause_mapping in
+    (* Get pre-instrument var from instrument var *)
+    let odefa_ident' =
+      match Ast.Ident_map.Exceptionless.find odefa_ident inst_map with
+      | Some (Some pre_inst_ident) -> pre_inst_ident
+      | Some (None) | None -> odefa_ident
+    in
+    (* Get clause from var *)
+    match Ast.Ident_map.Exceptionless.find odefa_ident' clause_map with
+    | Some clause -> clause
+    | None ->
+      raise @@ Utils.Invariant_failure
+        (Printf.sprintf
+          "%s should have associated clause!"
+          (Ast.show_ident odefa_ident))
   ;;
 
   let get_natodefa_equivalent_expr mappings odefa_ident =
+    let inst_map = mappings.odefa_instrument_vars_map in
     let odefa_on_map = mappings.odefa_var_to_natodefa_expr in
     let on_expr_map = mappings.natodefa_expr_to_expr in
-    match Ast.Ident_map.Exceptionless.find odefa_ident odefa_on_map with
-    | Some natodefa_expr ->
-      begin
-        match On_ast.Expr_map.Exceptionless.find natodefa_expr on_expr_map with
-        | Some natodefa_expr' -> natodefa_expr'
-        | None -> natodefa_expr
-      end
-    | None ->
-      begin
-        if Ast.Ident_set.mem odefa_ident mappings.odefa_instrument_vars then
-          raise @@ Utils.Invariant_failure
-            (Printf.sprintf
-              "instrument var %s not associated with any natodefa expression"
-              (Ast.show_ident odefa_ident))
-        else
-          let (Ast.Ident id) = odefa_ident in
-          On_ast.Var (Ident id)
-      end
+    (* Get pre-instrument var *)
+    let odefa_ident' =
+      match Ast.Ident_map.Exceptionless.find odefa_ident inst_map with
+      | Some (Some pre_inst_ident) -> pre_inst_ident
+      | Some (None) | None -> odefa_ident
+    in
+    (* Get natodefa expr from odefa var *)
+    let natodefa_expr =
+      try Ast.Ident_map.find odefa_ident' odefa_on_map with
+      | Not_found ->
+        raise @@ Utils.Invariant_failure
+          (Printf.sprintf
+            "variable %s not associated with natodefa expr"
+            (Ast.show_ident odefa_ident'))
+    in
+    (* Get any original natodefa exprs *)
+    match On_ast.Expr_map.Exceptionless.find natodefa_expr on_expr_map with
+    | Some natodefa_expr' -> natodefa_expr'
+    | None -> natodefa_expr
+  ;;
 end;;

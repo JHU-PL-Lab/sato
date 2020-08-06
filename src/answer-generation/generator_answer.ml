@@ -3,15 +3,13 @@ open Batteries;;
 
 open Odefa_ast;;
 open Ast;;
-(* open Ast_pp;; *)
 
-(* open Odefa_symbolic_interpreter;; *)
 open Odefa_symbolic_interpreter.Error;;
 open Odefa_symbolic_interpreter.Interpreter_types;;
 open Odefa_symbolic_interpreter.Interpreter;;
-(* open Odefa_symbolic_interpreter.Solver;; *)
 
-(* open Odefa_symbolic_interpreter.Relative_stack;; *)
+open Odefa_natural;;
+open On_to_odefa_types;;
 
 (* let lazy_logger = Jhupllib.Logger_utils.make_lazy_logger "Generator_answer";; *)
 
@@ -25,7 +23,7 @@ module type Answer = sig
   val count : t -> int;;
   val count_list : t list -> int;;
   val generation_successful : t -> bool;;
-  val remove_instrument_vars : var Var_map.t -> t -> t;;
+  val remove_instrument_vars : Odefa_natodefa_mappings.t -> t -> t;;
   val test_mem : t list -> t -> bool;;
 end;;
 
@@ -97,7 +95,7 @@ module Input_sequence : Answer = struct
     | None -> false
   ;;
 
-  let remove_instrument_vars (_ : var Var_map.t) (inputs : t) = inputs;;
+  let remove_instrument_vars (_ : Odefa_natodefa_mappings.t) (inputs : t) = inputs;;
 
   let test_mem input_seq_list input_seq = List.mem input_seq input_seq_list;;
 end;;
@@ -193,51 +191,56 @@ module Type_errors : Answer = struct
   let generation_successful (_: t) = true;;
 
   let remove_instrument_vars_error
-      (inst_var_map : var Var_map.t)
-      (error : error) =
+      (odefa_on_maps : Odefa_natodefa_mappings.t)
+      (error : error)
+    : error =
     match error with
     | Error_binop _ -> error
     | Error_match err ->
       begin
-        let (Clause (v_val, b_val)) = err.err_match_value in
-        let (Clause (v_match, b_match)) = err.err_match_clause in
+        let instrument_vars = odefa_on_maps.odefa_instrument_vars_map in
+        let val_cls = err.err_match_value in
+        let match_cls = err.err_match_clause in
+        let (Clause (Var (v_val, _), _)) = val_cls in
+        let (Clause (Var (v_match, _), _)) = match_cls in
         let match_aliases = err.err_match_aliases in
-        let (value_cls', match_aliases') =
+        let (value_cls'', match_aliases') =
           try
-            (* Replace the var in the value clause and remove extra var in
-               alias chain *)
-            let v_val' = Var_map.find v_val inst_var_map in
-            let Var (v_ident', _) = v_val' in
-            (Clause (v_val', b_val), List.remove match_aliases v_ident')
+            (* Replace the var in the value clause *)
+            let val_cls' =
+              Odefa_natodefa_mappings.get_pre_inst_equivalent_clause
+                odefa_on_maps v_val
+            in
+            (* Remove extra var from alias chain *)
+            let Clause (Var (val_ident', _), _) = val_cls' in
+            (val_cls', List.remove match_aliases val_ident')
           with Not_found ->
-            (Clause (v_val, b_val), match_aliases)
+            (val_cls, match_aliases)
         in
         let match_aliases'' =
           List.filter
             (* Stacks aren't set during instrumenting, so we're safe *)
-            (fun a -> not @@ Var_map.mem (Var (a, None)) inst_var_map)
+            (fun a -> not @@ Ident_map.mem a instrument_vars)
             match_aliases'
         in
-        let match_cls' =
-          try
-            let v_match' = Var_map.find v_match inst_var_map in
-            Clause (v_match', b_match)
-          with Not_found ->
-            Clause (v_match, b_match)
+        let match_cls'' =
+          Odefa_natodefa_mappings.get_pre_inst_equivalent_clause
+            odefa_on_maps v_match
         in
         Error_match {
           err with
           err_match_aliases = match_aliases'';
-          err_match_clause = match_cls';
-          err_match_value = value_cls';
+          err_match_clause = match_cls'';
+          err_match_value = value_cls'';
         }
       end
   ;;
 
   let remove_instrument_vars
-      (inst_var_map : var Var_map.t)
-      (error : t) =
-    let rm_inst_var_fn = remove_instrument_vars_error inst_var_map in
+      (odefa_on_maps : Odefa_natodefa_mappings.t)
+      (error : t)
+    : t =
+    let rm_inst_var_fn = remove_instrument_vars_error odefa_on_maps in
     let error_list = error.err_errors in
     let error_list' = List.map (Error_tree.map rm_inst_var_fn) error_list in
     {
@@ -265,3 +268,13 @@ module Type_errors : Answer = struct
       failwith "test_mem can only test single error"
   ;;
 end;;
+
+(*
+module Natodefa_type_errors : Answer = struct
+  type error_seq = {
+    err_errors :  list;
+    err_input_seq : int list;
+  }
+  ;;
+end;;
+*)

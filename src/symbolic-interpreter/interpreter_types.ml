@@ -52,13 +52,13 @@ type abort_value = {
       taken, lead to this abort point. *)
   abort_conditional_clauses : clause list;
 
+  (** The identifier variables of the conditional clauses, in the order that
+      the clauses are nested. *)
+  abort_conditional_idents : ident list;
+
   (** The predicates of the conditional clauses, in the order that the clauses
       are nested. *)
   abort_predicate_idents : ident list;
-
-  (** The return clauses, ie. the last clauses of the expression, of the true
-      branches of the conditional clauses. *)
-  abort_return_clauses : clause list;
 }
 [@@ deriving eq, ord, show]
 ;;

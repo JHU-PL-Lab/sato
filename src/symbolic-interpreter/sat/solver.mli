@@ -65,7 +65,7 @@ val solve : t -> solution option;;
 val solvable : t -> bool;;
 
 (** Find errors associated with a particular abort clause. *)
-val find_errors : t -> symbol -> Ast.clause -> Error_tree.t;;
+val find_errors : t -> Ast.clause -> symbol -> Error_tree.t;;
 
 (** Enumerates the constraints in a solver. *)
 val enum : t -> Constraint.t Enum.t;;

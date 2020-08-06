@@ -6,7 +6,7 @@ open Odefa_ast;;
 
 open Ast_tools;;
 
-(* open On_to_odefa_types;; *)
+open On_to_odefa_types;;
 open Preliminary_conversion;;
 (* open Simplification;; *)
 open Translator_utils;;
@@ -909,8 +909,8 @@ let translate
     ?translation_context:(translation_context=None)
     ?is_instrumented:(is_instrumented=false)
     (e : On_ast.expr)
-  : (Ast.expr * Ast.var Ast.Var_map.t) =
-  let (e_m_with_info : (Ast.expr * Ast.var Ast.Var_map.t) m) =
+  : (Ast.expr * Odefa_natodefa_mappings.t) =
+  let (e_m_with_info : (Ast.expr * Odefa_natodefa_mappings.t) m) =
     let%bind transformed_e =
       return e
       >>= debug_transform "pre-alphatize" alphatize
@@ -929,8 +929,9 @@ let translate
     let res_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
     let res_clause = Ast.Clause(res_var, Ast.Var_body(last_var)) in
     (* let%bind odefa_on_info = get_odefa_natodefa_info in *)
-    let%bind inst_map = instrument_map in
-    return (Ast.Expr(c_list @ [res_clause]), inst_map)
+    (* let%bind inst_map = instrument_map in *)
+    let%bind odefa_on_maps = odefa_natodefa_maps in
+    return (Ast.Expr(c_list @ [res_clause]), odefa_on_maps)
   in
   let context =
     match translation_context with

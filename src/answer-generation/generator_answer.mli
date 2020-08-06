@@ -1,6 +1,9 @@
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
+open Odefa_natural;;
+open On_to_odefa_types;;
+
 exception Parse_failure;;
 
 (** The interface of a generic answer, i.e. information that can be extracted
@@ -32,7 +35,7 @@ module type Answer = sig
 
   (** Remove any variables from the alias chain or clauses that were added
       during type constraint instrumentation. *)
-  val remove_instrument_vars : Ast.var Ast.Var_map.t -> t -> t;;
+  val remove_instrument_vars : Odefa_natodefa_mappings.t -> t -> t;;
 
   (** Test if an answer is a member of a collection of answers. (If the answer
       is an error, it must be wrapped in a singleton error tree). *)

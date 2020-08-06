@@ -39,9 +39,9 @@ module TranslationMonad : sig
   val fresh_name : string -> string m
   val fresh_var : string -> Ast.var m
   val update_natodefa_expr : On_ast.expr -> unit m
-  val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
   val add_var_clause_pair : Ast.var -> Ast.clause -> unit m
   val add_instrument_var : Ast.var -> unit m
+  val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
   val is_instrument_var : Ast.var -> bool m
   val add_odefa_natodefa_mapping : Ast.var -> unit m
   val add_natodefa_expr_mapping : On_ast.expr -> On_ast.expr -> unit m
@@ -80,11 +80,6 @@ end = struct
     Ast.Var(Ast.Ident name', None)
   ;;
 
-  let add_instrument_var_pair v_key v_val ctx =
-    ctx.tc_instrumented_var_map
-      <- Ast.Var_map.add v_key v_val ctx.tc_instrumented_var_map;
-  ;;
-
   let add_var_clause_pair v_key cls_val ctx =
     let (Ast.Var (i_key, _)) = v_key in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
@@ -96,13 +91,21 @@ end = struct
     let (Ast.Var (i, _)) = v in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_odefa_instrument_var odefa_on_maps i
+      <- Odefa_natodefa_mappings.add_odefa_instrument_var odefa_on_maps i None
+  ;;
+
+  let add_instrument_var_pair v_key v_val ctx =
+    let (Ast.Var (i_key, _)) = v_key in
+    let (Ast.Var (i_val, _)) = v_val in
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- Odefa_natodefa_mappings.add_odefa_instrument_var odefa_on_maps i_key (Some i_val);
   ;;
 
   let is_instrument_var v ctx =
     let (Ast.Var (i, _)) =  v in
-    let inst_vars = ctx.tc_odefa_natodefa_mappings.odefa_instrument_vars in
-    Ast.Ident_set.mem i inst_vars
+    let inst_vars = ctx.tc_odefa_natodefa_mappings.odefa_instrument_vars_map in
+    Ast.Ident_map.mem i inst_vars
   ;;
 
   let add_odefa_natodefa_mapping v_key ctx =

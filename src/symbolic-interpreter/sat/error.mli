@@ -28,7 +28,7 @@ type error_match = {
   (** The value of the ident that is being matched. *)
   err_match_value : clause;
 
-  (** The clause that is being constrained by the abort's conditional. *)
+  (** The clause respresenting the operation being instrumented. *)
   err_match_clause : clause;
 
   (** The expected type, according to the pattern. *)

@@ -9,6 +9,7 @@
     odefa.ast
     odefa.ddpa
     odefa.interpreter
+    odefa.natural
     odefa.parser
     odefa.statistics
     odefa.symbolic-interpreter

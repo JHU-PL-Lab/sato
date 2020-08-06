@@ -201,9 +201,12 @@ let prepare_environment
     |> Enum.map
         (fun ((abort_ident: ident), (cond_vars : var list)) ->
           let cond_vars = List.rev cond_vars in
-          let cond_clauses =
-            List.map
-              (fun (Var (k, _)) -> Ident_map.find k clause_mapping)
+          let (cond_idents, cond_clauses) =
+            List.fold_left
+              (fun (ident_acc, cls_acc) (Var (id, _)) ->
+                let cls = Ident_map.find id clause_mapping in
+                (id :: ident_acc, cls :: cls_acc))
+              ([], [])
               cond_vars
           in
           let pred_idents =
@@ -215,20 +218,11 @@ let prepare_environment
               )
               cond_clauses
           in
-          let ret_clauses =
-            List.map
-              (fun (Clause (x, cls_body)) ->
-                match cls_body with
-                | Conditional_body (_, Expr (clist), _) -> List.last clist
-                | _ -> raise @@ Utils.Invariant_failure ((show_var x) ^ " is not a conditional!")
-              )
-              cond_clauses
-          in
           let abort_val : abort_value =
             {
               abort_conditional_clauses = cond_clauses;
+              abort_conditional_idents = cond_idents;
               abort_predicate_idents = pred_idents;
-              abort_return_clauses = ret_clauses;
             }
           in
           (abort_ident, abort_val)
@@ -1057,13 +1051,13 @@ struct
         |> Enum.map
           (fun (Symbol (symb_id, rstack), e) ->
             let pred_ids = e.abort_predicate_idents in
-            let cond_cls = e.abort_return_clauses in
+            let cond_cls = List.hd e.abort_conditional_clauses in
             let preds = List.map (fun id -> (Symbol(id, rstack))) pred_ids in
             ((Symbol (symb_id, rstack)), (preds, cond_cls))
           )
         |> Enum.map
           (fun (symb, (preds, cond_cls)) ->
-            (symb, (List.map2 (Solver.find_errors solver) preds cond_cls))
+            (symb, (List.map (Solver.find_errors solver cond_cls) preds))
           )
         |> Enum.map
           (fun (symb, err_list) ->
