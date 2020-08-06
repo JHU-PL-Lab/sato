@@ -19,6 +19,11 @@ module Odefa_natodefa_mappings : sig
     (** Mapping between an odefa variable to the natodefa expr that the
         odefa variable was derived from. *)
     odefa_var_to_natodefa_expr : On_ast.expr Ast.Ident_map.t;
+
+    (** Mapping between two natodefa expressions.  Used to create a
+        mapping of natodefa lists and variants with their record
+        equivalents as their keys. *)
+    natodefa_expr_to_expr : On_ast.expr On_ast.Expr_map.t;
   }
   [@@ deriving eq, ord]
   ;;
@@ -31,6 +36,8 @@ module Odefa_natodefa_mappings : sig
 
   val add_natodefa_mapping : t -> Ast.ident -> On_ast.expr -> t;;
 
+  val add_on_expr_to_expr_mapping : t -> On_ast.expr -> On_ast.expr -> t;;
+
   (* val get_pre_instrumented : t -> Ast.ident -> Ast.clause;; *)
 
   (* val get_natodefa_expr : t -> Ast.ident -> On_ast.expr;; *)
@@ -40,6 +47,7 @@ end = struct
     odefa_instrument_vars : Ast.Ident_set.t;
     odefa_pre_instrument_clause_mapping : Ast.clause Ast.Ident_map.t;
     odefa_var_to_natodefa_expr : On_ast.expr Ast.Ident_map.t;
+    natodefa_expr_to_expr : On_ast.expr On_ast.Expr_map.t;
   }
   [@@ deriving eq, ord]
   ;;
@@ -48,6 +56,7 @@ end = struct
     odefa_instrument_vars = Ast.Ident_set.empty;
     odefa_pre_instrument_clause_mapping = Ast.Ident_map.empty;
     odefa_var_to_natodefa_expr = Ast.Ident_map.empty;
+    natodefa_expr_to_expr = On_ast.Expr_map.empty;
   }
   ;;
 
@@ -93,4 +102,11 @@ end = struct
       On_ast.Var (Ident id)
   ;;
   *)
+
+  let add_on_expr_to_expr_mapping mappings expr1 expr2 =
+    let natodefa_expr_map = mappings.natodefa_expr_to_expr in
+    { mappings with
+      natodefa_expr_to_expr =
+        On_ast.Expr_map.add expr1 expr2 natodefa_expr_map;
+    }
 end;;

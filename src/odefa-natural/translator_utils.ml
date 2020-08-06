@@ -46,6 +46,7 @@ module TranslationMonad : sig
   val instrument_map : Ast.var Ast.Var_map.t m
   val var_clause_mapping : Ast.clause Ast.Ident_map.t m
   val add_odefa_natodefa_mapping : Ast.var -> unit m
+  val add_natodefa_expr_mapping : On_ast.expr -> On_ast.expr -> unit m
   val freshness_string : string m
   val acontextual_recursion : bool m
   val sequence : 'a m list -> 'a list m
@@ -113,6 +114,12 @@ end = struct
         <- Odefa_natodefa_mappings.add_natodefa_mapping odefa_on_maps i_key expr_val
     | None ->
       failwith (Printf.sprintf "Tried to add mapping of %s to a natodefa expr, but no expr was available!" (Ast.show_ident i_key))
+  ;;
+
+  let add_natodefa_expr_mapping k_expr v_expr ctx =
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- Odefa_natodefa_mappings.add_on_expr_to_expr_mapping odefa_on_maps k_expr v_expr
   ;;
 
   let update_natodefa_expr expr ctx =

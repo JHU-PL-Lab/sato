@@ -11,8 +11,12 @@ let _lbl_m name =
   return @@ Ident (freshness ^ name)
 ;;
 
+(* Note: We have two labels in order to distinguish between list heads that
+   were added via consing from heads that were originally part of lists. *)
+
 let lbl_empty_m : Ident.t m = _lbl_m "empty";;
 let lbl_head_m : Ident.t m = _lbl_m "head";;
+let lbl_head_cons_m : Ident.t m = _lbl_m "head_cons";;
 let lbl_tail_m : Ident.t m = _lbl_m "tail";;
 let lbl_variant_m (s : string) : Ident.t m = _lbl_m ("variant_" ^ s);;
 let lbl_value_m : Ident.t m = _lbl_m "value";;
@@ -44,10 +48,11 @@ let list_transform (e : expr) : expr m =
   let%bind () = update_natodefa_expr e in
   let%bind lbl_empty = lbl_empty_m in
   let%bind lbl_head = lbl_head_m in
+  let%bind lbl_head_cons = lbl_head_cons_m in
   let%bind lbl_tail = lbl_tail_m in
-  let transformer recurse expr =
-    match expr with
-    | List (expr_list) ->
+  let transformer recurse e =
+    match e with
+    | List expr_list ->
       let list_maker element acc =
         let%bind clean_elm = recurse element in
         let new_map =
@@ -57,13 +62,14 @@ let list_transform (e : expr) : expr m =
         in
         return @@ Record new_map
       in
-      let empty_rec =
-        Record (Ident_map.add
-                  lbl_empty (Record (Ident_map.empty)) Ident_map.empty)
+      let empty_rec = Record Ident_map.empty in
+      let empty_rec' =
+        Record (Ident_map.add lbl_empty empty_rec Ident_map.empty)
       in
       let%bind record_equivalent =
-        list_fold_right_m list_maker expr_list empty_rec
+        list_fold_right_m list_maker expr_list empty_rec'
       in
+      let%bind () = add_natodefa_expr_mapping record_equivalent e in
       return record_equivalent
     (* Here  we "cons" the expression with the list during natodefa-to-odefa translation. 
        Simple, but can introduce pitfalls such as:
@@ -76,12 +82,14 @@ let list_transform (e : expr) : expr m =
       let%bind record_list = recurse expr_list in
       let new_map =
         Ident_map.empty
-        |> Ident_map.add lbl_head clean_expr
+        |> Ident_map.add lbl_head_cons clean_expr
         |> Ident_map.add lbl_tail record_list
       in
-      return @@ Record new_map
-    | Match (match_e, pat_expr_list) ->
-      let%bind new_match_e = recurse match_e in
+      let record_equivalent = Record new_map in
+      let%bind () = add_natodefa_expr_mapping record_equivalent e in
+      return record_equivalent
+    | Match (match_expr, pat_expr_list) ->
+      let%bind new_match_e = recurse match_expr in
       (* routine to pass into List.map... *)
       let pat_expr_list_changer pat_expr_tuple =
         let (curr_pat, curr_expr) = pat_expr_tuple in
@@ -92,9 +100,11 @@ let list_transform (e : expr) : expr m =
       let%bind new_pat_expr_list =
         sequence @@ List.map pat_expr_list_changer pat_expr_list
       in
-      return @@ Match(new_match_e, new_pat_expr_list)
+      let new_expr = Match (new_match_e, new_pat_expr_list) in
+      let%bind () = add_natodefa_expr_mapping new_expr e in
+      return @@ new_expr
     | _ ->
-      return expr
+      return e
   in
   m_transform_expr transformer e
 ;;
@@ -141,7 +151,9 @@ let encode_variant (e : expr) : expr m =
     let%bind () = update_natodefa_expr e in
     match e with
     | VariantExpr (lbl, e') ->
-      variant_expr_to_record recurse lbl e'
+      let%bind record_equivalent = variant_expr_to_record recurse lbl e' in
+      let%bind () = add_natodefa_expr_mapping record_equivalent e in
+      return record_equivalent
     | Match (match_e, pat_expr_list) ->
       let%bind new_match_e = recurse match_e in
       (* routine to pass into List.map to edit all of the pattern/expression
@@ -155,7 +167,9 @@ let encode_variant (e : expr) : expr m =
       let%bind new_pat_expr_list =
         sequence @@ List.map pat_expr_list_changer pat_expr_list
       in
-      return @@ Match (new_match_e, new_pat_expr_list)
+      let new_expr = Match (new_match_e, new_pat_expr_list) in
+      let%bind () = add_natodefa_expr_mapping new_expr e in
+      return new_expr
     | _ ->
       return e
   in

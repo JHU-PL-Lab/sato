@@ -63,3 +63,12 @@ and expr =
 
 [@@deriving eq, ord, show]
 ;;
+
+module Expr = struct
+  type t = expr;;
+  let equal = equal_expr;;
+  let compare = compare_expr;;
+  let show = show_expr;;
+end;;
+
+module Expr_map = Map.Make(Expr);;

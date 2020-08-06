@@ -821,10 +821,8 @@ and flatten_expr
     in
     let%bind rec_var = fresh_var "record" in
     let%bind () = add_odefa_natodefa_mapping rec_var in
-    let new_clause = Ast.Clause(rec_var,
-                                Ast.Value_body(Ast.Value_record(
-                                    Ast.Record_value (map)
-                                  ))) in
+    let new_body = Ast.Value_body (Ast.Value_record (Ast.Record_value map)) in
+    let new_clause = Ast.Clause (rec_var, new_body) in
     return (clist @ [new_clause], rec_var)
   | RecordProj (rec_expr, lab) ->
     let%bind (e_clist, e_var) = flatten_expr rec_expr in
