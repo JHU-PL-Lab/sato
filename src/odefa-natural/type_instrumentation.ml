@@ -51,58 +51,6 @@ let rec change_abort_vars
   | _ -> clause
 ;;
 
-(*
-let rec instrument_zero
-    (clause : clause)
-  : (clause list) m =
-  match 
-  let Clause(v, body) = clause in
-  match body with
-  | Value_body value ->
-    begin
-      match value with
-      | Value_function f ->
-        let Function_value(arg, Expr(f_body)) = f in
-        let f_body' = List.map (instrument_zero clause) f_body in
-        let value' = Value_function (Function_value (arg, Expr(f_body'))) in
-        return @@ Clause(v, Value_body value')
-      | _ -> return @@ clause
-    end
-  | Conditional_body (pred, e1, e2) ->
-    let Expr(cl1) = e1 in
-    let Expr(cl2) = e2 in
-    let cl1' = List.map instrument_zero cl1 in
-    let cl2' = List.map instrument_zero cl2 in
-    let body' = Conditional_body (pred, Expr(cl1'), Expr(cl2')) in
-    return @@ Clause (v, body')
-  | Binary_operation_body (x1, op, x2) ->
-    begin
-      match op with
-      | Binary_operator_divide | Binary_operator_modulus ->
-        (* Variables *)
-        let%bind b1 = fresh_var "b_zl" in
-        let%bind b2 = fresh_var "b_zr" in
-        let%bind b = fresh_var "b_z" in
-        (* Clauses *)
-        let b1_cls = Clause(b1, Binary_operation_body (x1, Binary_operator_less_than, x2)) in
-        let b2_cls = Clause(b2, Bianry_operation_body (x2, Binary_operator_less_than, x1)) in
-        let b_cls = Clause(b, Binary_operation_body (b1, Binary_operator_and, b2)) in
-        (* Conditional *)
-        let%bind cz_binop = fresh_var "cz_binop" in
-        let%bind () = add_instrument_var_pair cz_binop v in
-        let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
-        let%bind f_path = add_abort_expr v in
-        let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
-        let%bind cont = instrument_clauses clauses' in
-        return @@ [m1_cls; m2_cls; m_cls; c_cls] @ cont
-      | _ ->
-        return @@ clause
-    end
-  | _ ->
-    return @@ clause
-;;
-*)
-
 let rec instrument_clauses
     (c_list : clause list)
   : (clause list) m =

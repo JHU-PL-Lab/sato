@@ -38,15 +38,16 @@ module TranslationMonad : sig
   val run : translation_context -> 'a m -> 'a
   val fresh_name : string -> string m
   val fresh_var : string -> Ast.var m
+  val update_natodefa_expr : On_ast.expr -> unit m
   val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
   val add_var_clause_pair : Ast.var -> Ast.clause -> unit m
   val add_instrument_var : Ast.var -> unit m
   val is_instrument_var : Ast.var -> bool m
-  val update_natodefa_expr : On_ast.expr -> unit m
-  val instrument_map : Ast.var Ast.Var_map.t m
-  val var_clause_mapping : Ast.clause Ast.Ident_map.t m
   val add_odefa_natodefa_mapping : Ast.var -> unit m
   val add_natodefa_expr_mapping : On_ast.expr -> On_ast.expr -> unit m
+  val instrument_map : Ast.var Ast.Var_map.t m
+  val var_clause_mapping : Ast.clause Ast.Ident_map.t m
+  val odefa_natodefa_maps : Odefa_natodefa_mappings.t m
   val freshness_string : string m
   val acontextual_recursion : bool m
   val sequence : 'a m list -> 'a list m
@@ -88,14 +89,14 @@ end = struct
     let (Ast.Var (i_key, _)) = v_key in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_var_clause_mapping odefa_on_maps i_key cls_val
+      <- Odefa_natodefa_mappings.add_odefa_var_clause_mapping odefa_on_maps i_key cls_val
   ;;
 
   let add_instrument_var v ctx =
     let (Ast.Var (i, _)) = v in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_instrument_var odefa_on_maps i
+      <- Odefa_natodefa_mappings.add_odefa_instrument_var odefa_on_maps i
   ;;
 
   let is_instrument_var v ctx =
@@ -111,7 +112,7 @@ end = struct
     | Some expr_val ->
       let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
       ctx.tc_odefa_natodefa_mappings
-        <- Odefa_natodefa_mappings.add_natodefa_mapping odefa_on_maps i_key expr_val
+        <- Odefa_natodefa_mappings.add_odefa_var_on_expr_mapping odefa_on_maps i_key expr_val
     | None ->
       failwith (Printf.sprintf "Tried to add mapping of %s to a natodefa expr, but no expr was available!" (Ast.show_ident i_key))
   ;;
@@ -132,6 +133,10 @@ end = struct
 
   let var_clause_mapping ctx =
     ctx.tc_odefa_natodefa_mappings.odefa_pre_instrument_clause_mapping
+  ;;
+
+  let odefa_natodefa_maps ctx =
+    ctx.tc_odefa_natodefa_mappings
   ;;
 
   let freshness_string ctx =

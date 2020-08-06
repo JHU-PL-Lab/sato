@@ -1,3 +1,5 @@
+open Jhupllib;;
+
 open Odefa_ast;;
 
 module Odefa_natodefa_mappings : sig
@@ -30,17 +32,17 @@ module Odefa_natodefa_mappings : sig
 
   val empty : t;;
 
-  val add_instrument_var : t -> Ast.ident -> t;;
+  val add_odefa_instrument_var : t -> Ast.ident -> t;;
 
-  val add_var_clause_mapping : t -> Ast.ident -> Ast.clause -> t;;
+  val add_odefa_var_clause_mapping : t -> Ast.ident -> Ast.clause -> t;;
 
-  val add_natodefa_mapping : t -> Ast.ident -> On_ast.expr -> t;;
+  val add_odefa_var_on_expr_mapping : t -> Ast.ident -> On_ast.expr -> t;;
 
   val add_on_expr_to_expr_mapping : t -> On_ast.expr -> On_ast.expr -> t;;
 
-  (* val get_pre_instrumented : t -> Ast.ident -> Ast.clause;; *)
+  val get_pre_inst_equivalent_clause : t -> Ast.ident -> Ast.clause;;
 
-  (* val get_natodefa_expr : t -> Ast.ident -> On_ast.expr;; *)
+  val get_natodefa_equivalent_expr : t -> Ast.ident -> On_ast.expr;;
 
 end = struct
   type t = {
@@ -60,14 +62,14 @@ end = struct
   }
   ;;
 
-  let add_instrument_var mappings inst_ident =
+  let add_odefa_instrument_var mappings inst_ident =
     let instrument_set = mappings.odefa_instrument_vars in
     { mappings with
       odefa_instrument_vars = Ast.Ident_set.add inst_ident instrument_set;
     }
   ;;
 
-  let add_var_clause_mapping mappings var_ident clause =
+  let add_odefa_var_clause_mapping mappings var_ident clause =
     let instrument_map = mappings.odefa_pre_instrument_clause_mapping in
     { mappings with
       odefa_pre_instrument_clause_mapping =
@@ -75,38 +77,56 @@ end = struct
     }
   ;;
 
-  (*
-  let get_pre_instrumented mappings inst_ident =
-    let instrument_map = mappings.odefa_pre_instrument_clause_mapping in
-    Ast.Ident_map.find_default inst_ident inst_ident instrument_map
-  ;;
-  *)
-
-  let add_natodefa_mapping mappings odefa_ident on_expr =
+  let add_odefa_var_on_expr_mapping mappings odefa_ident on_expr =
     let natodefa_map = mappings.odefa_var_to_natodefa_expr in
     { mappings with
       odefa_var_to_natodefa_expr =
         Ast.Ident_map.add odefa_ident on_expr natodefa_map;
     }
   ;;
-
-  (*
-  let get_natodefa_expr mappings odefa_ident =
-    let natodefa_map = mappings.odefa_var_to_natodefa_expr in
-    try
-      Ast.Ident_map.find odefa_ident natodefa_map
-    with Not_found ->
-      (* If the variable is not in the mapping, it's probably because it was
-         originally in the natodefa code. *)
-      let (Ast.Ident id) = odefa_ident in
-      On_ast.Var (Ident id)
-  ;;
-  *)
-
   let add_on_expr_to_expr_mapping mappings expr1 expr2 =
     let natodefa_expr_map = mappings.natodefa_expr_to_expr in
     { mappings with
       natodefa_expr_to_expr =
         On_ast.Expr_map.add expr1 expr2 natodefa_expr_map;
     }
+
+  let get_pre_inst_equivalent_clause mappings odefa_ident =
+    let instrument_map = mappings.odefa_pre_instrument_clause_mapping in
+    try
+      Ast.Ident_map.find odefa_ident instrument_map
+    with Not_found ->
+      begin
+        if Ast.Ident_set.mem odefa_ident mappings.odefa_instrument_vars then
+          raise @@ Utils.Invariant_failure
+            (Printf.sprintf "%s was added during instrumentation."
+              (Ast.show_ident odefa_ident))
+        else
+          raise @@ Utils.Invariant_failure
+            (Printf.sprintf "%s should have associated clause!"
+              (Ast.show_ident odefa_ident))
+      end
+  ;;
+
+  let get_natodefa_equivalent_expr mappings odefa_ident =
+    let odefa_on_map = mappings.odefa_var_to_natodefa_expr in
+    let on_expr_map = mappings.natodefa_expr_to_expr in
+    match Ast.Ident_map.Exceptionless.find odefa_ident odefa_on_map with
+    | Some natodefa_expr ->
+      begin
+        match On_ast.Expr_map.Exceptionless.find natodefa_expr on_expr_map with
+        | Some natodefa_expr' -> natodefa_expr'
+        | None -> natodefa_expr
+      end
+    | None ->
+      begin
+        if Ast.Ident_set.mem odefa_ident mappings.odefa_instrument_vars then
+          raise @@ Utils.Invariant_failure
+            (Printf.sprintf
+              "instrument var %s not associated with any natodefa expression"
+              (Ast.show_ident odefa_ident))
+        else
+          let (Ast.Ident id) = odefa_ident in
+          On_ast.Var (Ident id)
+      end
 end;;
