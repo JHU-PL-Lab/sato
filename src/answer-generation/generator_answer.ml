@@ -19,11 +19,11 @@ module type Answer = sig
   type t;;
   val answer_from_result : expr -> ident -> evaluation_result -> t;;
   val answer_from_string : string -> t;;
+  val set_odefa_natodefa_map : Odefa_natodefa_mappings.t -> unit;;
   val show : t -> string;;
   val count : t -> int;;
   val count_list : t list -> int;;
   val generation_successful : t -> bool;;
-  val remove_instrument_vars : Odefa_natodefa_mappings.t -> t -> t;;
   val test_mem : t list -> t -> bool;;
 end;;
 
@@ -70,6 +70,9 @@ module Input_sequence : Answer = struct
     Some (parse_comma_separated_ints arg_str)
   ;;
 
+  (* Unused for input sequence generation. *)
+  let set_odefa_natodefa_map (_ : Odefa_natodefa_mappings.t) = ();;
+
   let show inputs_opt =
     match inputs_opt with
     | Some inputs ->
@@ -95,8 +98,6 @@ module Input_sequence : Answer = struct
     | None -> false
   ;;
 
-  let remove_instrument_vars (_ : Odefa_natodefa_mappings.t) (inputs : t) = inputs;;
-
   let test_mem input_seq_list input_seq = List.mem input_seq input_seq_list;;
 end;;
 
@@ -112,83 +113,9 @@ module Type_errors : Answer = struct
 
   type t = error_seq;;
 
-  let answer_from_result e x result =
-    let error_tree_map = result.er_errors in
-    let (input_seq, abort_list) =
-      Generator_utils.input_sequence_from_result e x result
-    in
-    (* For now, we only report the error associated with the first we encounter
-       on a program path, since (during forward evaluation) only code up to
-       that abort is "live;" all code afterwards is "dead" code that is
-       unreachable in the non-instrumented code.  In the future we can report
-       potential errors in "dead" code as well, but only after we prove
-       soundness. *)
-    let abort_list_singleton =
-      if List.is_empty abort_list then [] else [List.first abort_list]
-    in
-    let error_tree_list =
-      List.fold_right
-        (fun abort_symb et_list ->
-          let et = Symbol_map.find abort_symb error_tree_map in
-          et :: et_list
-        )
-        abort_list_singleton
-        []
-    in
-    let errs =
-      {
-        err_input_seq = input_seq;
-        err_errors = error_tree_list;
-      }
-    in
-    errs
-  ;;
+  let odefa_on_maps_option_ref = ref None;;
 
-  (* Ex: [0, 1] : "a = b" "c = 2" "sum = a or z" "int" "bool" *)
-  let answer_from_string arg_str =
-    let (input_str, error_str) =
-      arg_str
-      |> String.split ~by:":"
-      |> (fun (i_str, e_str) -> (String.trim i_str, String.trim e_str))
-    in
-    let inputs = parse_comma_separated_ints input_str in
-    let error = parse_error error_str in
-    let err_tree = Error_tree.singleton error in
-    {
-      err_input_seq = inputs;
-      err_errors = [err_tree];
-    }
-  ;;
-
-  let show_input_seq input_seq =
-    "[" ^ (String.join ", " @@ List.map string_of_int input_seq) ^ "]"
-  ;;
-
-  let show error_seq =
-    if not @@ List.is_empty error_seq.err_errors then begin
-      "Type errors for input sequence " ^
-      (show_input_seq error_seq.err_input_seq) ^ ":\n" ^
-      (String.join "\n-----------------\n" @@ List.map Error_tree.to_string error_seq.err_errors)
-    end else begin
-      ""
-    end
-  ;;
-
-  let count errors =
-    List.fold_left
-      (fun count err_tree -> count + (Error_tree.count err_tree))
-      0
-      errors.err_errors
-  ;;
-
-  let count_list error_list =
-    error_list
-    |> List.map count
-    |> List.fold_left (fun a x -> x + a) 0
-  ;;
-
-  (* Currently always returns true; no mechanism to detect failed answer gen *)
-  let generation_successful (_: t) = true;;
+  (* **** Remove variables added during instrumentation **** *)
 
   let remove_instrument_vars_error
       (odefa_on_maps : Odefa_natodefa_mappings.t)
@@ -248,6 +175,91 @@ module Type_errors : Answer = struct
       err_errors = error_list';
     }
   ;;
+
+  let answer_from_result e x result =
+    let error_tree_map = result.er_errors in
+    let (input_seq, abort_list) =
+      Generator_utils.input_sequence_from_result e x result
+    in
+    (* For now, we only report the error associated with the first we encounter
+       on a program path, since (during forward evaluation) only code up to
+       that abort is "live;" all code afterwards is "dead" code that is
+       unreachable in the non-instrumented code.  In the future we can report
+       potential errors in "dead" code as well, but only after we prove
+       soundness. *)
+    let abort_list_singleton =
+      if List.is_empty abort_list then [] else [List.first abort_list]
+    in
+    let error_tree_list =
+      List.fold_right
+        (fun abort_symb et_list ->
+          let et = Symbol_map.find abort_symb error_tree_map in
+          et :: et_list
+        )
+        abort_list_singleton
+        []
+    in
+    let errs =
+      {
+        err_input_seq = input_seq;
+        err_errors = error_tree_list;
+      }
+    in
+    match !odefa_on_maps_option_ref with
+    | Some odefa_on_maps -> remove_instrument_vars odefa_on_maps errs
+    | None -> failwith "Odefa/natodefa maps were not set!"
+  ;;
+
+  (* Ex: [0, 1] : "a = b" "c = 2" "sum = a or z" "int" "bool" *)
+  let answer_from_string arg_str =
+    let (input_str, error_str) =
+      arg_str
+      |> String.split ~by:":"
+      |> (fun (i_str, e_str) -> (String.trim i_str, String.trim e_str))
+    in
+    let inputs = parse_comma_separated_ints input_str in
+    let error = parse_error error_str in
+    let err_tree = Error_tree.singleton error in
+    {
+      err_input_seq = inputs;
+      err_errors = [err_tree];
+    }
+  ;;
+
+  let set_odefa_natodefa_map odefa_on_maps =
+    odefa_on_maps_option_ref := Some (odefa_on_maps);;
+  ;;
+
+  let show_input_seq input_seq =
+    "[" ^ (String.join ", " @@ List.map string_of_int input_seq) ^ "]"
+  ;;
+
+  let show error_seq =
+    if not @@ List.is_empty error_seq.err_errors then begin
+      "Type errors for input sequence " ^
+      (show_input_seq error_seq.err_input_seq) ^ ":\n" ^
+      (String.join "\n-----------------\n"
+        @@ List.map Error_tree.to_string error_seq.err_errors)
+    end else begin
+      ""
+    end
+  ;;
+
+  let count errors =
+    List.fold_left
+      (fun count err_tree -> count + (Error_tree.count err_tree))
+      0
+      errors.err_errors
+  ;;
+
+  let count_list error_list =
+    error_list
+    |> List.map count
+    |> List.fold_left (fun a x -> x + a) 0
+  ;;
+
+  (* Currently always returns true; no mechanism to detect failed answer gen *)
+  let generation_successful (_: t) = true;;
 
   let test_mem (error_list: t list) (error: t) =
     let input_seq = error.err_input_seq in

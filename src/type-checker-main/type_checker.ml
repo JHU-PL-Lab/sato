@@ -69,6 +69,7 @@ let get_ast (args : Type_checker_parser.type_checker_args)
 let () =
   let args = Type_checker_parser.parse_args () in
   let (ast, on_odefa_maps) = get_ast args in
+  Ans.set_odefa_natodefa_map on_odefa_maps;
   try
     let results_remaining = ref args.tc_maximum_results in
     let total_errors = ref 0 in
@@ -82,8 +83,7 @@ let () =
     let generation_callback
       (type_errors : Ans.t) (steps: int) : unit =
       let _ = steps in (* Temp *)
-      let type_errors' = Ans.remove_instrument_vars on_odefa_maps type_errors in
-      print_endline (Ans.show type_errors');
+      print_endline (Ans.show type_errors);
       flush stdout;
       total_errors := !total_errors + Ans.count type_errors;
       results_remaining := (Option.map (fun n -> n - 1) !results_remaining);
