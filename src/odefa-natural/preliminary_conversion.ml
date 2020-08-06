@@ -24,8 +24,6 @@ let lbl_value_m : Ident.t m = _lbl_m "value";;
 (* This function encodes all list-related patterns with record patterns *)
 let rec encode_list_pattern (pat : pattern) : pattern m =
   match pat with
-  | AnyPat | IntPat | BoolPat | FunPat | VarPat _ | VariantPat (_, _) | RecPat _->
-    return pat
   | EmptyLstPat ->
     (* The empty list is encoded as {~empty = {}}
        The corresponding pattern is {~empty = None} *)
@@ -41,16 +39,18 @@ let rec encode_list_pattern (pat : pattern) : pattern m =
       |> Ident_map.add lbl_tail @@ Some tl_var
     in
     return @@ RecPat (new_pat)
+  | _ ->
+    return pat
 ;;
 
 (* This function transforms all lists in the expression to records. *)
 let list_transform (e : expr) : expr m =
-  let%bind () = update_natodefa_expr e in
   let%bind lbl_empty = lbl_empty_m in
   let%bind lbl_head = lbl_head_m in
   let%bind lbl_head_cons = lbl_head_cons_m in
   let%bind lbl_tail = lbl_tail_m in
   let transformer recurse e =
+    let%bind () = update_natodefa_expr e in
     match e with
     | List expr_list ->
       let list_maker element acc =
@@ -139,8 +139,7 @@ let encode_variant_pattern (p : pattern) : pattern m =
       Ident_map.add variant_ident (Some v_var) Ident_map.empty
     in
     return @@ RecPat (new_pattern)
-  | AnyPat | IntPat | BoolPat | FunPat | VarPat _ | RecPat _
-  | EmptyLstPat | LstDestructPat _ ->
+  | _ ->
     return p
 ;;
 
