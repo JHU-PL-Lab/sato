@@ -2,6 +2,14 @@ open Odefa_ast;;
 
 module Odefa_natodefa_mappings : sig
   type t = {
+    (** A set of odefa variables that were added during instrumentation
+        (as opposed to being in the original code or added during pre-
+        instrumentation translation).  This also includes variables added
+        when translating natodefa match clauses, so that they aren't
+        unnecessarily constrained (since the match conditionals already
+        instrument their respective expressions). *)
+    odefa_instrument_vars : Ast.Ident_set.t;
+
     (** Mapping between variables that were added during instrumentation
         with the variables whose clauses the instrumenting clause is
         constraining.  This is mainly used to obtain the operation that
@@ -17,6 +25,8 @@ module Odefa_natodefa_mappings : sig
 
   val empty : t;;
 
+  val add_instrument_var : t -> Ast.ident -> t;;
+
   val add_var_clause_mapping : t -> Ast.ident -> Ast.clause -> t;;
 
   val add_natodefa_mapping : t -> Ast.ident -> On_ast.expr -> t;;
@@ -27,6 +37,7 @@ module Odefa_natodefa_mappings : sig
 
 end = struct
   type t = {
+    odefa_instrument_vars : Ast.Ident_set.t;
     odefa_pre_instrument_clause_mapping : Ast.clause Ast.Ident_map.t;
     odefa_var_to_natodefa_expr : On_ast.expr Ast.Ident_map.t;
   }
@@ -34,16 +45,24 @@ end = struct
   ;;
 
   let empty = {
+    odefa_instrument_vars = Ast.Ident_set.empty;
     odefa_pre_instrument_clause_mapping = Ast.Ident_map.empty;
     odefa_var_to_natodefa_expr = Ast.Ident_map.empty;
   }
   ;;
 
-  let add_var_clause_mapping mappings inst_ident pre_inst_clause =
+  let add_instrument_var mappings inst_ident =
+    let instrument_set = mappings.odefa_instrument_vars in
+    { mappings with
+      odefa_instrument_vars = Ast.Ident_set.add inst_ident instrument_set;
+    }
+  ;;
+
+  let add_var_clause_mapping mappings var_ident clause =
     let instrument_map = mappings.odefa_pre_instrument_clause_mapping in
     { mappings with
       odefa_pre_instrument_clause_mapping =
-        Ast.Ident_map.add inst_ident pre_inst_clause instrument_map;
+        Ast.Ident_map.add var_ident clause instrument_map;
     }
   ;;
 

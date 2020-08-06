@@ -140,7 +140,13 @@ let rec instrument_clauses
           return @@ clause :: new_clauses'
         end
       | Binary_operation_body (v1, binop, v2) ->
-        begin
+        (* Don't instrument if the v is already counted as a variable added
+            during instrumentation (i.e. pattern match conversion *)
+        let%bind is_already_inst = is_instrument_var v in
+        if is_already_inst then begin
+          let%bind new_clauses' = instrument_clauses clauses' in
+          return @@ clause :: new_clauses'
+        end else begin
           match binop with
           | Binary_operator_plus
           | Binary_operator_minus
@@ -152,6 +158,9 @@ let rec instrument_clauses
               let%bind m1 = fresh_var "m_bl" in
               let%bind m2 = fresh_var "m_br" in
               let%bind m = fresh_var "m_b" in
+              let%bind () = add_instrument_var m1 in
+              let%bind () = add_instrument_var m2 in
+              let%bind () = add_instrument_var m in
               (* Clauses *)
               let m1_cls = Clause(m1, Match_body(v1, Int_pattern)) in
               let m2_cls = Clause(m2, Match_body(v2, Int_pattern)) in
@@ -159,6 +168,7 @@ let rec instrument_clauses
               let m_cls = Clause(m, m_bod) in
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
+              let%bind () = add_instrument_var c_binop in
               let%bind () = add_instrument_var_pair c_binop v in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
               let%bind f_path = add_abort_expr v in
@@ -174,6 +184,9 @@ let rec instrument_clauses
               let%bind m1 = fresh_var "m_bl" in
               let%bind m2 = fresh_var "m_br" in
               let%bind m = fresh_var "m_b" in
+              let%bind () = add_instrument_var m1 in
+              let%bind () = add_instrument_var m2 in
+              let%bind () = add_instrument_var m in
               (* Clauses *)
               let m1_cls = Clause(m1, Match_body(v1, Bool_pattern)) in
               let m2_cls = Clause(m2, Match_body(v2, Bool_pattern)) in
@@ -181,6 +194,7 @@ let rec instrument_clauses
               let m_cls = Clause(m, m_bod) in
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
+              let%bind () = add_instrument_var c_binop in
               let%bind () = add_instrument_var_pair c_binop v in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
               let%bind f_path = add_abort_expr v in
@@ -196,6 +210,9 @@ let rec instrument_clauses
               let%bind m1 = fresh_var "m_bl" in
               let%bind m2 = fresh_var "m_br" in
               let%bind m = fresh_var "m_b" in
+              let%bind () = add_instrument_var m1 in
+              let%bind () = add_instrument_var m2 in
+              let%bind () = add_instrument_var m in
               (* Clauses *)
               let m1_cls = Clause(m1, Match_body(v1, Int_pattern)) in
               let m2_cls = Clause(m2, Match_body(v2, Int_pattern)) in
@@ -203,6 +220,7 @@ let rec instrument_clauses
               let m_cls = Clause(m, m_bod) in
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
+              let%bind () = add_instrument_var c_binop in
               let%bind () = add_instrument_var_pair c_binop v in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
               let%bind f_path = add_abort_expr v in
@@ -218,6 +236,9 @@ let rec instrument_clauses
               let%bind m1 = fresh_var "m_bl" in
               let%bind m2 = fresh_var "m_br" in
               let%bind m = fresh_var "m_b" in
+              let%bind () = add_instrument_var m1 in
+              let%bind () = add_instrument_var m2 in
+              let%bind () = add_instrument_var m in
               (* Clauses *)
               let m1_cls = Clause(m1, Match_body(v1, Int_pattern)) in
               let m2_cls = Clause(m2, Match_body(v2, Int_pattern)) in
@@ -225,6 +246,7 @@ let rec instrument_clauses
               let m_cls = Clause(m, m_bod) in
               (* Conditional *)
               let%bind c_binop = fresh_var "c_binop" in
+              let%bind () = add_instrument_var c_binop in
               let%bind () = add_instrument_var_pair c_binop v in
               let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
               let%bind f_path = add_abort_expr v in
@@ -234,7 +256,11 @@ let rec instrument_clauses
             end
         end
       | Projection_body (r, lbl) ->
-        begin
+        let%bind is_already_inst = is_instrument_var v in
+        if is_already_inst then begin
+          let%bind new_clauses' = instrument_clauses clauses' in
+          return @@ clause :: new_clauses'
+        end else begin
           (*
             proj = r.lbl;
             ==>
@@ -246,11 +272,13 @@ let rec instrument_clauses
           *)
           (* Pattern match *)
           let%bind m = fresh_var "m" in
+          let%bind () = add_instrument_var m in
           let rec_pat_set = Ident_set.add lbl Ident_set.empty in
           let rec_pat = Rec_pattern rec_pat_set in
           let m_clause = Clause(m, Match_body(r, rec_pat)) in
           (* Conditional *)
           let%bind c_proj = fresh_var "c_proj" in
+          let%bind () = add_instrument_var c_proj in
           let%bind () = add_instrument_var_pair c_proj v in
           let%bind t_path = return @@ Expr([Clause(c_proj, body)]) in
           let%bind f_path = add_abort_expr v in
@@ -259,7 +287,11 @@ let rec instrument_clauses
           return @@ [m_clause; cond_clause] @ cont
         end
       | Appl_body (f, _) ->
-        begin
+        let%bind is_already_inst = is_instrument_var v in
+        if is_already_inst then begin
+          let%bind new_clauses' = instrument_clauses clauses' in
+          return @@ clause :: new_clauses'
+        end else begin
           (*
             appl = f x;
             ==>
@@ -271,9 +303,11 @@ let rec instrument_clauses
           *)
           (* Pattern match *)
           let%bind m = fresh_var "m" in
+          let%bind () = add_instrument_var m in
           let m_clause = Clause(m, Match_body(f, Fun_pattern)) in
           (* Conditional *)
           let%bind c_appl = fresh_var "c_appl" in
+          let%bind () = add_instrument_var c_appl in
           let%bind () = add_instrument_var_pair c_appl v in
           let%bind t_path = return @@ Expr([Clause(c_appl, body)]) in
           let%bind f_path = add_abort_expr v in
@@ -282,20 +316,30 @@ let rec instrument_clauses
           return @@ [m_clause; cond_clause] @ cont
         end
       | Conditional_body (pred, Expr path1, Expr path2) ->
-        begin
+        let%bind is_already_inst = is_instrument_var v in
+        if is_already_inst then begin
+          (* Still instrument the inner expressions *)
+          let%bind path1' = instrument_clauses path1 in
+          let%bind path2' = instrument_clauses path2 in
+          let body' = Conditional_body(pred, Expr path1', Expr path2') in
+          let clause' = Clause (v, body') in
+          let%bind new_clauses' = instrument_clauses clauses' in
+          return @@ clause' :: new_clauses'
+        end else begin
           (*
             cond = pred ? true_path : false_path;
             ==>
             m = pred ~ bool;
             constrain_cond = m ? (cond = pred ? true_path : false_path)
-                               : (ab = abort)
+                              : (ab = abort)
             ==>
             m = pred ~ bool;
             cond = m ? ( constrain_cond = pred ? true_path : false_path )
-                     : ( ab = abort );
+                    : ( ab = abort );
           *)
           (* Pattern match *)
           let%bind m = fresh_var "m" in
+          let%bind () = add_instrument_var m in
           let m_clause = Clause(m, Match_body(pred, Bool_pattern)) in
           (* Underlying conditional *)
           let%bind path1' = instrument_clauses path1 in
@@ -303,6 +347,7 @@ let rec instrument_clauses
           let body' = Conditional_body(pred, Expr path1', Expr path2') in
           (* Constrain conditional *)
           let%bind c_cond = fresh_var "c_cond" in
+          let%bind () = add_instrument_var c_cond in
           let%bind () = add_instrument_var_pair c_cond v in
           let clause' = Clause (c_cond, body') in
           let clause'' = change_abort_vars v c_cond clause' in

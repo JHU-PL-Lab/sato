@@ -40,6 +40,8 @@ module TranslationMonad : sig
   val fresh_var : string -> Ast.var m
   val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
   val add_var_clause_pair : Ast.var -> Ast.clause -> unit m
+  val add_instrument_var : Ast.var -> unit m
+  val is_instrument_var : Ast.var -> bool m
   val update_natodefa_expr : On_ast.expr -> unit m
   val instrument_map : Ast.var Ast.Var_map.t m
   val var_clause_mapping : Ast.clause Ast.Ident_map.t m
@@ -86,6 +88,19 @@ end = struct
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
       <- Odefa_natodefa_mappings.add_var_clause_mapping odefa_on_maps i_key cls_val
+  ;;
+
+  let add_instrument_var v ctx =
+    let (Ast.Var (i, _)) = v in
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- Odefa_natodefa_mappings.add_instrument_var odefa_on_maps i
+  ;;
+
+  let is_instrument_var v ctx =
+    let (Ast.Var (i, _)) =  v in
+    let inst_vars = ctx.tc_odefa_natodefa_mappings.odefa_instrument_vars in
+    Ast.Ident_set.mem i inst_vars
   ;;
 
   let add_odefa_natodefa_mapping v_key ctx =

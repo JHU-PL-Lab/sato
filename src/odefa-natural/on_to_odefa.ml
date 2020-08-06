@@ -855,6 +855,8 @@ and flatten_expr
             let%bind cond_var = fresh_var "m_cond" in
             let%bind () = add_odefa_natodefa_mapping bool_var in
             let%bind () = add_odefa_natodefa_mapping cond_var in
+            let%bind () = add_instrument_var bool_var in
+            let%bind () = add_instrument_var cond_var in
             let%bind (flat_pat, new_clauses) =
               flatten_pattern subj_var curr_pat
             in
