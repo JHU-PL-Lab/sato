@@ -68,6 +68,7 @@ open Ast_pp;;
 open Ast_wellformedness;;
 open Generator_answer;;
 open Generator_configuration;;
+open On_to_odefa_types;;
 open Toploop_options;;
 open Toploop_types;;
 open Ddpa_abstract_ast;;
@@ -896,7 +897,7 @@ let test_sato
     (expect_left : test_expectation list ref)
     (stack_module_choice : expectation_stack_decision)
     (generation_steps : int)
-    (instrument_map : var Var_map.t)
+    (odefa_on_map : Odefa_natodefa_mappings.t)
     (expr : expr)
   : unit =
   let observation = _observation filename in
@@ -952,6 +953,9 @@ let test_sato
   in
   let total_err_lst = ref [] in
   let total_err_num = ref 0 in
+  (* Set the odefa/natodefa mappings *)
+  Type_error_generator.Answer.set_odefa_natodefa_map odefa_on_map;
+  (* Run tests *)
   let run_type_checker x =
     let generator =
       Type_error_generator.create
@@ -965,13 +969,9 @@ let test_sato
         (steps : int)
       : unit =
       let _ = steps in
-      let type_errors' =
-        Type_error_generator.Answer.remove_instrument_vars
-          instrument_map type_errors
-      in
-      total_err_lst := (x, type_errors') :: (!total_err_lst);
+      total_err_lst := (x, type_errors) :: (!total_err_lst);
       total_err_num :=
-        !total_err_num + Type_error_generator.Answer.count type_errors';
+        !total_err_num + Type_error_generator.Answer.count type_errors;
     in
     let _ =
       Type_error_generator.generate_answers
