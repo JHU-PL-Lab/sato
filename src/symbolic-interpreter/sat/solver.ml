@@ -769,6 +769,7 @@ let rec _find_errors solver instrument_clause symbol =
         | Constraint.Bool false ->
           let binop_error = {
             err_binop_ident = (fun (Symbol (x, _)) -> x) symbol;
+            err_binop_clause = instrument_clause;
             err_binop_operation = op;
             err_binop_left_val =
               begin

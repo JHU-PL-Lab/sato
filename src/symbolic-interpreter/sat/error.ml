@@ -10,6 +10,7 @@ open Constraint;;
 
 type error_binop = {
   err_binop_ident : ident;
+  err_binop_clause : clause;
   err_binop_operation : binary_operator;
   err_binop_left_val : value_source;
   err_binop_right_val : value_source;
@@ -105,10 +106,19 @@ module Error_tree : Error_tree = struct
     match error with
     | Error_binop binop_err ->
       begin
-        "* Operation : " ^
-        (show_value_source binop_err.err_binop_left_val) ^ " " ^
-        (show_binary_operator binop_err.err_binop_operation) ^ " " ^
-        (show_value_source binop_err.err_binop_right_val)
+        let operation_str =
+          (show_value_source binop_err.err_binop_left_val) ^ " " ^
+          (show_binary_operator binop_err.err_binop_operation) ^ " " ^
+          (show_value_source binop_err.err_binop_right_val) 
+        in
+        let clause_str =
+          binop_err.err_binop_clause
+          (* Delete context stack information for end-user *)
+          |> Ast_tools.map_clause_vars (fun (Var (x, _)) -> Var (x, None))
+          |> show_clause
+        in
+        "* Constraint : " ^ operation_str ^ "\n" ^
+        "* Clause     : " ^ clause_str
       end
     | Error_match match_err ->
       begin

@@ -122,7 +122,22 @@ module Type_errors : Answer = struct
       (error : error)
     : error =
     match error with
-    | Error_binop _ -> error
+    | Error_binop err->
+      begin
+        let binop_cls = err.err_binop_clause in
+        let (Clause (Var (b_ident, _), _)) = binop_cls in
+        let binop_cls' =
+          try
+            Odefa_natodefa_mappings.get_pre_inst_equivalent_clause
+              odefa_on_maps b_ident
+          with Not_found ->
+            binop_cls
+        in
+        Error_binop {
+          err with
+          err_binop_clause = binop_cls';
+        }
+      end
     | Error_match err ->
       begin
         let instrument_vars = odefa_on_maps.odefa_instrument_vars_map in

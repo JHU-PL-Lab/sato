@@ -9,6 +9,9 @@ type error_binop = {
   (** The identifier of the binop clause. *)
   err_binop_ident : ident;
 
+  (** The clause representing the operation being instrumented. *)
+  err_binop_clause : clause;
+
   (** The operator (e.g. +, -, and, or, ==, etc. *)
   err_binop_operation : binary_operator;
 
