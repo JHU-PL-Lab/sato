@@ -106,8 +106,8 @@ module Error_tree : Error_tree = struct
     | Error_binop binop_err ->
       begin
         "* Operation : " ^
-        (show_value_source binop_err.err_binop_left_val) ^ "\n" ^
-        (show_binary_operator binop_err.err_binop_operation) ^ "\n" ^
+        (show_value_source binop_err.err_binop_left_val) ^ " " ^
+        (show_binary_operator binop_err.err_binop_operation) ^ " " ^
         (show_value_source binop_err.err_binop_right_val)
       end
     | Error_match match_err ->
@@ -116,14 +116,6 @@ module Error_tree : Error_tree = struct
           let a_chain = match_err.err_match_aliases in
           let a_str = String.join " = " @@ List.map show_ident a_chain in
           if not @@ List.is_empty a_chain then a_str ^ " = " else a_str
-          (*
-          if List.length alias_chain > 1 then begin
-            (show_ident @@ List.first alias_chain) ^ " = " ^
-            (show_ident @@ List.last alias_chain)
-          end else begin
-            (show_ident @@ List.first alias_chain)
-          end
-          *)
         in
         let clause_str =
           match_err.err_match_clause
