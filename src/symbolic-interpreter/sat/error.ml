@@ -9,11 +9,12 @@ open Constraint;;
 (* let lazy_logger = Jhupllib.Logger_utils.make_lazy_logger "Symbolic_interpreter.Error";; *)
 
 type error_binop = {
-  err_binop_ident : ident;
   err_binop_clause : clause;
   err_binop_operation : binary_operator;
   err_binop_left_val : value_source;
   err_binop_right_val : value_source;
+  err_binop_left_aliases : ident list;
+  err_binop_right_aliases : ident list;
 }
 [@@ deriving eq, show]
 ;;

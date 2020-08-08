@@ -768,7 +768,6 @@ let rec _find_errors solver instrument_clause symbol =
         match binop_value with
         | Constraint.Bool false ->
           let binop_error = {
-            err_binop_ident = (fun (Symbol (x, _)) -> x) symbol;
             err_binop_clause = instrument_clause;
             err_binop_operation = op;
             err_binop_left_val =
@@ -783,6 +782,14 @@ let rec _find_errors solver instrument_clause symbol =
                 | Some vs -> vs
                 | None -> raise Not_found
               end;
+            err_binop_left_aliases =
+              List.map
+                (fun (Symbol (i1, _)) -> i1)
+                (_construct_alias_chain solver s1);
+            err_binop_right_aliases =
+              List.map
+                (fun (Symbol (i2, _)) -> i2)
+                (_construct_alias_chain solver s2);
           }
           in
           lazy_logger `trace (fun () -> (show_error_binop binop_error));
