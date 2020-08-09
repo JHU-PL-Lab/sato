@@ -76,8 +76,8 @@ TODO
   - [ ] Prove the soundness of reporting such potential errors
 - [ ] More errors
   - [ ] ~~Add "Primitive" pattern/type for bool + int "=="~~ Use an `or` statement instead
-  - [ ] Divide by zero (new nonzero pattern + type vs. nested constraints) - refinement types!
-  - [ ] Match errors (conjunction vs. disjunction)
+  - [x] Divide by zero (new nonzero pattern + type vs. nested constraints) - refinement types!
+  - [x] Match errors (conjunction vs. disjunction)
   - [ ] Asserts (including fancier types/predicates) (encode in odefa)
 - [x] Deal with aborts in the (regular) interpreter environment
 - [ ] Heuristic to identify higher-level errors (as opposed to strictly lower-level ones)
