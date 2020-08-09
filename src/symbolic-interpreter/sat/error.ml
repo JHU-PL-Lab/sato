@@ -21,7 +21,7 @@ type error_binop = {
 
 type error_match = {
   err_match_aliases : ident list;
-  err_match_value : clause;
+  err_match_value : clause_body;
   err_match_clause : clause;
   err_match_expected_type : type_sig;
   err_match_actual_type : type_sig;
@@ -178,14 +178,14 @@ module Error_tree : Error_tree = struct
           let a_str = String.join " = " @@ List.map show_ident a_chain in
           if not @@ List.is_empty a_chain then a_str ^ " = " else a_str
         in
+        let val_str = show_clause_body match_err.err_match_value in
         let clause_str =
           match_err.err_match_clause
           (* Delete context stack information for end-user *)
           |> Ast_tools.map_clause_vars (fun (Var (x, _)) -> Var (x, None))
           |> show_clause
         in
-        "* Value    : " ^ alias_str ^
-          (show_clause match_err.err_match_value) ^ "\n" ^
+        "* Value    : " ^ alias_str ^ val_str ^ "\n" ^
         "* Clause   : " ^ clause_str ^ "\n" ^
         "* Expected : " ^ (show_type_sig match_err.err_match_expected_type) ^ "\n" ^
         "* Actual   : " ^ (show_type_sig match_err.err_match_actual_type)
@@ -368,9 +368,10 @@ let parse_error error_str =
   | [error_str; alias_str; val_str; clause_str; expected_str; actual_str]
     when String.equal error_str "match" ->
     begin
+      let (Clause (_, body)) = _parse_clause @@ "dummy = " ^ val_str in
       Error_match {
         err_match_aliases = _parse_aliases alias_str;
-        err_match_value = _parse_clause val_str;
+        err_match_value = body;
         err_match_clause = _parse_clause clause_str;
         err_match_expected_type = _parse_type expected_str;
         err_match_actual_type = _parse_type actual_str;

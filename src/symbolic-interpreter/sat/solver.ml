@@ -808,13 +808,7 @@ let rec _find_errors solver instrument_clause symbol =
       lazy_logger `trace (fun () ->
         Printf.sprintf "Pattern match on symbol %s" (show_symbol symbol));
       let (match_symb, pattern) = m in
-      let a_chain = _construct_alias_chain solver match_symb in
-      let (Symbol(v, _), alias_chain) =
-        match List.rev a_chain with
-        | hd :: tl -> (hd, tl)
-        | [] -> raise @@ Utils.Invariant_failure "At least one variable must exist in alias chain"
-      in
-      let alias_chain = List.rev alias_chain in
+      let alias_chain = _construct_alias_chain solver match_symb in
       let match_value =
         match value_opt with
         | Some v -> v
@@ -836,7 +830,7 @@ let rec _find_errors solver instrument_clause symbol =
         let actual_type = _get_type solver match_symb in
         let match_val_source =
           match _get_value_source solver match_symb with
-          | Some vs -> Ast.Clause (Var (v, None), _symbolic_to_concrete_value vs)
+          | Some vs -> _symbolic_to_concrete_value vs
           | None -> raise @@ Utils.Invariant_failure
             (Printf.sprintf "%s has no value in constraint set!"
               (show_symbol match_symb))

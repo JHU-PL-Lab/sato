@@ -32,7 +32,7 @@ type error_match = {
   err_match_aliases : ident list;
 
   (** The value of the ident that is being matched. *)
-  err_match_value : clause;
+  err_match_value : clause_body;
 
   (** The clause respresenting the operation being instrumented. *)
   err_match_clause : clause;

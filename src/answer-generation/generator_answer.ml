@@ -156,39 +156,23 @@ module Type_errors : Answer = struct
     | Error_match err ->
       begin
         let instrument_vars = odefa_on_maps.odefa_instrument_vars_map in
-        let val_cls = err.err_match_value in
         let match_cls = err.err_match_clause in
-        let (Clause (Var (v_val, _), _)) = val_cls in
         let (Clause (Var (v_match, _), _)) = match_cls in
         let match_aliases = err.err_match_aliases in
-        let (value_cls'', match_aliases') =
-          try
-            (* Replace the var in the value clause *)
-            let val_cls' =
-              Odefa_natodefa_mappings.get_pre_inst_equivalent_clause
-                odefa_on_maps v_val
-            in
-            (* Remove extra var from alias chain *)
-            let Clause (Var (val_ident', _), _) = val_cls' in
-            (val_cls', List.remove match_aliases val_ident')
-          with Not_found ->
-            (val_cls, match_aliases)
-        in
-        let match_aliases'' =
+        let match_aliases' =
           List.filter
             (* Stacks aren't set during instrumenting, so we're safe *)
             (fun a -> not @@ Ident_map.mem a instrument_vars)
-            match_aliases'
+            match_aliases
         in
-        let match_cls'' =
+        let match_cls' =
           Odefa_natodefa_mappings.get_pre_inst_equivalent_clause
             odefa_on_maps v_match
         in
         Error_match {
           err with
-          err_match_aliases = match_aliases'';
-          err_match_clause = match_cls'';
-          err_match_value = value_cls'';
+          err_match_aliases = match_aliases';
+          err_match_clause = match_cls';
         }
       end
     | Error_value err ->
