@@ -191,6 +191,27 @@ module Type_errors : Answer = struct
           err_match_value = value_cls'';
         }
       end
+    | Error_value err ->
+      begin
+        let instrument_vars = odefa_on_maps.odefa_instrument_vars_map in
+        let aliases = err.err_value_aliases in
+        let val_clause = err.err_value_clause in
+        let (Clause (Var (x, _), _)) = val_clause in
+        let aliases' =
+          List.filter
+            (fun a -> not @@ Ident_map.mem a instrument_vars)
+            aliases
+        in
+        let clause' =
+          Odefa_natodefa_mappings.get_pre_inst_equivalent_clause
+            odefa_on_maps x
+        in
+        Error_value {
+          err with
+          err_value_aliases = aliases';
+          err_value_clause = clause';
+        }
+      end
   ;;
 
   let remove_instrument_vars

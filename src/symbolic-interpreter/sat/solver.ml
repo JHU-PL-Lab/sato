@@ -725,6 +725,9 @@ let solvable solver =
 (* **** Error finding **** *)
 
 let rec _find_errors solver instrument_clause symbol =
+  let value_opt =
+    Symbol_map.Exceptionless.find symbol solver.value_constraints_by_symbol
+  in
   let binop_opt =
     Symbol_map.Exceptionless.find symbol solver.binop_constraints_by_symbol
   in
@@ -758,9 +761,9 @@ let rec _find_errors solver instrument_clause symbol =
       | Binary_operator_equal_to
       | Binary_operator_not_equal_to ->
         let binop_value =
-          try
-            Symbol_map.find symbol solver.value_constraints_by_symbol
-          with Not_found ->
+          match value_opt with
+          | Some v -> v
+          | None ->
             raise @@ Utils.Invariant_failure
               (Printf.sprintf "Binop at %s did not produce a value"
                 (show_symbol symbol))
@@ -813,9 +816,9 @@ let rec _find_errors solver instrument_clause symbol =
       in
       let alias_chain = List.rev alias_chain in
       let match_value =
-        try
-          Symbol_map.find symbol solver.value_constraints_by_symbol
-        with Not_found ->
+        match value_opt with
+        | Some v -> v
+        | None ->
           raise @@ Utils.Invariant_failure
             (Printf.sprintf "Pattern match at %s did not produce a value"
             (show_symbol symbol))
@@ -860,14 +863,34 @@ let rec _find_errors solver instrument_clause symbol =
           (Printf.sprintf "%s is not a boolean value" (show_symbol symbol))
     end
   | (None, None) ->
-    lazy_logger `trace (fun () ->
-        Printf.sprintf "??? on symbol %s" (show_symbol symbol));
-    raise @@ Utils.Invariant_failure "Error tree cannot include unwrapped values"
+    begin
+      match value_opt with
+      | Some (Bool b) ->
+        if b then
+          Error_tree.empty
+        else
+          let alias_chain =
+            List.map
+              (fun (Symbol (i1, _)) -> i1)
+              (_construct_alias_chain solver symbol);
+          in
+          let value_error = {
+            err_value_aliases = alias_chain;
+            err_value_val = Value_body (Value_bool b);
+            err_value_clause = instrument_clause;
+          }
+          in
+          Error_tree.singleton (Error_value value_error)
+      | _ ->
+        lazy_logger `trace (fun () ->
+            Printf.sprintf "??? on symbol %s" (show_symbol symbol));
+        raise @@ Utils.Invariant_failure "Error tree has non-boolean values"
+    end
   | (_, _) ->
     raise @@ Utils.Invariant_failure ("Multiple definitions for symbol " ^ (show_symbol symbol))
 ;;
 
-let find_errors solver symbol = _find_errors solver symbol;;
+let find_errors solver inst_clause symbol = _find_errors solver inst_clause symbol;;
 
 (* **** Other functions **** *)
 
