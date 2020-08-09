@@ -1,22 +1,28 @@
 open Odefa_ast;;
 open Ast;;
 
-open Constraint;;
+(* open Constraint;; *)
 
 exception Parse_failure of string;;
 
 type error_binop = {
-  (** The identifier of the binop clause. *)
-  err_binop_ident : ident;
+  (** The clause representing the operation being instrumented. *)
+  err_binop_clause : clause;
 
   (** The operator (e.g. +, -, and, or, ==, etc. *)
   err_binop_operation : binary_operator;
 
   (** The value of the left side of the binop. *)
-  err_binop_left_val : value_source;
+  err_binop_left_val : clause_body;
 
   (** The value of the right side of the binop. *)
-  err_binop_right_val : value_source;
+  err_binop_right_val : clause_body;
+
+  (** The alias chain leading up to the left value. *)
+  err_binop_left_aliases : ident list;
+
+  (** The alias chain leading up to the right value. *)
+  err_binop_right_aliases : ident list;
 }
 [@@ deriving show]
 ;;

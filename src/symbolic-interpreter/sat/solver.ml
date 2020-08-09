@@ -737,13 +737,15 @@ let rec _find_errors solver instrument_clause symbol =
       lazy_logger `trace (fun () ->
         Printf.sprintf "Binary operation on symbol %s" (show_symbol symbol));
       let (s1, op, s2) = b in
-      let et1 = _find_errors solver instrument_clause s1 in
-      let et2 = _find_errors solver instrument_clause s2 in
       match op with
       (* TODO: If a symbol is another and/or or a pattern, recurse on find_error. Otherwise treat this as a leaf node. *)
       | Binary_operator_and ->
+        let et1 = _find_errors solver instrument_clause s1 in
+        let et2 = _find_errors solver instrument_clause s2 in
         Error_tree.add_and et1 et2
       | Binary_operator_or ->
+        let et1 = _find_errors solver instrument_clause s1 in
+        let et2 = _find_errors solver instrument_clause s2 in
         Error_tree.add_or et1 et2
       | Binary_operator_xor
       | Binary_operator_plus
@@ -766,20 +768,28 @@ let rec _find_errors solver instrument_clause symbol =
         match binop_value with
         | Constraint.Bool false ->
           let binop_error = {
-            err_binop_ident = (fun (Symbol (x, _)) -> x) symbol;
+            err_binop_clause = instrument_clause;
             err_binop_operation = op;
             err_binop_left_val =
               begin
                 match _get_value_source solver s1 with
-                | Some vs -> vs
+                | Some vs -> _symbolic_to_concrete_value vs
                 | None -> raise Not_found
               end;
             err_binop_right_val =
               begin
                 match _get_value_source solver s2 with
-                | Some vs -> vs
+                | Some vs -> _symbolic_to_concrete_value vs
                 | None -> raise Not_found
               end;
+            err_binop_left_aliases =
+              List.map
+                (fun (Symbol (i1, _)) -> i1)
+                (_construct_alias_chain solver s1);
+            err_binop_right_aliases =
+              List.map
+                (fun (Symbol (i2, _)) -> i2)
+                (_construct_alias_chain solver s2);
           }
           in
           lazy_logger `trace (fun () -> (show_error_binop binop_error));
@@ -850,6 +860,8 @@ let rec _find_errors solver instrument_clause symbol =
           (Printf.sprintf "%s is not a boolean value" (show_symbol symbol))
     end
   | (None, None) ->
+    lazy_logger `trace (fun () ->
+        Printf.sprintf "??? on symbol %s" (show_symbol symbol));
     raise @@ Utils.Invariant_failure "Error tree cannot include unwrapped values"
   | (_, _) ->
     raise @@ Utils.Invariant_failure ("Multiple definitions for symbol " ^ (show_symbol symbol))

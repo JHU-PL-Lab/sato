@@ -68,6 +68,7 @@ let rec instrument_clauses
         begin
           match value with
           | Value_function f ->
+            (* Instrument function body *)
             let Function_value(arg, Expr(body)) = f in
             let%bind new_body = instrument_clauses body in
             let new_fun_val = Function_value(arg, Expr(new_body)) in
@@ -97,109 +98,77 @@ let rec instrument_clauses
           let%bind new_clauses' = instrument_clauses clauses' in
           return @@ clause :: new_clauses'
         end else begin
-          match binop with
-          | Binary_operator_plus
-          | Binary_operator_minus
-          | Binary_operator_times
-          | Binary_operator_less_than
-          | Binary_operator_less_than_or_equal_to ->
-            begin
+          (*
+            binop = x + y
+            ==>
+            m_bl = x ~ int;
+            m_br = y ~ int;
+            m_b = x and y;
+            binop = m ? ( c_binop = x + y ) : ( ab = abort );
+          *)
+          let pattern =
+            match binop with
+            | Binary_operator_plus
+            | Binary_operator_minus
+            | Binary_operator_times
+            | Binary_operator_divide
+            | Binary_operator_modulus
+            | Binary_operator_less_than
+            | Binary_operator_less_than_or_equal_to
+            | Binary_operator_equal_to
+            | Binary_operator_not_equal_to -> Int_pattern
+            | Binary_operator_and
+            | Binary_operator_or
+            | Binary_operator_xor -> Bool_pattern
+          in
+          (* Variables *)
+          let%bind m1 = fresh_var "m_bl" in
+          let%bind m2 = fresh_var "m_br" in
+          let%bind m = fresh_var "m_b" in
+          let%bind () = add_instrument_var m1 in
+          let%bind () = add_instrument_var m2 in
+          let%bind () = add_instrument_var m in
+          (* Clauses *)
+          let m1_cls = Clause(m1, Match_body(v1, pattern)) in
+          let m2_cls = Clause(m2, Match_body(v2, pattern)) in
+          let m_bod = Binary_operation_body(m1, Binary_operator_and, m2) in
+          let m_cls = Clause(m, m_bod) in
+          (* Conditional *)
+          let%bind c_binop = fresh_var "c_binop" in
+          let%bind () = add_instrument_var_pair c_binop v in
+          (* Inner clause (eg. divide by zero check) *)
+          let%bind inner_clauses =
+            match binop with
+            | Binary_operator_divide
+            | Binary_operator_modulus ->
               (* Variables *)
-              let%bind m1 = fresh_var "m_bl" in
-              let%bind m2 = fresh_var "m_br" in
-              let%bind m = fresh_var "m_b" in
-              let%bind () = add_instrument_var m1 in
-              let%bind () = add_instrument_var m2 in
-              let%bind () = add_instrument_var m in
+              let%bind z = fresh_var "b_zero" in
+              let%bind b = fresh_var "b_b" in
+              let%bind () = add_instrument_var z in
+              let%bind () = add_instrument_var b in
               (* Clauses *)
-              let m1_cls = Clause(m1, Match_body(v1, Int_pattern)) in
-              let m2_cls = Clause(m2, Match_body(v2, Int_pattern)) in
-              let m_bod = Binary_operation_body(m1, Binary_operator_and, m2) in
-              let m_cls = Clause(m, m_bod) in
+              let z_cls = Clause(z, Value_body (Value_int 0)) in
+              let b_bod =
+                Binary_operation_body (v2, Binary_operator_not_equal_to, z)
+              in
+              let b_cls = Clause(b, b_bod) in
               (* Conditional *)
-              let%bind c_binop = fresh_var "c_binop" in
-              let%bind () = add_instrument_var_pair c_binop v in
-              let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
-              let%bind f_path = add_abort_expr v in
-              let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
-              let%bind cont = instrument_clauses clauses' in
-              return @@ [m1_cls; m2_cls; m_cls; c_cls] @ cont
-            end
-          | Binary_operator_and
-          | Binary_operator_or
-          | Binary_operator_xor ->
-            begin
-              (* Variables *)
-              let%bind m1 = fresh_var "m_bl" in
-              let%bind m2 = fresh_var "m_br" in
-              let%bind m = fresh_var "m_b" in
-              let%bind () = add_instrument_var m1 in
-              let%bind () = add_instrument_var m2 in
-              let%bind () = add_instrument_var m in
-              (* Clauses *)
-              let m1_cls = Clause(m1, Match_body(v1, Bool_pattern)) in
-              let m2_cls = Clause(m2, Match_body(v2, Bool_pattern)) in
-              let m_bod = Binary_operation_body(m1, Binary_operator_and, m2) in
-              let m_cls = Clause(m, m_bod) in
-              (* Conditional *)
-              let%bind c_binop = fresh_var "c_binop" in
-              let%bind () = add_instrument_var_pair c_binop v in
-              let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
-              let%bind f_path = add_abort_expr v in
-              let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
-              let%bind cont = instrument_clauses clauses' in
-              return @@ [m1_cls; m2_cls; m_cls; c_cls] @ cont
-            end
-          | Binary_operator_divide
-          | Binary_operator_modulus ->
-            (* TODO: Add inner conditional to constrain divisor to be <> 0 *)
-            begin
-              (* Variables *)
-              let%bind m1 = fresh_var "m_bl" in
-              let%bind m2 = fresh_var "m_br" in
-              let%bind m = fresh_var "m_b" in
-              let%bind () = add_instrument_var m1 in
-              let%bind () = add_instrument_var m2 in
-              let%bind () = add_instrument_var m in
-              (* Clauses *)
-              let m1_cls = Clause(m1, Match_body(v1, Int_pattern)) in
-              let m2_cls = Clause(m2, Match_body(v2, Int_pattern)) in
-              let m_bod = Binary_operation_body(m1, Binary_operator_and, m2) in
-              let m_cls = Clause(m, m_bod) in
-              (* Conditional *)
-              let%bind c_binop = fresh_var "c_binop" in
-              let%bind () = add_instrument_var_pair c_binop v in
-              let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
-              let%bind f_path = add_abort_expr v in
-              let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
-              let%bind cont = instrument_clauses clauses' in
-              return @@ [m1_cls; m2_cls; m_cls; c_cls] @ cont
-            end
-          | Binary_operator_equal_to
-          | Binary_operator_not_equal_to ->
-            (* TODO: Add or clause to include bools *)
-            begin
-              (* Variables *)
-              let%bind m1 = fresh_var "m_bl" in
-              let%bind m2 = fresh_var "m_br" in
-              let%bind m = fresh_var "m_b" in
-              let%bind () = add_instrument_var m1 in
-              let%bind () = add_instrument_var m2 in
-              let%bind () = add_instrument_var m in
-              (* Clauses *)
-              let m1_cls = Clause(m1, Match_body(v1, Int_pattern)) in
-              let m2_cls = Clause(m2, Match_body(v2, Int_pattern)) in
-              let m_bod = Binary_operation_body(m1, Binary_operator_and, m2) in
-              let m_cls = Clause(m, m_bod) in
-              (* Conditional *)
-              let%bind c_binop = fresh_var "c_binop" in
-              let%bind () = add_instrument_var_pair c_binop v in
-              let%bind t_path = return @@ Expr([Clause(c_binop, body)]) in
-              let%bind f_path = add_abort_expr v in
-              let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
-              let%bind cont = instrument_clauses clauses' in
-              return @@ [m1_cls; m2_cls; m_cls; c_cls] @ cont
-            end
+              let%bind c_binop_sub = fresh_var "c_binop" in
+              let%bind () = add_instrument_var_pair c_binop_sub v in
+              let%bind t_path = return @@ Expr([Clause(c_binop_sub, body)]) in
+              let%bind f_path = add_abort_expr c_binop in
+              let c_cls =
+                Clause(c_binop, Conditional_body(b, t_path, f_path))
+              in
+              return @@ [z_cls; b_cls; c_cls]
+            | _ ->
+              return @@ [Clause (c_binop, body)]
+          in
+          let%bind t_path = return @@ Expr(inner_clauses) in
+          let%bind f_path = add_abort_expr v in
+          let c_cls = Clause(v, Conditional_body(m, t_path, f_path)) in
+          let%bind cont = instrument_clauses clauses' in
+          return @@ [m1_cls; m2_cls; m_cls; c_cls] @ cont
         end
       | Projection_body (r, lbl) ->
         let%bind is_already_inst = is_instrument_var v in
@@ -211,10 +180,7 @@ let rec instrument_clauses
             proj = r.lbl;
             ==>
             m = r ~ {lbl};
-            constrain_proj = m ? (proj = r.l) : (ab = abort);
-            ==>
-            m = r ~ {lbl};
-            proj = m ? ( constrain_proj = r.lbl ) : ( ab = abort );
+            proj = m ? ( c_proj = r.lbl ) : ( ab = abort );
           *)
           (* Pattern match *)
           let%bind m = fresh_var "m" in
@@ -241,10 +207,7 @@ let rec instrument_clauses
             appl = f x;
             ==>
             m = f ~ fun;
-            constrain_appl = m ? (appl = f x) : (ab = abort);
-            ==>
-            m = f ~ fun;
-            appl = m ? ( constrain_appl = f x ) : ( ab = abort );
+            appl = m ? ( c_appl = f x ) : ( ab = abort );
           *)
           (* Pattern match *)
           let%bind m = fresh_var "m" in
@@ -274,12 +237,8 @@ let rec instrument_clauses
             cond = pred ? true_path : false_path;
             ==>
             m = pred ~ bool;
-            constrain_cond = m ? (cond = pred ? true_path : false_path)
-                              : (ab = abort)
-            ==>
-            m = pred ~ bool;
-            cond = m ? ( constrain_cond = pred ? true_path : false_path )
-                    : ( ab = abort );
+            cond = m ? ( c_cond = pred ? true_path : false_path )
+                     : ( ab = abort );
           *)
           (* Pattern match *)
           let%bind m = fresh_var "m" in
