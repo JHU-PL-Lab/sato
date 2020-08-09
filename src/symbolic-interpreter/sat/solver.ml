@@ -773,13 +773,13 @@ let rec _find_errors solver instrument_clause symbol =
             err_binop_left_val =
               begin
                 match _get_value_source solver s1 with
-                | Some vs -> vs
+                | Some vs -> _symbolic_to_concrete_value vs
                 | None -> raise Not_found
               end;
             err_binop_right_val =
               begin
                 match _get_value_source solver s2 with
-                | Some vs -> vs
+                | Some vs -> _symbolic_to_concrete_value vs
                 | None -> raise Not_found
               end;
             err_binop_left_aliases =
