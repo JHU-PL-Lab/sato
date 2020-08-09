@@ -1,7 +1,7 @@
 # EXPECT-WELL-FORMED
 # EXPECT-TYPE-ERROR-COUNT 2
-# EXPECT-TYPE-ERROR ~result [0, 0] : "match" "" "i1 = input" "ans = i1 and i2" "bool" "int"
-# EXPECT-TYPE-ERROR ~result [0, 0] : "match" "" "i2 = input" "ans = i1 and i2" "bool" "int"
+# EXPECT-TYPE-ERROR ~result [0, 0] : "match" "i1" "input" "ans = i1 and i2" "bool" "int"
+# EXPECT-TYPE-ERROR ~result [0, 0] : "match" "i2" "input" "ans = i1 and i2" "bool" "int"
 
 i1 = input;
 i2 = input;
