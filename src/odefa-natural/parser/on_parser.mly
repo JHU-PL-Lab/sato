@@ -39,6 +39,7 @@ exception On_Parse_error of string;;
 %token INPUT
 %token MATCH
 %token END
+%token ASSERT
 %token PLUS
 %token MINUS
 %token ASTERISK
@@ -136,6 +137,7 @@ fun_sig_list:
   | fun_sig WITH fun_sig_list { $1 :: $3 }
 
 unary_expr:
+  | ASSERT simple_expr { Assert($2) }
   | NOT simple_expr { Not($2) }
   | BACKTICK variant_label simple_expr { VariantExpr($2, $3) }
   | appl_expr { $1 }

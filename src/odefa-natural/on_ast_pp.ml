@@ -162,6 +162,8 @@ and pp_expr formatter expr =
   | ListCons (e1, e2) ->
     Format.fprintf formatter "%a :: %a"
       pp_expr e1 pp_expr e2
+  | Assert e ->
+    Format.fprintf formatter "assert %a" pp_expr e
 ;;
 
 let show_expr = Pp_utils.pp_to_string pp_expr;;

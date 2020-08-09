@@ -271,6 +271,7 @@ let rec rename_variable
   | On_ast.VariantExpr (lbl, e1) -> On_ast.VariantExpr(lbl, recurse e1)
   | On_ast.List es -> On_ast.List(List.map recurse es)
   | On_ast.ListCons (e1, e2) -> On_ast.ListCons(recurse e1, recurse e2)
+  | On_ast.Assert e -> On_ast.Assert(recurse e)
 ;;
 
 (** This function alphatizes an entire expression.  If a variable is defined
@@ -555,6 +556,9 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
       let%bind e1', seen_declared' = walk e1 seen_declared in
       let%bind e2', seen_declared'' = walk e2 seen_declared' in
       return (ListCons(e1', e2'), seen_declared'')
+    | Assert e ->
+      let%bind e', seen_declared' = walk e seen_declared in
+      return (Assert e', seen_declared')
   in
   lift1 fst @@ walk e Ident_set.empty
 ;;
@@ -889,6 +893,34 @@ and flatten_expr
   | List _ | ListCons _ ->
     raise @@ Utils.Invariant_failure
       "flatten_expr: List expressions should have been handled!"
+  | Assert e ->
+    let%bind (flattened_exprs, last_var) = flatten_expr e in
+    (* Variables *)
+    let%bind assert_pred = fresh_var "assert_pred" in
+    let%bind assert_result = fresh_var "assert_res" in
+    let%bind assert_result_inner = fresh_var "assert_res_true" in
+    let%bind () = add_odefa_natodefa_mapping assert_pred in
+    let%bind () = add_odefa_natodefa_mapping assert_result in
+    let%bind () = add_odefa_natodefa_mapping assert_result_inner in
+    let%bind () = add_instrument_var assert_pred in
+    let%bind () = add_instrument_var assert_result in
+    let%bind () = add_instrument_var assert_result_inner in
+    (* Clauses *)
+    let alias_clause = Ast.Clause (assert_pred, Var_body last_var) in
+    (* We use an empty record as the result value, since no valid operation can
+       done on it (any projection will fail, and no binop, application, nor
+       conditional will work either).  It's a hack (especially if we match on
+       it), but it will do for now. *)
+    let res_value = Ast.Value_record (Record_value Ast.Ident_map.empty) in
+    let t_path =
+      Ast.Expr [Clause (assert_result_inner, Value_body res_value)]
+    in
+    let%bind f_path = add_abort_expr [assert_result] in
+    let cond_clause =
+      Ast.Clause (assert_result, Conditional_body(assert_pred, t_path, f_path))
+    in
+    let all_clauses = (flattened_exprs @ [alias_clause; cond_clause]) in
+    return (all_clauses, assert_result)
 ;;
 
 let debug_transform

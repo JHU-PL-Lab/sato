@@ -29,9 +29,18 @@ type error_match = {
 [@@ deriving eq, show]
 ;;
 
+type error_value = {
+  err_value_aliases : ident list;
+  err_value_val : clause_body;
+  err_value_clause : clause;
+}
+[@@ deriving eq, show]
+;;
+
 type error =
   | Error_binop of error_binop
   | Error_match of error_match
+  | Error_value of error_value
   [@@ deriving eq, show]
 ;;
 
@@ -105,6 +114,16 @@ module Error_tree : Error_tree = struct
 
   let error_to_string error =
     match error with
+    | Error_value value_err ->
+      begin
+        let alias_str =
+          value_err.err_value_aliases
+          |> List.map show_ident
+          |> String.join " = "
+        in
+        "* Value  : " ^ alias_str ^ " = " ^ (show_clause_body value_err.err_value_val) ^ "\n" ^
+        "* Clause : " ^ (show_clause value_err.err_value_clause)
+      end
     | Error_binop binop_err ->
       begin
         let l_aliases = binop_err.err_binop_left_aliases in

@@ -59,6 +59,7 @@ rule token = parse
 | "input"              { INPUT }
 | "match"              { MATCH }
 | "end"                { END }
+| "assert"             { ASSERT }
 | "+"                  { PLUS }
 | "-"                  { MINUS }
 | "*"                  { ASTERISK }
