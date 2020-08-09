@@ -342,6 +342,9 @@ let rec env_out_transform_expr
       let (e1', out1) = recurse env e1 in
       let (e2', out2) = recurse env e2 in
       (On_ast.ListCons(e1', e2'), combiner out1 out2)
+    | On_ast.Assert e ->
+      let (e', out) = recurse env e in
+      (On_ast.Assert e', out)
   in
   let (e'', out'') = transformer recurse env e' in
   (e'', combiner out' out'')
@@ -538,6 +541,9 @@ let rec m_env_out_transform_expr
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
       return @@ (On_ast.ListCons(e1', e2'), combiner out1 out2)
+    | On_ast.Assert e ->
+      let%bind (e', out) = recurse env e in
+      return @@ (On_ast.Assert e', out)
   in
   let%bind (e'', out'') = transformer recurse env e' in
   return (e'', combiner out' out'')

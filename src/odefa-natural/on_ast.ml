@@ -60,6 +60,7 @@ and expr =
   | Match of expr * (pattern * expr) list
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
+  | Assert of expr
 
 [@@deriving eq, ord, show]
 ;;
