@@ -107,10 +107,41 @@ module Error_tree : Error_tree = struct
     match error with
     | Error_binop binop_err ->
       begin
+        let l_aliases = binop_err.err_binop_left_aliases in
+        let r_aliases = binop_err.err_binop_right_aliases in
+        let l_val = binop_err.err_binop_left_val in
+        let r_val = binop_err.err_binop_right_val in
+        let (left_str, l_aliases_str_opt) =
+          let l_val_str = show_value_source l_val in
+          let l_alias_str = String.join " = " @@ List.map show_ident l_aliases in
+          if List.length l_aliases > 0 then
+            (show_ident @@ List.first l_aliases, Some (l_alias_str ^ " = " ^ l_val_str))
+          else
+            (l_val_str, None)
+        in
+        let op_str =
+          show_binary_operator binop_err.err_binop_operation
+        in
+        let (right_str, r_aliases_str_opt) =
+          let r_val_str = show_value_source r_val in
+          let r_alias_str = String.join " = " @@ List.map show_ident r_aliases in
+          if List.length r_aliases > 0 then
+            (show_ident @@ List.first r_aliases, Some (r_alias_str ^ " = " ^ r_val_str))
+          else
+            (show_value_source @@ binop_err.err_binop_left_val, None)
+        in
+        let l_str =
+          match l_aliases_str_opt with
+          | Some str -> "* Left Value  : " ^ str ^ "\n"
+          | None -> ""
+        in
+        let r_str =
+          match r_aliases_str_opt with
+          | Some str -> "* Right Value : " ^ str ^ "\n"
+          | None -> ""
+        in
         let operation_str =
-          (show_value_source binop_err.err_binop_left_val) ^ " " ^
-          (show_binary_operator binop_err.err_binop_operation) ^ " " ^
-          (show_value_source binop_err.err_binop_right_val) 
+          left_str ^ " " ^ op_str ^ " " ^ right_str
         in
         let clause_str =
           binop_err.err_binop_clause
@@ -118,8 +149,8 @@ module Error_tree : Error_tree = struct
           |> Ast_tools.map_clause_vars (fun (Var (x, _)) -> Var (x, None))
           |> show_clause
         in
-        "* Constraint : " ^ operation_str ^ "\n" ^
-        "* Clause     : " ^ clause_str
+        "* Constraint  : " ^ operation_str ^ "\n" ^ l_str ^ r_str ^
+        "* Clause      : " ^ clause_str
       end
     | Error_match match_err ->
       begin
