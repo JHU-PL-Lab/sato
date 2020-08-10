@@ -73,6 +73,11 @@ module Error_tree : Error_tree = struct
 
   let singleton error = Error error;;
 
+  (* We need to effective negate the logical operations, according to
+     DeMorgan's laws.  (Think negating the predicate of the conditional;
+     the the abort clause is in the true branch.) *)
+
+  (* not (x1 and x2) <=> (not x1) or (not x2) *)
   let add_and et1 et2 =
     match (et1, et2) with
     | (Empty, Empty) -> Empty
@@ -81,9 +86,12 @@ module Error_tree : Error_tree = struct
     | (_, _) -> Node (et1, et2)
   ;;
 
+  (* not (x1 or x2) <=> (not x1) and (not x2) *)
   let add_or et1 et2 =
     match (et1, et2) with
     | (Empty, Empty) -> Empty
+    | (_, Empty) -> Empty
+    | (Empty, _) -> Empty
     | (_, _) -> Node (et1, et2)
   ;;
 
