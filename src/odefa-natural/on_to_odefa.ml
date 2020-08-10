@@ -692,22 +692,21 @@ and flatten_eq_binop
     (binop_int : Ast.binary_operator)
     (binop_bool : Ast.binary_operator)
   : (Ast.clause list * Ast.var) m =
-      (* e1 and e2 *)
+    (* Helper function *)
+    let add_var var_name =
+      let%bind var = fresh_var var_name in
+      let%bind () = add_odefa_natodefa_mapping var in
+      let%bind () = add_instrument_var var in
+      return var
+    in
+    (* e1 and e2 *)
     let%bind (e1_clist, e1_var) = flatten_expr e1 in
     let%bind (e2_clist, e2_var) = flatten_expr e2 in
     (* Outer true path *)
-    let%bind m_bl_int = fresh_var "m_bl_int" in
-    let%bind m_br_int = fresh_var "m_br_int" in
-    let%bind m_b_int = fresh_var "m_b_int" in
-    let%bind c_binop_int = fresh_var "c_binop_int" in
-    let%bind () = add_odefa_natodefa_mapping m_bl_int in
-    let%bind () = add_odefa_natodefa_mapping m_br_int in
-    let%bind () = add_odefa_natodefa_mapping m_b_int in
-    let%bind () = add_odefa_natodefa_mapping c_binop_int in
-    let%bind () = add_instrument_var m_bl_int in
-    let%bind () = add_instrument_var m_br_int in
-    let%bind () = add_instrument_var m_b_int in
-    let%bind () = add_instrument_var c_binop_int in
+    let%bind m_bl_int = add_var "m_bl_int" in
+    let%bind m_br_int = add_var "m_br_int" in
+    let%bind m_b_int = add_var "m_b_int" in
+    let%bind c_binop_int = add_var "c_binop_int" in
     let m_clause_l = Ast.Clause (m_bl_int, Match_body (e1_var, Int_pattern)) in
     let m_clause_r = Ast.Clause (m_br_int, Match_body (e2_var, Int_pattern)) in
     let m_clause_body =
@@ -718,18 +717,10 @@ and flatten_eq_binop
       Ast.Clause(c_binop_int, Binary_operation_body(e1_var, binop_int, e2_var))
     in
     (* Inner true path *)
-    let%bind m_bl_bool = fresh_var "m_bl_bool" in
-    let%bind m_br_bool = fresh_var "m_br_bool" in
-    let%bind m_b_bool = fresh_var "m_b_bool" in
-    let%bind c_binop_bool = fresh_var "c_binop_bool" in
-    let%bind () = add_odefa_natodefa_mapping m_bl_bool in
-    let%bind () = add_odefa_natodefa_mapping m_br_bool in
-    let%bind () = add_odefa_natodefa_mapping m_b_bool in
-    let%bind () = add_odefa_natodefa_mapping c_binop_bool in
-    let%bind () = add_instrument_var m_bl_bool in
-    let%bind () = add_instrument_var m_br_int in
-    let%bind () = add_instrument_var m_b_bool in
-    let%bind () = add_instrument_var c_binop_bool in 
+    let%bind m_bl_bool = add_var "m_bl_bool" in
+    let%bind m_br_bool = add_var "m_br_bool" in
+    let%bind m_b_bool = add_var "m_b_bool" in
+    let%bind c_binop_bool = add_var "c_binop_bool" in
     let m_clause_l' = Ast.Clause (m_bl_bool, Match_body (e1_var, Bool_pattern)) in
     let m_clause_r' = Ast.Clause (m_br_bool, Match_body (e2_var, Bool_pattern)) in
     let m_clause_body' =
@@ -739,13 +730,9 @@ and flatten_eq_binop
     let t_path_clause' =
       Ast.Clause(c_binop_bool, Binary_operation_body(e1_var, binop_bool, e2_var))
     in
-    (* Conditional *)
-    let%bind binop_int = fresh_var "binop" in
-    let%bind binop_bool = fresh_var "binop" in
-    let%bind () = add_odefa_natodefa_mapping binop_int in
-    let%bind () = add_odefa_natodefa_mapping binop_bool in
-    let%bind () = add_instrument_var binop_int in
-    let%bind () = add_instrument_var binop_bool in
+    (* Inner conditional *)
+    let%bind binop_int = add_var "binop" in
+    let%bind binop_bool = add_var "binop" in
     let%bind f_path = add_abort_expr [binop_bool; binop_int] in
     let%bind t_path' = return @@ Ast.Expr [t_path_clause'] in
     let inner_cond =
@@ -754,6 +741,7 @@ and flatten_eq_binop
     let inner_cond_expr =
       Ast.Expr [m_clause_l'; m_clause_r'; m_clause'; inner_cond]
     in
+    (* Outer conditional *)
     let outer_cond =
       Ast.Clause(binop_int,
         Conditional_body(m_b_int, Expr [t_path_clause], inner_cond_expr))
