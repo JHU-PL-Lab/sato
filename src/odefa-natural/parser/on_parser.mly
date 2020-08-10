@@ -102,6 +102,8 @@ expr:
       { Or($1, $3) }
   | expr EQUAL_EQUAL expr
       { Equal($1, $3) }
+  | expr NOT_EQUAL expr
+      { Neq($1, $3) }
   | FUNCTION param_list ARROW expr %prec prec_fun
       { Function($2, $4) }
   | LET REC fun_sig_list IN expr %prec prec_fun
