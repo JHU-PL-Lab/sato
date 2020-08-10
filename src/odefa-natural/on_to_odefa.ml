@@ -243,6 +243,7 @@ let rec rename_variable
   | On_ast.Divide (e1, e2) -> On_ast.Divide(recurse e1, recurse e2)
   | On_ast.Modulus (e1, e2) -> On_ast.Modulus(recurse e1, recurse e2)
   | On_ast.Equal (e1, e2) -> On_ast.Equal(recurse e1, recurse e2)
+  | On_ast.Neq (e1, e2) -> On_ast.Neq(recurse e1, recurse e2)
   | On_ast.LessThan (e1, e2) -> On_ast.LessThan(recurse e1, recurse e2)
   | On_ast.Leq (e1, e2) -> On_ast.Leq(recurse e1, recurse e2)
   | On_ast.GreaterThan (e1, e2) -> On_ast.GreaterThan(recurse e1, recurse e2)
@@ -447,6 +448,10 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
       let%bind e1', seen_declared' = walk e1 seen_declared in
       let%bind e2', seen_declared'' = walk e2 seen_declared' in
       return (Equal(e1', e2'), seen_declared'')
+    | Neq (e1, e2) ->
+      let%bind e1', seen_declared' = walk e1 seen_declared in
+      let%bind e2', seen_declared'' = walk e2 seen_declared' in
+      return (Neq(e1', e2'), seen_declared'')
     | LessThan (e1, e2) ->
       let%bind e1', seen_declared' = walk e1 seen_declared in
       let%bind e2', seen_declared'' = walk e2 seen_declared' in
@@ -756,6 +761,8 @@ and flatten_expr
     flatten_binop e1 e2 Ast.Binary_operator_modulus
   | Equal (e1, e2) ->
     flatten_binop e1 e2 Ast.Binary_operator_equal_to
+  | Neq (e1, e2) ->
+    flatten_binop e1 e2 Ast.Binary_operator_not_equal_to
   | LessThan (e1, e2) ->
     flatten_binop e1 e2 Ast.Binary_operator_less_than
   | Leq (e1, e2) ->

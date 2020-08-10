@@ -50,6 +50,7 @@ exception On_Parse_error of string;;
 %token GREATER
 %token GREATER_EQUAL
 %token EQUAL_EQUAL
+%token NOT_EQUAL
 
 /*
  * Precedences and associativities.  Lower precedences come first.

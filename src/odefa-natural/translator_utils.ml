@@ -268,6 +268,10 @@ let rec env_out_transform_expr
       let (e1', out1) = recurse env e1 in
       let (e2', out2) = recurse env e2 in
       (On_ast.Equal(e1', e2'), combiner out1 out2)
+    | On_ast.Neq(e1, e2) ->
+      let (e1', out1) = recurse env e1 in
+      let (e2', out2) = recurse env e2 in
+      (On_ast.Neq(e1', e2'), combiner out1 out2)
     | On_ast.LessThan(e1, e2) ->
       let (e1', out1) = recurse env e1 in
       let (e2', out2) = recurse env e2 in
@@ -460,6 +464,10 @@ let rec m_env_out_transform_expr
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
       return @@ (On_ast.Equal(e1', e2'), combiner out1 out2)
+    | On_ast.Neq(e1, e2) ->
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ (On_ast.Neq(e1', e2'), combiner out1 out2)
     | On_ast.LessThan(e1, e2) ->
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
