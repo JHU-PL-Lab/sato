@@ -30,6 +30,7 @@ module List = BatList;;
 %token KEYWORD_FALSE
 %token KEYWORD_AND
 %token KEYWORD_OR
+%token KEYWORD_XNOR
 %token KEYWORD_XOR
 %token KEYWORD_ANY
 %token UNDERSCORE
@@ -124,6 +125,8 @@ clause_body:
       { Binary_operation_body($1,Binary_operator_and,$3) }
   | variable KEYWORD_OR variable
       { Binary_operation_body($1,Binary_operator_or,$3) }
+  | variable KEYWORD_XNOR variable
+      { Binary_operation_body($1,Binary_operator_xnor,$3) }
   | variable KEYWORD_XOR variable
       { Binary_operation_body($1,Binary_operator_xor,$3) }
   ;

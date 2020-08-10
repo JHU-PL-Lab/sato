@@ -50,6 +50,7 @@ rule token = parse
   | "false"                          { KEYWORD_FALSE }
   | "and"                            { KEYWORD_AND }
   | "or"                             { KEYWORD_OR }
+  | "xnor"                           { KEYWORD_XNOR }
   | "xor"                            { KEYWORD_XOR }
   | "any"                            { KEYWORD_ANY }
   | "_"                              { UNDERSCORE }

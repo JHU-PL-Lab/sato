@@ -119,6 +119,7 @@ let rec instrument_clauses
             | Binary_operator_not_equal_to -> Int_pattern
             | Binary_operator_and
             | Binary_operator_or
+            | Binary_operator_xnor
             | Binary_operator_xor -> Bool_pattern
           in
           (* Variables *)

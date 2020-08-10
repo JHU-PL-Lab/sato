@@ -127,9 +127,10 @@ let _binop_types (op : binary_operator)
   | Binary_operator_less_than
   | Binary_operator_less_than_or_equal_to
   | Binary_operator_equal_to
-  | Binary_operator_not_equal_to -> (IntSymbol, IntSymbol, BoolSymbol) (* TODO: Accomodate both bool and int equal *)
+  | Binary_operator_not_equal_to -> (IntSymbol, IntSymbol, BoolSymbol)
   | Binary_operator_and
   | Binary_operator_or
+  | Binary_operator_xnor
   | Binary_operator_xor -> (BoolSymbol, BoolSymbol, BoolSymbol)
 ;;
 
@@ -599,6 +600,7 @@ let z3_fn_of_operator
   | Binary_operator_and -> Some(z3_listop_to_binop Z3.Boolean.mk_and)
   | Binary_operator_or -> Some(z3_listop_to_binop Z3.Boolean.mk_or)
   | Binary_operator_xor -> Some(Z3.Boolean.mk_xor ctx)
+  | Binary_operator_xnor -> Some(z3_negate_binop Z3.Boolean.mk_xor)
 ;;
 
 let z3_constraint_of_constraint
@@ -750,6 +752,7 @@ let rec _find_errors solver instrument_clause symbol =
         let et1 = _find_errors solver instrument_clause s1 in
         let et2 = _find_errors solver instrument_clause s2 in
         Error_tree.add_or et1 et2
+      | Binary_operator_xnor
       | Binary_operator_xor
       | Binary_operator_plus
       | Binary_operator_minus
