@@ -179,25 +179,26 @@ let abstract_binary_operation
     (arg2 : abstract_value)
   : abstract_value Enum.t option =
   let singleton x = Some(Enum.singleton x) in
-  match binop,arg1,arg2 with
+  match binop, arg1, arg2 with
   | ( Binary_operator_plus
     | Binary_operator_minus
     | Binary_operator_times
     | Binary_operator_divide
     | Binary_operator_modulus
-    ), (* Abs_value_int, Abs_value_int*) _, _ ->
+    ), Abs_value_int, Abs_value_int ->
     singleton Abs_value_int
   | ( Binary_operator_less_than
     | Binary_operator_less_than_or_equal_to
     | Binary_operator_equal_to
+    | Binary_operator_not_equal_to
     ), Abs_value_int, Abs_value_int ->
     Some (List.enum [Abs_value_bool(true); Abs_value_bool(false)])
-  | Binary_operator_equal_to, Abs_value_bool b1, Abs_value_bool b2 ->
-    singleton @@ Abs_value_bool(b1 = b2)
   | Binary_operator_and, Abs_value_bool b1, Abs_value_bool b2 ->
     singleton @@ Abs_value_bool(b1 && b2)
   | Binary_operator_or, Abs_value_bool b1, Abs_value_bool b2 ->
     singleton @@ Abs_value_bool(b1 || b2)
+  | Binary_operator_xnor, Abs_value_bool b1, Abs_value_bool b2 ->
+    singleton @@ Abs_value_bool(b1 = b2)
   | Binary_operator_xor, Abs_value_bool b1, Abs_value_bool b2 ->
     singleton @@ Abs_value_bool(b1 <> b2)
   | _ -> None
@@ -214,10 +215,10 @@ let abstract_binary_operation
   | Binary_operator_minus
   | Binary_operator_times
   | Binary_operator_divide
-  | Binary_operator_modulus
-  | Binary_operator_equal_to
-  | Binary_operator_not_equal_to ->
+  | Binary_operator_modulus ->
     Some (Enum.singleton Abs_value_int)
+  | Binary_operator_equal_to
+  | Binary_operator_not_equal_to
   | Binary_operator_less_than
   | Binary_operator_less_than_or_equal_to
   | Binary_operator_and
