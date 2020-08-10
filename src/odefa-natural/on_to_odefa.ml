@@ -243,6 +243,7 @@ let rec rename_variable
   | On_ast.Divide (e1, e2) -> On_ast.Divide(recurse e1, recurse e2)
   | On_ast.Modulus (e1, e2) -> On_ast.Modulus(recurse e1, recurse e2)
   | On_ast.Equal (e1, e2) -> On_ast.Equal(recurse e1, recurse e2)
+  | On_ast.Neq (e1, e2) -> On_ast.Neq(recurse e1, recurse e2)
   | On_ast.LessThan (e1, e2) -> On_ast.LessThan(recurse e1, recurse e2)
   | On_ast.Leq (e1, e2) -> On_ast.Leq(recurse e1, recurse e2)
   | On_ast.GreaterThan (e1, e2) -> On_ast.GreaterThan(recurse e1, recurse e2)
@@ -447,6 +448,10 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
       let%bind e1', seen_declared' = walk e1 seen_declared in
       let%bind e2', seen_declared'' = walk e2 seen_declared' in
       return (Equal(e1', e2'), seen_declared'')
+    | Neq (e1, e2) ->
+      let%bind e1', seen_declared' = walk e1 seen_declared in
+      let%bind e2', seen_declared'' = walk e2 seen_declared' in
+      return (Neq(e1', e2'), seen_declared'')
     | LessThan (e1, e2) ->
       let%bind e1', seen_declared' = walk e1 seen_declared in
       let%bind e2', seen_declared'' = walk e2 seen_declared' in
@@ -679,6 +684,73 @@ let rec flatten_binop
   let new_clause = Ast.Clause (binop_var, binop_body) in
   return (e1_clist @ e2_clist @ [new_clause], binop_var)
 
+(** Flatten either the equal or not equal binary operation.
+    This involves instrumenting both operations in nested conditionals. *)
+and flatten_eq_binop
+    (e1 : On_ast.expr)
+    (e2 : On_ast.expr)
+    (binop_int : Ast.binary_operator)
+    (binop_bool : Ast.binary_operator)
+  : (Ast.clause list * Ast.var) m =
+    (* Helper function *)
+    let add_var var_name =
+      let%bind var = fresh_var var_name in
+      let%bind () = add_odefa_natodefa_mapping var in
+      let%bind () = add_instrument_var var in
+      return var
+    in
+    (* e1 and e2 *)
+    let%bind (e1_clist, e1_var) = flatten_expr e1 in
+    let%bind (e2_clist, e2_var) = flatten_expr e2 in
+    (* Outer true path *)
+    let%bind m_bl_int = add_var "m_bl_int" in
+    let%bind m_br_int = add_var "m_br_int" in
+    let%bind m_b_int = add_var "m_b_int" in
+    let%bind c_binop_int = add_var "c_binop_int" in
+    let m_clause_l = Ast.Clause (m_bl_int, Match_body (e1_var, Int_pattern)) in
+    let m_clause_r = Ast.Clause (m_br_int, Match_body (e2_var, Int_pattern)) in
+    let m_clause_body =
+      Ast.Binary_operation_body (m_bl_int, Binary_operator_and, m_br_int)
+    in
+    let m_clause = Ast.Clause (m_b_int, m_clause_body) in
+    let t_path_clause = 
+      Ast.Clause(c_binop_int, Binary_operation_body(e1_var, binop_int, e2_var))
+    in
+    (* Inner true path *)
+    let%bind m_bl_bool = add_var "m_bl_bool" in
+    let%bind m_br_bool = add_var "m_br_bool" in
+    let%bind m_b_bool = add_var "m_b_bool" in
+    let%bind c_binop_bool = add_var "c_binop_bool" in
+    let m_clause_l' = Ast.Clause (m_bl_bool, Match_body (e1_var, Bool_pattern)) in
+    let m_clause_r' = Ast.Clause (m_br_bool, Match_body (e2_var, Bool_pattern)) in
+    let m_clause_body' =
+      Ast.Binary_operation_body (m_bl_bool, Binary_operator_and, m_br_bool)
+    in
+    let m_clause' = Ast.Clause (m_b_bool, m_clause_body') in
+    let t_path_clause' =
+      Ast.Clause(c_binop_bool, Binary_operation_body(e1_var, binop_bool, e2_var))
+    in
+    (* Inner conditional *)
+    let%bind binop_int = add_var "binop" in
+    let%bind binop_bool = add_var "binop" in
+    let%bind f_path = add_abort_expr [binop_bool; binop_int] in
+    let%bind t_path' = return @@ Ast.Expr [t_path_clause'] in
+    let inner_cond =
+      Ast.Clause(binop_bool, Conditional_body(m_b_bool, t_path', f_path))
+    in
+    let inner_cond_expr =
+      Ast.Expr [m_clause_l'; m_clause_r'; m_clause'; inner_cond]
+    in
+    (* Outer conditional *)
+    let outer_cond =
+      Ast.Clause(binop_int,
+        Conditional_body(m_b_int, Expr [t_path_clause], inner_cond_expr))
+    in
+    let outer_cond_clist =
+      [m_clause_l; m_clause_r; m_clause; outer_cond]
+    in
+    return (e1_clist @ e2_clist @ outer_cond_clist, binop_int)
+
 (** Flatten an entire expression (i.e. convert natodefa into odefa code) *)
 and flatten_expr
     (e : On_ast.expr)
@@ -755,7 +827,13 @@ and flatten_expr
   | Modulus (e1, e2) ->
     flatten_binop e1 e2 Ast.Binary_operator_modulus
   | Equal (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_equal_to
+    flatten_eq_binop e1 e2
+      Ast.Binary_operator_equal_to
+      Ast.Binary_operator_xnor
+  | Neq (e1, e2) ->
+    flatten_eq_binop e1 e2
+      Ast.Binary_operator_not_equal_to
+      Ast.Binary_operator_xor
   | LessThan (e1, e2) ->
     flatten_binop e1 e2 Ast.Binary_operator_less_than
   | Leq (e1, e2) ->

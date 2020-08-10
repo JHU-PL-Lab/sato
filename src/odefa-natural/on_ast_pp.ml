@@ -114,6 +114,8 @@ and pp_expr formatter expr =
     Format.fprintf formatter "(%a %% %a)" pp_expr e1 pp_expr e2
   | Equal (e1, e2) ->
     Format.fprintf formatter "(%a == %a)" pp_expr e1 pp_expr e2
+  | Neq (e1, e2) ->
+    Format.fprintf formatter "(%a <> %a)" pp_expr e1 pp_expr e2
   | LessThan (e1, e2) ->
     Format.fprintf formatter "(%a < %a)" pp_expr e1 pp_expr e2
   | Leq (e1, e2) ->

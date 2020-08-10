@@ -74,11 +74,11 @@ TODO
   - [x] Extract return values; retvs from true branches are what the abort constrains
 - [ ] Report potential errors that may arise in dead code
   - [ ] Prove the soundness of reporting such potential errors
-- [ ] More errors
-  - [ ] ~~Add "Primitive" pattern/type for bool + int "=="~~ Use an `or` statement instead
+- [x] More errors
+  - [x] ~~Add "Primitive" pattern/type for bool + int "=="~~ Use an `or` statement instead
   - [x] Divide by zero (new nonzero pattern + type vs. nested constraints) - refinement types!
   - [x] Match errors (conjunction vs. disjunction)
-  - [ ] Asserts (including fancier types/predicates) (encode in odefa)
+  - [x] Asserts (including fancier types/predicates) (encode in odefa)
 - [x] Deal with aborts in the (regular) interpreter environment
 - [ ] Heuristic to identify higher-level errors (as opposed to strictly lower-level ones)
   - [ ] Incorrect data structures (e.g. using lists wrong)

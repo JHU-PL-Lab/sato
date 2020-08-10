@@ -53,6 +53,7 @@ let pp_binary_operator formatter binop =
     | Binary_operator_not_equal_to -> "<>"
     | Binary_operator_and -> "and"
     | Binary_operator_or -> "or"
+    | Binary_operator_xnor -> "xnor"
     | Binary_operator_xor -> "xor"
   in
   Format.pp_print_string formatter s
