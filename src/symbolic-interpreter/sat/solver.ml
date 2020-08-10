@@ -143,7 +143,6 @@ let rec _construct_alias_chain solver symbol =
   | None -> [symbol]
 ;;
 
-
 let _get_symbol_type solver symbol : symbol_type option =
   Symbol_map.Exceptionless.find symbol solver.type_constraints_by_symbol
 ;;
@@ -202,13 +201,14 @@ let _get_value_source solver symbol : value_source option =
     Symbol_set.Exceptionless.find symbol solver.abort_constraints_by_symbol
   in
   match (value_opt, input_opt, binop_opt, match_opt, abort_opt) with
-  | (Some value, None, None, None, None) -> 
+  | (Some value, None, None, None, None) ->
       Some (Constraint.Value value)
   | (None, Some _, None, None, None) ->
       Some (Constraint.Input)
   | (None, None, Some (s1, op, s2), None, None) ->
       Some (Constraint.Binop (s1, op, s2))
-  | (None, None, None, Some (s, p), None) ->
+  | (_, None, None, Some (s, p), None) ->
+      (* Match constraints produce an additional value constraint*)
       Some (Constraint.Match (s, p))
   | (None, None, None, None, Some _) ->
       Some (Constraint.Abort)
@@ -743,7 +743,6 @@ let rec _find_errors solver instrument_clause symbol =
         Printf.sprintf "Binary operation on symbol %s" (show_symbol symbol));
       let (s1, op, s2) = b in
       match op with
-      (* TODO: If a symbol is another and/or or a pattern, recurse on find_error. Otherwise treat this as a leaf node. *)
       | Binary_operator_and ->
         let et1 = _find_errors solver instrument_clause s1 in
         let et2 = _find_errors solver instrument_clause s2 in
@@ -763,48 +762,34 @@ let rec _find_errors solver instrument_clause symbol =
       | Binary_operator_less_than_or_equal_to
       | Binary_operator_equal_to
       | Binary_operator_not_equal_to ->
-        let binop_value =
-          match value_opt with
-          | Some v -> v
-          | None ->
-            raise @@ Utils.Invariant_failure
-              (Printf.sprintf "Binop at %s did not produce a value"
-                (show_symbol symbol))
+        let binop_error = {
+          err_binop_clause = instrument_clause;
+          err_binop_operation = op;
+          err_binop_left_val =
+            begin
+              match _get_value_source solver s1 with
+              | Some vs -> _symbolic_to_concrete_value vs
+              | None -> raise Not_found
+            end;
+          err_binop_right_val =
+            begin
+              match _get_value_source solver s2 with
+              | Some vs -> _symbolic_to_concrete_value vs
+              | None -> raise Not_found
+            end;
+          err_binop_left_aliases =
+            List.map
+              (fun (Symbol (i1, _)) -> i1)
+              (_construct_alias_chain solver s1);
+          err_binop_right_aliases =
+            List.map
+              (fun (Symbol (i2, _)) -> i2)
+              (_construct_alias_chain solver s2);
+        }
         in
-        match binop_value with
-        | Constraint.Bool false ->
-          let binop_error = {
-            err_binop_clause = instrument_clause;
-            err_binop_operation = op;
-            err_binop_left_val =
-              begin
-                match _get_value_source solver s1 with
-                | Some vs -> _symbolic_to_concrete_value vs
-                | None -> raise Not_found
-              end;
-            err_binop_right_val =
-              begin
-                match _get_value_source solver s2 with
-                | Some vs -> _symbolic_to_concrete_value vs
-                | None -> raise Not_found
-              end;
-            err_binop_left_aliases =
-              List.map
-                (fun (Symbol (i1, _)) -> i1)
-                (_construct_alias_chain solver s1);
-            err_binop_right_aliases =
-              List.map
-                (fun (Symbol (i2, _)) -> i2)
-                (_construct_alias_chain solver s2);
-          }
-          in
-          lazy_logger `trace (fun () -> (show_error_binop binop_error));
-          Error_tree.singleton (Error_binop binop_error)
-        | Constraint.Bool true ->
-          Error_tree.empty
-        | _ ->
-          raise @@ Utils.Invariant_failure
-            (Printf.sprintf "%s is not a boolean binop" (show_symbol symbol))
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Binop error:\n%s" (show_error_binop binop_error));
+        Error_tree.singleton (Error_binop binop_error)
     end
   | (None, Some m) ->
     begin
@@ -877,11 +862,13 @@ let rec _find_errors solver instrument_clause symbol =
             err_value_clause = instrument_clause;
           }
           in
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Value error:\n%s" (show_error_value value_error));
           Error_tree.singleton (Error_value value_error)
       | _ ->
-        lazy_logger `trace (fun () ->
-            Printf.sprintf "??? on symbol %s" (show_symbol symbol));
-        raise @@ Utils.Invariant_failure "Error tree has non-boolean values"
+        raise @@ Utils.Invariant_failure
+          (Printf.sprintf "Error tree on %s has non-boolean values"
+            (show_symbol symbol))
     end
   | (_, _) ->
     raise @@ Utils.Invariant_failure ("Multiple definitions for symbol " ^ (show_symbol symbol))
