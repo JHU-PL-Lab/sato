@@ -126,9 +126,11 @@ let _binop_types (op : binary_operator)
   | Binary_operator_modulus -> (IntSymbol, IntSymbol, IntSymbol)
   | Binary_operator_less_than
   | Binary_operator_less_than_or_equal_to
-  | Binary_operator_equal_to -> (IntSymbol, IntSymbol, BoolSymbol) (* TODO: Accomodate both bool and int equal *)
+  | Binary_operator_equal_to
+  | Binary_operator_not_equal_to -> (IntSymbol, IntSymbol, BoolSymbol)
   | Binary_operator_and
   | Binary_operator_or
+  | Binary_operator_xnor
   | Binary_operator_xor -> (BoolSymbol, BoolSymbol, BoolSymbol)
 ;;
 
@@ -582,6 +584,9 @@ let z3_fn_of_operator
   let z3_listop_to_binop f =
     fun arg1 arg2 -> f ctx [arg1;arg2]
   in
+  let z3_negate_binop f =
+    fun arg1 arg2 -> Z3.Boolean.mk_not ctx (f ctx arg1 arg2)
+  in
   match operator with
   | Binary_operator_plus -> Some(z3_listop_to_binop Z3.Arithmetic.mk_add)
   | Binary_operator_minus -> Some(z3_listop_to_binop Z3.Arithmetic.mk_sub)
@@ -591,9 +596,11 @@ let z3_fn_of_operator
   | Binary_operator_less_than -> Some(Z3.Arithmetic.mk_lt ctx)
   | Binary_operator_less_than_or_equal_to -> Some(Z3.Arithmetic.mk_le ctx)
   | Binary_operator_equal_to -> Some(Z3.Boolean.mk_eq ctx)
+  | Binary_operator_not_equal_to -> Some(z3_negate_binop Z3.Boolean.mk_eq)
   | Binary_operator_and -> Some(z3_listop_to_binop Z3.Boolean.mk_and)
   | Binary_operator_or -> Some(z3_listop_to_binop Z3.Boolean.mk_or)
   | Binary_operator_xor -> Some(Z3.Boolean.mk_xor ctx)
+  | Binary_operator_xnor -> Some(z3_negate_binop Z3.Boolean.mk_xor)
 ;;
 
 let z3_constraint_of_constraint
@@ -719,7 +726,10 @@ let solvable solver =
 
 (* **** Error finding **** *)
 
-let rec _find_errors solver symbol constrained_clause =
+let rec _find_errors solver instrument_clause symbol =
+  let value_opt =
+    Symbol_map.Exceptionless.find symbol solver.value_constraints_by_symbol
+  in
   let binop_opt =
     Symbol_map.Exceptionless.find symbol solver.binop_constraints_by_symbol
   in
@@ -732,14 +742,17 @@ let rec _find_errors solver symbol constrained_clause =
       lazy_logger `trace (fun () ->
         Printf.sprintf "Binary operation on symbol %s" (show_symbol symbol));
       let (s1, op, s2) = b in
-      let et1 = _find_errors solver s1 constrained_clause in
-      let et2 = _find_errors solver s2 constrained_clause in
       match op with
       (* TODO: If a symbol is another and/or or a pattern, recurse on find_error. Otherwise treat this as a leaf node. *)
       | Binary_operator_and ->
+        let et1 = _find_errors solver instrument_clause s1 in
+        let et2 = _find_errors solver instrument_clause s2 in
         Error_tree.add_and et1 et2
       | Binary_operator_or ->
+        let et1 = _find_errors solver instrument_clause s1 in
+        let et2 = _find_errors solver instrument_clause s2 in
         Error_tree.add_or et1 et2
+      | Binary_operator_xnor
       | Binary_operator_xor
       | Binary_operator_plus
       | Binary_operator_minus
@@ -748,11 +761,12 @@ let rec _find_errors solver symbol constrained_clause =
       | Binary_operator_modulus
       | Binary_operator_less_than
       | Binary_operator_less_than_or_equal_to
-      | Binary_operator_equal_to ->
+      | Binary_operator_equal_to
+      | Binary_operator_not_equal_to ->
         let binop_value =
-          try
-            Symbol_map.find symbol solver.value_constraints_by_symbol
-          with Not_found ->
+          match value_opt with
+          | Some v -> v
+          | None ->
             raise @@ Utils.Invariant_failure
               (Printf.sprintf "Binop at %s did not produce a value"
                 (show_symbol symbol))
@@ -760,20 +774,28 @@ let rec _find_errors solver symbol constrained_clause =
         match binop_value with
         | Constraint.Bool false ->
           let binop_error = {
-            err_binop_ident = (fun (Symbol (x, _)) -> x) symbol;
+            err_binop_clause = instrument_clause;
             err_binop_operation = op;
             err_binop_left_val =
               begin
                 match _get_value_source solver s1 with
-                | Some vs -> vs
+                | Some vs -> _symbolic_to_concrete_value vs
                 | None -> raise Not_found
               end;
             err_binop_right_val =
               begin
                 match _get_value_source solver s2 with
-                | Some vs -> vs
+                | Some vs -> _symbolic_to_concrete_value vs
                 | None -> raise Not_found
               end;
+            err_binop_left_aliases =
+              List.map
+                (fun (Symbol (i1, _)) -> i1)
+                (_construct_alias_chain solver s1);
+            err_binop_right_aliases =
+              List.map
+                (fun (Symbol (i2, _)) -> i2)
+                (_construct_alias_chain solver s2);
           }
           in
           lazy_logger `trace (fun () -> (show_error_binop binop_error));
@@ -789,16 +811,11 @@ let rec _find_errors solver symbol constrained_clause =
       lazy_logger `trace (fun () ->
         Printf.sprintf "Pattern match on symbol %s" (show_symbol symbol));
       let (match_symb, pattern) = m in
-      let a_chain = _construct_alias_chain solver match_symb in
-      let (Symbol(v, _), alias_chain) =
-        match List.rev a_chain with
-        | hd :: tl -> (hd, tl)
-        | [] -> raise @@ Utils.Invariant_failure "At least one variable must exist in alias chain"
-      in
+      let alias_chain = _construct_alias_chain solver match_symb in
       let match_value =
-        try
-          Symbol_map.find symbol solver.value_constraints_by_symbol
-        with Not_found ->
+        match value_opt with
+        | Some v -> v
+        | None ->
           raise @@ Utils.Invariant_failure
             (Printf.sprintf "Pattern match at %s did not produce a value"
             (show_symbol symbol))
@@ -816,7 +833,7 @@ let rec _find_errors solver symbol constrained_clause =
         let actual_type = _get_type solver match_symb in
         let match_val_source =
           match _get_value_source solver match_symb with
-          | Some vs -> Ast.Clause (Var (v, None), _symbolic_to_concrete_value vs)
+          | Some vs -> _symbolic_to_concrete_value vs
           | None -> raise @@ Utils.Invariant_failure
             (Printf.sprintf "%s has no value in constraint set!"
               (show_symbol match_symb))
@@ -824,7 +841,7 @@ let rec _find_errors solver symbol constrained_clause =
         if not (Ast.Type_signature.subtype actual_type expected_type) then begin
           let match_error = {
             err_match_aliases = List.map (fun (Symbol(x, _)) -> x) alias_chain;
-            err_match_clause = constrained_clause;
+            err_match_clause = instrument_clause;
             err_match_value = match_val_source;
             err_match_expected_type = expected_type;
             err_match_actual_type = actual_type;
@@ -843,12 +860,34 @@ let rec _find_errors solver symbol constrained_clause =
           (Printf.sprintf "%s is not a boolean value" (show_symbol symbol))
     end
   | (None, None) ->
-    raise @@ Utils.Invariant_failure "Error tree cannot include unwrapped values"
+    begin
+      match value_opt with
+      | Some (Bool b) ->
+        if b then
+          Error_tree.empty
+        else
+          let alias_chain =
+            List.map
+              (fun (Symbol (i1, _)) -> i1)
+              (_construct_alias_chain solver symbol);
+          in
+          let value_error = {
+            err_value_aliases = alias_chain;
+            err_value_val = Value_body (Value_bool b);
+            err_value_clause = instrument_clause;
+          }
+          in
+          Error_tree.singleton (Error_value value_error)
+      | _ ->
+        lazy_logger `trace (fun () ->
+            Printf.sprintf "??? on symbol %s" (show_symbol symbol));
+        raise @@ Utils.Invariant_failure "Error tree has non-boolean values"
+    end
   | (_, _) ->
     raise @@ Utils.Invariant_failure ("Multiple definitions for symbol " ^ (show_symbol symbol))
 ;;
 
-let find_errors solver symbol = _find_errors solver symbol;;
+let find_errors solver inst_clause symbol = _find_errors solver inst_clause symbol;;
 
 (* **** Other functions **** *)
 

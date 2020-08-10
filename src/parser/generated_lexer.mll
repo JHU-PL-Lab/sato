@@ -50,6 +50,7 @@ rule token = parse
   | "false"                          { KEYWORD_FALSE }
   | "and"                            { KEYWORD_AND }
   | "or"                             { KEYWORD_OR }
+  | "xnor"                           { KEYWORD_XNOR }
   | "xor"                            { KEYWORD_XOR }
   | "any"                            { KEYWORD_ANY }
   | "_"                              { UNDERSCORE }
@@ -62,5 +63,6 @@ rule token = parse
   | "<"                              { LESS }
   | "<="                             { LESS_EQUAL }
   | "=="                             { EQUAL_EQUAL }
+  | "<>"                             { NOT_EQUAL }
   | ident_start ident_cont* as s     { IDENTIFIER s }
   | ";;"                             { DOUBLE_SEMICOLON }

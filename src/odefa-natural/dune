@@ -1,3 +1,6 @@
+(copy_files# parser/*.{ml,mli})
+(copy_files parser/*.{mll,mly})
+
 (ocamllex
   on_lexer
 )

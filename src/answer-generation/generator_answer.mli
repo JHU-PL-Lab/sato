@@ -1,6 +1,9 @@
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
+open Odefa_natural;;
+open On_to_odefa_types;;
+
 exception Parse_failure;;
 
 (** The interface of a generic answer, i.e. information that can be extracted
@@ -17,6 +20,11 @@ module type Answer = sig
   (** A function to parse an answer from a string. Mostly used for testing. *)
   val answer_from_string : string -> t;;
 
+  (** Set the odefa/natodefa mappings as a global, which will be needed to
+      remove any variables added during instrumentation, convert from odefa
+      back to natodefa, etc. *)
+  val set_odefa_natodefa_map : Odefa_natodefa_mappings.t -> unit;;
+
   (** Convert the answer into a string. *)
   val show : t -> string;;
 
@@ -29,10 +37,6 @@ module type Answer = sig
   (** True if generating an answer from the result is successful, false
       otherwise. *)
   val generation_successful : t -> bool;;
-
-  (** Remove any variables from the alias chain or clauses that were added
-      during type constraint instrumentation. *)
-  val remove_instrument_vars : Ast.var Ast.Var_map.t -> t -> t;;
 
   (** Test if an answer is a member of a collection of answers. (If the answer
       is an error, it must be wrapped in a singleton error tree). *)

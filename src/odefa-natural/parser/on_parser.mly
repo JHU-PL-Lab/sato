@@ -39,6 +39,7 @@ exception On_Parse_error of string;;
 %token INPUT
 %token MATCH
 %token END
+%token ASSERT
 %token PLUS
 %token MINUS
 %token ASTERISK
@@ -49,6 +50,7 @@ exception On_Parse_error of string;;
 %token GREATER
 %token GREATER_EQUAL
 %token EQUAL_EQUAL
+%token NOT_EQUAL
 
 /*
  * Precedences and associativities.  Lower precedences come first.
@@ -100,6 +102,8 @@ expr:
       { Or($1, $3) }
   | expr EQUAL_EQUAL expr
       { Equal($1, $3) }
+  | expr NOT_EQUAL expr
+      { Neq($1, $3) }
   | FUNCTION param_list ARROW expr %prec prec_fun
       { Function($2, $4) }
   | LET REC fun_sig_list IN expr %prec prec_fun
@@ -136,6 +140,7 @@ fun_sig_list:
   | fun_sig WITH fun_sig_list { $1 :: $3 }
 
 unary_expr:
+  | ASSERT simple_expr { Assert($2) }
   | NOT simple_expr { Not($2) }
   | BACKTICK variant_label simple_expr { VariantExpr($2, $3) }
   | appl_expr { $1 }
@@ -231,28 +236,28 @@ pattern:
   | BOOL_KEYWORD { BoolPat }
   | FUNCTION { FunPat }
   | IDENTIFIER { VarPat(Ident($1)) }
-  | BACKTICK variant_label pattern { VariantPat(Variant($2, $3)) } %prec prec_variant
+  | BACKTICK variant_label ident_decl { VariantPat($2, $3) } %prec prec_variant
   | OPEN_BRACE rec_pattern_body CLOSE_BRACE { RecPat $2 }
   | OPEN_BRACE CLOSE_BRACE { RecPat (Ident_map.empty) }
-  | RECORD { RecPat (Ident_map.empty) }
+  | RECORD { RecPat (Ident_map.empty) } /* TODO: Remove? */
   | OPEN_BRACKET CLOSE_BRACKET { EmptyLstPat }
-  | pattern DOUBLE_COLON pattern { LstDestructPat($1, $3) }
+  | ident_decl DOUBLE_COLON ident_decl { LstDestructPat($1, $3) }
   | OPEN_PAREN pattern CLOSE_PAREN { $2 }
 ;
 
 rec_pattern_body:
-  | label EQUALS pattern
+  | label EQUALS ident_decl
       { let (Label k) = $1 in
         let key = Ident k in
-        Ident_map.singleton key $3 }
-  | label EQUALS pattern COMMA rec_pattern_body
+        Ident_map.singleton key (Some $3) }
+  | label EQUALS ident_decl COMMA rec_pattern_body
       { let (Label k) = $1 in
         let key = Ident k in
         let old_map = $5 in
         let dup_check = Ident_map.mem key old_map in
         if dup_check then raise (On_Parse_error "Duplicate label names in record!")
         else
-        let new_map = Ident_map.add key $3 old_map in
+        let new_map = Ident_map.add key (Some $3) old_map in
         new_map
       }
 ;

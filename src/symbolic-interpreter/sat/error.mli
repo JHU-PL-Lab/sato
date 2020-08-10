@@ -1,24 +1,30 @@
 open Odefa_ast;;
 open Ast;;
 
-open Constraint;;
+(* open Constraint;; *)
 
 exception Parse_failure of string;;
 
 type error_binop = {
-  (** The identifier of the binop clause. *)
-  err_binop_ident : ident;
+  (** The clause representing the operation being instrumented. *)
+  err_binop_clause : clause;
 
   (** The operator (e.g. +, -, and, or, ==, etc. *)
   err_binop_operation : binary_operator;
 
   (** The value of the left side of the binop. *)
-  err_binop_left_val : value_source;
+  err_binop_left_val : clause_body;
 
   (** The value of the right side of the binop. *)
-  err_binop_right_val : value_source;
+  err_binop_right_val : clause_body;
+
+  (** The alias chain leading up to the left value. *)
+  err_binop_left_aliases : ident list;
+
+  (** The alias chain leading up to the right value. *)
+  err_binop_right_aliases : ident list;
 }
-[@@ deriving show]
+[@@ deriving eq, show]
 ;;
 
 type error_match = {
@@ -26,9 +32,9 @@ type error_match = {
   err_match_aliases : ident list;
 
   (** The value of the ident that is being matched. *)
-  err_match_value : clause;
+  err_match_value : clause_body;
 
-  (** The clause that is being constrained by the abort's conditional. *)
+  (** The clause respresenting the operation being instrumented. *)
   err_match_clause : clause;
 
   (** The expected type, according to the pattern. *)
@@ -37,12 +43,28 @@ type error_match = {
   (** The actual type of the symbol being matched. *)
   err_match_actual_type : type_sig;
 }
-[@@ deriving show]
+[@@ deriving eq, show]
 ;;
+
+type error_value = {
+  (** The alias chain defining the boolean value. *)
+  err_value_aliases : ident list;
+
+  (** The boolean value (should always be false). *)
+  err_value_val : clause_body;
+
+  (** The clause representing the operation being constrained. *)
+  err_value_clause : clause;
+}
+[@@ deriving eq, show]
+;;
+
 
 type error =
   | Error_binop of error_binop
   | Error_match of error_match
+  | Error_value of error_value
+[@@ deriving eq, show]
 ;;
 
 val parse_error : string -> error;;

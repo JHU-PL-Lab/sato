@@ -47,8 +47,10 @@ let pp_binary_operator formatter binop =
     | Binary_operator_less_than -> "<"
     | Binary_operator_less_than_or_equal_to -> "<="
     | Binary_operator_equal_to -> "=="
+    | Binary_operator_not_equal_to -> "<>"
     | Binary_operator_and -> "and"
     | Binary_operator_or -> "or"
+    | Binary_operator_xnor -> "xnor"
     | Binary_operator_xor -> "xor"
   in
   Format.pp_print_string formatter s
@@ -122,6 +124,7 @@ and pp_pattern formatter p =
 ;;
 
 let show_value = pp_to_string pp_value;;
+let show_clause_body = pp_to_string pp_clause_body;;
 let show_clause = pp_to_string pp_clause;;
 let show_brief_clause formatter (Clause(x,_)) = pp_var formatter x;;
 let show_expr = pp_to_string pp_expr;;

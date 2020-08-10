@@ -173,19 +173,21 @@ let scope_violations expression =
 
 (* Abort variable well-formedness *)
 
-let abort_var_lists_eq cond_list var_list =
+(* An abort clause's variable list is considered valid if the nesting
+   conditionals' identifier variables are found in the list, in order
+   of nesting. *)
+let abort_var_list_valid cond_list abort_list =
   let rec v_list_eq c_list v_list =
     match c_list, v_list with
     | id1 :: tl1, id2 :: tl2 ->
       if Ident.equal id1 id2 then
         v_list_eq tl1 tl2
       else
-        Some id2
-    | [], [] -> None
-    | _ :: _, [] -> None
-    | [], id2 :: _ -> Some id2
+        v_list_eq tl1 v_list
+    | [], (id2 :: _) -> Some id2
+    | _, [] -> None
   in
-  v_list_eq cond_list (List.rev var_list)
+  v_list_eq cond_list abort_list
 ;;
 
 let rec check_abort_vars_in_expr
@@ -207,7 +209,7 @@ and check_abort_vars_in_clause
   | Abort_body v_list ->
     begin
       let i_list = List.map (fun (Var (id, _)) -> id) v_list in
-      match abort_var_lists_eq cond_idents i_list with
+      match abort_var_list_valid cond_idents i_list with
       | Some id -> [(site_x, id)]
       | None -> []
     end

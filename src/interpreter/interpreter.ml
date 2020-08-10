@@ -266,6 +266,7 @@ let rec evaluate
             | Some v1, Some v2 ->
               begin
                 match v1, op, v2 with
+                (* Arithmetic operations *)
                 | (Value_int n1, Binary_operator_plus, Value_int n2) ->
                   Value_int (n1 + n2)
                 | (Value_int n1, Binary_operator_minus, Value_int n2) ->
@@ -280,6 +281,7 @@ let rec evaluate
                   if n2 <> 0 then Value_int(n1 mod n2) else
                     raise @@ Evaluation_failure
                       ("Modulus by zero at " ^ show_var x)
+                (* Integer comparisons *)
                 | (Value_int n1, Binary_operator_less_than, Value_int n2) ->
                   Value_bool (n1 < n2)
                 | (Value_int n1,
@@ -288,12 +290,15 @@ let rec evaluate
                   Value_bool (n1 <= n2)
                 | (Value_int n1, Binary_operator_equal_to, Value_int n2) ->
                   Value_bool (n1 = n2)
-                | (Value_bool b1, Binary_operator_equal_to, Value_bool b2) ->
-                  Value_bool (b1 = b2)
+                | (Value_int n1, Binary_operator_not_equal_to, Value_int n2) ->
+                  Value_bool (n1 <> n2)
+                (* Boolean operations *)
                 | (Value_bool b1, Binary_operator_and, Value_bool b2) ->
                   Value_bool (b1 && b2)
                 | (Value_bool b1, Binary_operator_or, Value_bool b2) ->
                   Value_bool (b1 || b2)
+                | (Value_bool b1, Binary_operator_xnor, Value_bool b2) ->
+                  Value_bool (b1 = b2)
                 | (Value_bool b1, Binary_operator_xor, Value_bool b2) ->
                   Value_bool (b1 <> b2)
                 | _, _, _ ->

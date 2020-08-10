@@ -59,12 +59,14 @@ rule token = parse
 | "input"              { INPUT }
 | "match"              { MATCH }
 | "end"                { END }
+| "assert"             { ASSERT }
 | "+"                  { PLUS }
 | "-"                  { MINUS }
 | "*"                  { ASTERISK }
 | "/"                  { SLASH }
 | "%"                  { PERCENT }
 | "=="                 { EQUAL_EQUAL }
+| "<>"                 { NOT_EQUAL }
 | "<"                  { LESS }
 | "<="                 { LESS_EQUAL }
 | ">"                  { GREATER }

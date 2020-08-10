@@ -30,6 +30,7 @@ module List = BatList;;
 %token KEYWORD_FALSE
 %token KEYWORD_AND
 %token KEYWORD_OR
+%token KEYWORD_XNOR
 %token KEYWORD_XOR
 %token KEYWORD_ANY
 %token UNDERSCORE
@@ -41,6 +42,7 @@ module List = BatList;;
 %token LESS
 %token LESS_EQUAL
 %token EQUAL_EQUAL
+%token NOT_EQUAL
 %token DOUBLE_SEMICOLON
 
 %start <Odefa_ast.Ast.expr> prog
@@ -117,10 +119,14 @@ clause_body:
       { Binary_operation_body($1,Binary_operator_less_than_or_equal_to,$3) }
   | variable EQUAL_EQUAL variable
       { Binary_operation_body($1,Binary_operator_equal_to,$3) }
+  | variable NOT_EQUAL variable
+      { Binary_operation_body($1,Binary_operator_not_equal_to,$3) }
   | variable KEYWORD_AND variable
       { Binary_operation_body($1,Binary_operator_and,$3) }
   | variable KEYWORD_OR variable
       { Binary_operation_body($1,Binary_operator_or,$3) }
+  | variable KEYWORD_XNOR variable
+      { Binary_operation_body($1,Binary_operator_xnor,$3) }
   | variable KEYWORD_XOR variable
       { Binary_operation_body($1,Binary_operator_xor,$3) }
   ;

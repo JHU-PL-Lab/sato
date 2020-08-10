@@ -1,6 +1,7 @@
 open Batteries;;
 
 open Odefa_ast;;
+open On_to_odefa_types;;
 (* open Odefa_symbolic_interpreter.Interpreter_types;; *)
 
 (* open On_to_odefa_types;; *)
@@ -10,9 +11,10 @@ open Odefa_ast;;
 type translation_context =
   { tc_fresh_suffix_separator : string;
     tc_contextual_recursion : bool;
+    mutable tc_current_natodefa_expr : On_ast.expr option;
     mutable tc_fresh_name_counter : int;
-    (* mutable tc_odefa_natodefa_info : odefa_natodefa_info; *)
     mutable tc_instrumented_var_map : Ast.var Ast.Var_map.t;
+    mutable tc_odefa_natodefa_mappings : Odefa_natodefa_mappings.t;
   }
 [@@deriving eq, ord (*, show *)]
 ;;
@@ -25,11 +27,9 @@ let new_translation_context
   { tc_fresh_name_counter = 0;
     tc_fresh_suffix_separator = suffix;
     tc_contextual_recursion = contextual_recursion;
+    tc_current_natodefa_expr = None;
     tc_instrumented_var_map = Ast.Var_map.empty;
-    (* tc_odefa_natodefa_info = {
-      odefa_aborts = Ast.Var_map.empty;
-      natodefa_exprs = Ast.Var_map.empty;
-    }; *)
+    tc_odefa_natodefa_mappings = Odefa_natodefa_mappings.empty;
   }
 ;;
 
@@ -38,9 +38,16 @@ module TranslationMonad : sig
   val run : translation_context -> 'a m -> 'a
   val fresh_name : string -> string m
   val fresh_var : string -> Ast.var m
+  val update_natodefa_expr : On_ast.expr -> unit m
+  val add_var_clause_pair : Ast.var -> Ast.clause -> unit m
+  val add_instrument_var : Ast.var -> unit m
   val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
+  val is_instrument_var : Ast.var -> bool m
+  val add_odefa_natodefa_mapping : Ast.var -> unit m
+  val add_natodefa_expr_mapping : On_ast.expr -> On_ast.expr -> unit m
   val instrument_map : Ast.var Ast.Var_map.t m
-  (* val add_natodefa_expr : Ast.var -> On_ast.expr -> unit m *)
+  val var_clause_mapping : Ast.clause Ast.Ident_map.t m
+  val odefa_natodefa_maps : Odefa_natodefa_mappings.t m
   val freshness_string : string m
   val acontextual_recursion : bool m
   val sequence : 'a m list -> 'a list m
@@ -73,14 +80,66 @@ end = struct
     Ast.Var(Ast.Ident name', None)
   ;;
 
+  let add_var_clause_pair v_key cls_val ctx =
+    let (Ast.Var (i_key, _)) = v_key in
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- Odefa_natodefa_mappings.add_odefa_var_clause_mapping odefa_on_maps i_key cls_val
+  ;;
+
+  let add_instrument_var v ctx =
+    let (Ast.Var (i, _)) = v in
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- Odefa_natodefa_mappings.add_odefa_instrument_var odefa_on_maps i None
+  ;;
+
   let add_instrument_var_pair v_key v_val ctx =
-    ctx.tc_instrumented_var_map
-      <- Ast.Var_map.add v_key v_val ctx.tc_instrumented_var_map;
-    ()
+    let (Ast.Var (i_key, _)) = v_key in
+    let (Ast.Var (i_val, _)) = v_val in
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- Odefa_natodefa_mappings.add_odefa_instrument_var odefa_on_maps i_key (Some i_val);
+  ;;
+
+  let is_instrument_var v ctx =
+    let (Ast.Var (i, _)) =  v in
+    let inst_vars = ctx.tc_odefa_natodefa_mappings.odefa_instrument_vars_map in
+    Ast.Ident_map.mem i inst_vars
+  ;;
+
+  let add_odefa_natodefa_mapping v_key ctx =
+    let (Ast.Var (i_key, _)) = v_key in
+    let expr_val_opt = ctx.tc_current_natodefa_expr in
+    match expr_val_opt with
+    | Some expr_val ->
+      let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+      ctx.tc_odefa_natodefa_mappings
+        <- Odefa_natodefa_mappings.add_odefa_var_on_expr_mapping odefa_on_maps i_key expr_val
+    | None ->
+      failwith (Printf.sprintf "Tried to add mapping of %s to a natodefa expr, but no expr was available!" (Ast.show_ident i_key))
+  ;;
+
+  let add_natodefa_expr_mapping k_expr v_expr ctx =
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- Odefa_natodefa_mappings.add_on_expr_to_expr_mapping odefa_on_maps k_expr v_expr
+  ;;
+
+  let update_natodefa_expr expr ctx =
+    ctx.tc_current_natodefa_expr <- Some expr;
   ;;
 
   let instrument_map ctx =
     ctx.tc_instrumented_var_map
+  ;;
+
+  let var_clause_mapping ctx =
+    ctx.tc_odefa_natodefa_mappings.odefa_pre_instrument_clause_mapping
+  ;;
+
+  let odefa_natodefa_maps ctx =
+    ctx.tc_odefa_natodefa_mappings
   ;;
 
   let freshness_string ctx =
@@ -209,6 +268,10 @@ let rec env_out_transform_expr
       let (e1', out1) = recurse env e1 in
       let (e2', out2) = recurse env e2 in
       (On_ast.Equal(e1', e2'), combiner out1 out2)
+    | On_ast.Neq(e1, e2) ->
+      let (e1', out1) = recurse env e1 in
+      let (e2', out2) = recurse env e2 in
+      (On_ast.Neq(e1', e2'), combiner out1 out2)
     | On_ast.LessThan(e1, e2) ->
       let (e1', out1) = recurse env e1 in
       let (e2', out2) = recurse env e2 in
@@ -283,6 +346,9 @@ let rec env_out_transform_expr
       let (e1', out1) = recurse env e1 in
       let (e2', out2) = recurse env e2 in
       (On_ast.ListCons(e1', e2'), combiner out1 out2)
+    | On_ast.Assert e ->
+      let (e', out) = recurse env e in
+      (On_ast.Assert e', out)
   in
   let (e'', out'') = transformer recurse env e' in
   (e'', combiner out' out'')
@@ -398,6 +464,10 @@ let rec m_env_out_transform_expr
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
       return @@ (On_ast.Equal(e1', e2'), combiner out1 out2)
+    | On_ast.Neq(e1, e2) ->
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ (On_ast.Neq(e1', e2'), combiner out1 out2)
     | On_ast.LessThan(e1, e2) ->
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
@@ -479,6 +549,9 @@ let rec m_env_out_transform_expr
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
       return @@ (On_ast.ListCons(e1', e2'), combiner out1 out2)
+    | On_ast.Assert e ->
+      let%bind (e', out) = recurse env e in
+      return @@ (On_ast.Assert e', out)
   in
   let%bind (e'', out'') = transformer recurse env e' in
   return (e'', combiner out' out'')
