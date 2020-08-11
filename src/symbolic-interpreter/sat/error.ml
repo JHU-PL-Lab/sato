@@ -54,6 +54,7 @@ module type Error_tree = sig
   val add_and : t -> t -> t;;
   val add_or : t -> t -> t;;
   val tree_from_error_list : t list -> t;;
+  val flatten_tree : t -> error list;;
   val to_string : t -> string;;
   val map : (error -> error) -> t -> t;;
   val mem : error -> t -> bool;;
@@ -113,9 +114,9 @@ module Error_tree : Error_tree = struct
     add_to_tree err_trees
   ;;
 
-  let rec _flatten_tree error_tree =
+  let rec flatten_tree error_tree =
     match error_tree with
-    | Node (et1, et2) -> (_flatten_tree et1) @ (_flatten_tree et2)
+    | Node (et1, et2) -> (flatten_tree et1) @ (flatten_tree et2)
     | Error error -> [error]
     | Empty -> []
   ;;
@@ -201,7 +202,7 @@ module Error_tree : Error_tree = struct
   ;;
 
   let to_string error_tree =
-    let error_list = _flatten_tree error_tree in
+    let error_list = flatten_tree error_tree in
     let string_list = List.map error_to_string error_list in
     String.join "\n---------------\n" string_list
   ;;

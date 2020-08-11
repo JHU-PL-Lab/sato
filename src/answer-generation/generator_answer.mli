@@ -49,3 +49,5 @@ module Input_sequence : Answer;;
 (** The type errors encountered for a single program flow of symbolic
     evaluation. *)
 module Type_errors : Answer;;
+
+module Natodefa_type_errors : Answer;;

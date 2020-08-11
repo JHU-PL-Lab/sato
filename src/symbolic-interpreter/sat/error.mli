@@ -95,6 +95,9 @@ module type Error_tree = sig
       predicates have a false value). *)
   val tree_from_error_list : t list -> t;;
 
+  (** Flattens an error tree into a list structure. *)
+  val flatten_tree : t -> error list;;
+
   (** String representation of the error tree. *)
   val to_string : t -> string;;
 

@@ -262,7 +262,7 @@ module Type_errors : Answer = struct
   ;;
 
   let set_odefa_natodefa_map odefa_on_maps =
-    odefa_on_maps_option_ref := Some (odefa_on_maps);;
+    odefa_on_maps_option_ref := Some (odefa_on_maps)
   ;;
 
   let show_input_seq input_seq =
@@ -316,12 +316,88 @@ module Type_errors : Answer = struct
   ;;
 end;;
 
-(*
 module Natodefa_type_errors : Answer = struct
   type error_seq = {
-    err_errors :  list;
+    err_errors : On_error.Error_list.t;
     err_input_seq : int list;
   }
   ;;
+
+  type t = error_seq;;
+
+  let odefa_on_maps_option_ref = ref None;;
+
+  let answer_from_result e x result =
+    let error_tree_map = result.er_errors in
+    let (input_seq, abort_list) =
+      Generator_utils.input_sequence_from_result e x result
+    in
+    (* For now, we only report the error associated with the first we encounter
+       on a program path, since (during forward evaluation) only code up to
+       that abort is "live;" all code afterwards is "dead" code that is
+       unreachable in the non-instrumented code.  In the future we can report
+       potential errors in "dead" code as well, but only after we prove
+       soundness. *)
+    if List.is_empty abort_list then begin
+      {
+        err_input_seq = input_seq;
+        err_errors = On_error.Error_list.empty;
+      }
+    end else begin
+      let abort = List.first abort_list in
+      let error_tree = Symbol_map.find abort error_tree_map in
+      let error_list = Error_tree.flatten_tree error_tree in
+      match !odefa_on_maps_option_ref with
+      | Some odefa_on_maps ->
+        let on_error_list =
+          List.map (On_error.odefa_to_natodefa_error odefa_on_maps) error_list
+        in
+        {
+          err_input_seq = input_seq;
+          err_errors = On_error.Error_list.wrap on_error_list;
+        }
+      | None ->
+        failwith "Odefa/natodefa maps were not set!"
+    end
+  ;;
+
+  let answer_from_string (_ : string) : t =
+    {
+      err_input_seq = [];
+      err_errors = On_error.Error_list.empty;
+    }
+  ;;
+
+  let set_odefa_natodefa_map odefa_on_maps =
+    odefa_on_maps_option_ref := Some (odefa_on_maps)
+  ;;
+
+  let show_input_seq input_seq =
+    "[" ^ (String.join ", " @@ List.map string_of_int input_seq) ^ "]"
+  ;;
+
+  let show error =
+    if not @@ On_error.Error_list.is_empty error.err_errors then begin
+      "Type errors for input sequence " ^
+      (show_input_seq error.err_input_seq) ^ ":\n" ^
+      (On_error.Error_list.to_string error.err_errors)
+    end else begin
+      ""
+    end
+  ;;
+
+  let count error =
+    On_error.Error_list.count error.err_errors
+  ;;
+
+  let count_list error_list =
+    List.fold_left
+      (fun acc error -> acc + (count error))
+      0
+      error_list
+  ;;
+
+  let generation_successful _ = true;;
+
+  let test_mem _ _ = false;;
 end;;
-*)
