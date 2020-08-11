@@ -168,4 +168,5 @@ and pp_expr formatter expr =
     Format.fprintf formatter "assert %a" pp_expr e
 ;;
 
+let show_ident = Pp_utils.pp_to_string pp_ident;;
 let show_expr = Pp_utils.pp_to_string pp_expr;;

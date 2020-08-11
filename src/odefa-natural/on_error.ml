@@ -1,6 +1,6 @@
 open Batteries;;
 
-(* open Odefa_ast;; *)
+open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
 type error_binop = {
@@ -10,7 +10,9 @@ type error_binop = {
 ;;
 
 type error_match = {
+  err_match_aliases : On_ast.ident list;
   err_match_expr : On_ast.expr;
+  err_match_value : On_ast.expr;
 }
 [@@ deriving show]
 
@@ -47,6 +49,12 @@ module Error_list : Error_list = struct
     | Error_binop err ->
       "* Expression : " ^ (On_ast_pp.show_expr err.err_binop_expr)
     | Error_match err ->
+      let alias_str =
+        String.join " = "
+          @@ List.map On_ast_pp.show_ident err.err_match_aliases
+      in
+      let value_str = On_ast_pp.show_expr err.err_match_value in
+      "* Value      : " ^ alias_str ^ " = " ^ value_str ^"\n" ^
       "* Expression : " ^ (On_ast_pp.show_expr err.err_match_expr)
     | Error_value err ->
       "* Expression : " ^ (On_ast_pp.show_expr err.err_value_expr)
@@ -67,34 +75,65 @@ module Error_list : Error_list = struct
 end
 ;;
 
+(*
+let _odefa_to_on_binop
+    (expr1 : On_ast.expr)
+    (expr2 : On_ast.expr)
+    (op : Ast.binary_operator)
+  : On_ast.expr =
+  match op with
+  | Binary_operator_plus
+;;
+*)
+  
 let odefa_to_natodefa_error
     (odefa_on_maps : On_to_odefa_types.Odefa_natodefa_mappings.t)
     (odefa_err : Error.error)
   : error =
   let open On_to_odefa_types in
+  let odefa_to_on_expr =
+    Odefa_natodefa_mappings.get_natodefa_equivalent_expr odefa_on_maps
+  in
+  let odefa_to_on_aliases (aliases : Ast.ident list) : On_ast.ident list =
+    List.filter_map
+      (fun alias ->
+        match odefa_to_on_expr alias with
+        | (On_ast.Var ident) -> Some ident
+        | _ -> None
+      )
+      aliases
+  in
   match odefa_err with
   | Error.Error_binop err ->
-    let (Clause (Var (v, _), _)) = err.err_binop_clause in
-    let on_expr =
-      Odefa_natodefa_mappings.get_natodefa_equivalent_expr odefa_on_maps v
-    in
-    Error_binop {
-      err_binop_expr = on_expr;
-    }
+    begin
+      let (Clause (Var (v, _), _)) = err.err_binop_clause in
+      Error_binop {
+        err_binop_expr = odefa_to_on_expr v;
+      }
+    end
   | Error.Error_match err ->
-    let (Clause (Var (v, _), _)) = err.err_match_clause in
-    let on_expr =
-      Odefa_natodefa_mappings.get_natodefa_equivalent_expr odefa_on_maps v
-    in
-    Error_match {
-      err_match_expr = on_expr;
-    }
+    begin
+      let aliases = err.err_match_aliases in
+      let (aliases', last_var) =
+        match List.rev aliases with
+        | hd :: tl ->
+          (List.rev tl, hd)
+        | [] ->
+          raise @@
+            Jhupllib.Utils.Invariant_failure "Cannot have empty alias list!"
+      in
+      let (Clause (Var (v, _), _)) = err.err_match_clause in
+      Error_match {
+        err_match_aliases = odefa_to_on_aliases aliases';
+        err_match_expr = odefa_to_on_expr v;
+        err_match_value = odefa_to_on_expr last_var
+      }
+    end
   | Error.Error_value err ->
-    let (Clause (Var (v, _), _)) = err.err_value_clause in
-    let on_expr =
-      Odefa_natodefa_mappings.get_natodefa_equivalent_expr odefa_on_maps v
-    in
-    Error_value {
-      err_value_expr = on_expr;
-    }
+    begin
+      let (Clause (Var (v, _), _)) = err.err_value_clause in
+      Error_value {
+        err_value_expr = odefa_to_on_expr v;
+      }
+    end
 ;;
