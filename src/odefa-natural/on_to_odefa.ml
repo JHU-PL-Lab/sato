@@ -90,7 +90,6 @@ let rec pat_rename_vars
 (** Transform an expression to eliminate "let rec" expressions by encoding with
    self-passing. *)
 let rec_transform (e : On_ast.expr) : On_ast.expr m =
-  let%bind () = update_natodefa_expr e in
   begin
   let transformer recurse e =
     match e with
@@ -282,7 +281,6 @@ let rec rename_variable
 let alphatize (e : On_ast.expr) : On_ast.expr m =
   let open TranslationMonad in
   let open On_ast in
-  let%bind () = update_natodefa_expr e in
   (* Given a list of identifiers, a list of expressions, and a list of
      previously declared identifiers, this helper routine renames all previously
      declared identifiers which appear in the list within all of the
@@ -571,21 +569,21 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
 (* **** Expression flattening + helper functions **** *)
 
 (** Returns the body of a function or conditional with its return variable *)
-let nonempty_body ((body : Ast.clause list), (var : Ast.var))
+let nonempty_body (expr : On_ast.expr) ((body : Ast.clause list), (var : Ast.var))
   : (Ast.clause list * Ast.var) m =
   match body with
   | [] ->
     let%bind x = fresh_var "var" in
-    let%bind () = add_odefa_natodefa_mapping x in
+    let%bind () = add_odefa_natodefa_mapping x expr in
     return @@ ([Ast.Clause(x, Var_body var)], x)
   | _ ->
     return (body, var)
 ;;
 
 (** Create a new abort clause with multiple conditional clause variables *)
-let add_abort_expr (cond_vars : Ast.var list) =
+let add_abort_expr (expr : On_ast.expr) (cond_vars : Ast.var list) : Ast.expr m =
   let%bind abort_var = fresh_var "ab" in
-  let%bind () = add_odefa_natodefa_mapping abort_var in
+  let%bind () = add_odefa_natodefa_mapping abort_var expr in
   let abort_clause = Ast.Clause(abort_var, Abort_body cond_vars) in
   return @@ Ast.Expr([abort_clause]);
 ;;
@@ -596,6 +594,7 @@ let on_to_odefa_ident (On_ast.Ident (id)) = Ast.Ident (id);;
     clauses associated with a record or variable pattern; these will be
     appended to the front of the pattern's expression. *)
 let flatten_pattern
+    (expr : On_ast.expr)
     (pat_var : Ast.var)
     (pattern : On_ast.pattern)
   : (Ast.pattern * Ast.clause list) m =
@@ -622,7 +621,7 @@ let flatten_pattern
               let v' = on_to_odefa_ident v in
               let lbl' = on_to_odefa_ident lbl in
               let ast_var = Ast.Var (v', None) in
-              let%bind () = add_odefa_natodefa_mapping ast_var in
+              let%bind () = add_odefa_natodefa_mapping ast_var expr in
               let ast_body = Ast.Projection_body(pat_var, lbl') in
               return @@ acc @ [(Ast.Clause (ast_var, ast_body))]
             | None -> return acc
@@ -633,7 +632,7 @@ let flatten_pattern
   | On_ast.VarPat var_pat ->
     let (On_ast.Ident (var_id)) = var_pat in
     let ast_var = Ast.Var (Ident var_id, None) in
-    let%bind () = add_odefa_natodefa_mapping ast_var in
+    let%bind () = add_odefa_natodefa_mapping ast_var expr in
     let ast_body = Ast.Var_body pat_var in
     let clause = Ast.Clause (ast_var, ast_body) in
     return (Ast.Any_pattern, [clause])
@@ -648,19 +647,20 @@ let flatten_pattern
 (** Flatten a function *)
 let flatten_fun
     ?binding_name:(binding_name=(None:On_ast.Ident.t option))
+    (expr : On_ast.expr)
     (param_names : On_ast.Ident.t list)
     (body : Ast.expr)
   : (Ast.expr * Ast.var) m =
   list_fold_right_m
-    (fun (param : On_ast.Ident.t) ((expr : Ast.expr), (_ : Ast.Var.t)) ->
+    (fun (param : On_ast.Ident.t) ((e : Ast.expr), (_ : Ast.Var.t)) ->
       let id = on_to_odefa_ident param in
       let%bind (new_var : Ast.var) =
         match binding_name with
         | None -> fresh_var "flatten_fun"
         | Some (Ident(s)) -> fresh_var s
       in
-      let%bind () = add_odefa_natodefa_mapping new_var in
-      let fun_val = Ast.Value_function (Function_value(Var(id, None), expr)) in
+      let%bind () = add_odefa_natodefa_mapping new_var expr in
+      let fun_val = Ast.Value_function (Function_value(Var(id, None), e)) in
       let fun_body = Ast.Value_body (fun_val) in
       let new_clause = Ast.Clause(new_var, fun_body) in
       let expr' : Ast.expr = Ast.Expr([new_clause]) in
@@ -672,6 +672,7 @@ let flatten_fun
 
 (** Flatten a binary operation *)
 let rec flatten_binop
+    (expr : On_ast.expr)
     (e1 : On_ast.expr)
     (e2 : On_ast.expr)
     (binop : Ast.binary_operator)
@@ -679,7 +680,7 @@ let rec flatten_binop
   let%bind (e1_clist, e1_var) = flatten_expr e1 in
   let%bind (e2_clist, e2_var) = flatten_expr e2 in
   let%bind binop_var = fresh_var "binop" in
-  let%bind () = add_odefa_natodefa_mapping binop_var in
+  let%bind () = add_odefa_natodefa_mapping binop_var expr in
   let binop_body = Ast.Binary_operation_body (e1_var, binop, e2_var) in
   let new_clause = Ast.Clause (binop_var, binop_body) in
   return (e1_clist @ e2_clist @ [new_clause], binop_var)
@@ -687,6 +688,7 @@ let rec flatten_binop
 (** Flatten either the equal or not equal binary operation.
     This involves instrumenting both operations in nested conditionals. *)
 and flatten_eq_binop
+    (expr : On_ast.expr)
     (e1 : On_ast.expr)
     (e2 : On_ast.expr)
     (binop_int : Ast.binary_operator)
@@ -695,7 +697,7 @@ and flatten_eq_binop
     (* Helper function *)
     let add_var var_name =
       let%bind var = fresh_var var_name in
-      let%bind () = add_odefa_natodefa_mapping var in
+      let%bind () = add_odefa_natodefa_mapping var expr in
       let%bind () = add_instrument_var var in
       return var
     in
@@ -733,7 +735,7 @@ and flatten_eq_binop
     (* Inner conditional *)
     let%bind binop_int = add_var "binop" in
     let%bind binop_bool = add_var "binop" in
-    let%bind f_path = add_abort_expr [binop_bool; binop_int] in
+    let%bind f_path = add_abort_expr expr [binop_bool; binop_int] in
     let%bind t_path' = return @@ Ast.Expr [t_path_clause'] in
     let inner_cond =
       Ast.Clause(binop_bool, Conditional_body(m_b_bool, t_path', f_path))
@@ -753,31 +755,31 @@ and flatten_eq_binop
 
 (** Flatten an entire expression (i.e. convert natodefa into odefa code) *)
 and flatten_expr
-    (e : On_ast.expr)
+    (expr : On_ast.expr)
   : (Ast.clause list * Ast.var) m =
-  let%bind () = update_natodefa_expr e in
-  match e with
+  (* let%bind () = update_natodefa_expr exp in *)
+  match expr with
   | Var (id) ->
     let%bind alias_var = fresh_var "var" in
     let Ident(i_string) = id in
     let id_var = Ast.Var(Ast.Ident(i_string), None) in
-    let%bind () = add_odefa_natodefa_mapping alias_var in
-    let%bind () = add_odefa_natodefa_mapping id_var in
+    let%bind () = add_odefa_natodefa_mapping alias_var expr in
+    let%bind () = add_odefa_natodefa_mapping id_var expr in
     return ([Ast.Clause(alias_var, Ast.Var_body(id_var))], alias_var)
   | Input ->
     let%bind input_var = fresh_var "input" in
-    let%bind () = add_odefa_natodefa_mapping input_var in
+    let%bind () = add_odefa_natodefa_mapping input_var expr in
     return ([Ast.Clause(input_var, Ast.Input_body)], input_var)
   | Function (id_list, e) ->
-    let%bind (fun_c_list, _) = nonempty_body @@@ flatten_expr e in
+    let%bind (fun_c_list, _) = nonempty_body expr @@@ flatten_expr e in
     let body_expr = Ast.Expr(fun_c_list) in
-    let%bind (Expr(fun_clause), return_var) = flatten_fun id_list body_expr in
+    let%bind (Expr(fun_clause), return_var) = flatten_fun expr id_list body_expr in
     return (fun_clause, return_var)
   | Appl (e1, e2) ->
     let%bind (e1_clist, e1_var) = flatten_expr e1 in
     let%bind (e2_clist, e2_var) = flatten_expr e2 in
     let%bind appl_var = fresh_var "appl" in
-    let%bind () = add_odefa_natodefa_mapping appl_var in
+    let%bind () = add_odefa_natodefa_mapping appl_var expr in
     let new_clause =
       Ast.Clause (
         appl_var,
@@ -791,7 +793,7 @@ and flatten_expr
     let%bind (e2_clist, e2_var) = flatten_expr e2 in
     let Ident(var_name) = var_ident in
     let lt_var = Ast.Var (Ast.Ident(var_name), None) in
-    let%bind () = add_odefa_natodefa_mapping lt_var in
+    let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Ast.Var_body(e1_var)) in
     return (e1_clist @ [assignment_clause] @ e2_clist, e2_var)
     end
@@ -800,16 +802,16 @@ and flatten_expr
     (* TODO: check for bugs!!! *)
     (* Translating the function signature... *)
     let Funsig(fun_name, id_list, fun_e) = sign in
-    let%bind (body_clist, _) = nonempty_body @@@ flatten_expr fun_e in
+    let%bind (body_clist, _) = nonempty_body expr @@@ flatten_expr fun_e in
     let%bind (Expr(fun_clauses), return_var) =
-      flatten_fun ~binding_name:(Some fun_name) id_list (Expr(body_clist))
+      flatten_fun ~binding_name:(Some fun_name) expr id_list (Expr(body_clist))
     in
     (* Flattening the "e2"... *)
     let%bind (e_clist, e_var) = flatten_expr e in
     (* Assigning the function to the given function name... *)
     let On_ast.Ident(var_name) = fun_name in
     let lt_var = Ast.Var(Ast.Ident(var_name), None) in
-    let%bind () = add_odefa_natodefa_mapping lt_var in
+    let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Ast.Var_body(return_var)) in
     return (fun_clauses @ [assignment_clause] @ e_clist, e_var)
     end
@@ -817,41 +819,41 @@ and flatten_expr
     raise @@
       Utils.Invariant_failure "LetRecFun should not have been passed to flatten_expr"
   | Plus (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_plus
+    flatten_binop expr e1 e2 Ast.Binary_operator_plus
   | Minus (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_minus
+    flatten_binop expr e1 e2 Ast.Binary_operator_minus
   | Times (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_times
+    flatten_binop expr e1 e2 Ast.Binary_operator_times
   | Divide (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_divide
+    flatten_binop expr e1 e2 Ast.Binary_operator_divide
   | Modulus (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_modulus
+    flatten_binop expr e1 e2 Ast.Binary_operator_modulus
   | Equal (e1, e2) ->
-    flatten_eq_binop e1 e2
+    flatten_eq_binop expr e1 e2
       Ast.Binary_operator_equal_to
       Ast.Binary_operator_xnor
   | Neq (e1, e2) ->
-    flatten_eq_binop e1 e2
+    flatten_eq_binop expr e1 e2
       Ast.Binary_operator_not_equal_to
       Ast.Binary_operator_xor
   | LessThan (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_less_than
+    flatten_binop expr e1 e2 Ast.Binary_operator_less_than
   | Leq (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_less_than_or_equal_to
+    flatten_binop expr e1 e2 Ast.Binary_operator_less_than_or_equal_to
   | GreaterThan (e1, e2) -> (* Reverse e1 and e2 *)
-    flatten_binop e2 e1 Ast.Binary_operator_less_than
+    flatten_binop expr e2 e1 Ast.Binary_operator_less_than
   | Geq (e1, e2) -> (* Reverse e1 and e2 *)
-    flatten_binop e2 e1 Ast.Binary_operator_less_than_or_equal_to
+    flatten_binop expr e2 e1 Ast.Binary_operator_less_than_or_equal_to
   | And (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_and
+    flatten_binop expr e1 e2 Ast.Binary_operator_and
   | Or (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_or
+    flatten_binop expr e1 e2 Ast.Binary_operator_or
   | Not (e) ->
     let%bind (e_clist, e_var) = flatten_expr e in
     let%bind true_var = fresh_var "true" in
     let%bind binop_var = fresh_var "binop" in
-    let%bind () = add_odefa_natodefa_mapping true_var in
-    let%bind () = add_odefa_natodefa_mapping binop_var in
+    let%bind () = add_odefa_natodefa_mapping true_var expr in
+    let%bind () = add_odefa_natodefa_mapping binop_var expr in
     let binop = Ast.Binary_operator_xor in
     let true_body = Ast.Value_body(Value_bool true) in
     let binop_body = Ast.Binary_operation_body(e_var, binop, true_var) in
@@ -864,21 +866,21 @@ and flatten_expr
     (* NOTE: this is translation from an if statement. Thus e1 will be always
        matched with true. *)
     let%bind (e1_clst, e1_var) = flatten_expr e1 in
-    let%bind (e2_clst, _) = nonempty_body @@@ flatten_expr e2 in
-    let%bind (e3_clst, _) = nonempty_body @@@ flatten_expr e3 in
+    let%bind (e2_clst, _) = nonempty_body expr @@@ flatten_expr e2 in
+    let%bind (e3_clst, _) = nonempty_body expr @@@ flatten_expr e3 in
     let%bind if_var = fresh_var "if" in
-    let%bind () = add_odefa_natodefa_mapping if_var in
+    let%bind () = add_odefa_natodefa_mapping if_var expr in
     let if_body = Ast.Conditional_body(e1_var, Expr(e2_clst), Expr(e3_clst)) in
     let if_clause = Ast.Clause(if_var, if_body) in
     return (e1_clst @ [if_clause], if_var)
   | Int (n) ->
     let%bind int_var = fresh_var "int" in
-    let%bind () = add_odefa_natodefa_mapping int_var in
+    let%bind () = add_odefa_natodefa_mapping int_var expr in
     let new_clause = Ast.Clause(int_var, Ast.Value_body(Ast.Value_int(n))) in
     return ([new_clause], int_var)
   | Bool (b) ->
     let%bind bool_var = fresh_var "bool" in
-    let%bind () = add_odefa_natodefa_mapping bool_var in
+    let%bind () = add_odefa_natodefa_mapping bool_var expr in
     let new_clause = Ast.Clause(bool_var, Ast.Value_body(Ast.Value_bool(b))) in
     return ([new_clause], bool_var)
   | Record (recexpr_map) ->
@@ -902,7 +904,7 @@ and flatten_expr
       |> list_fold_left_m flatten_and_map empty_acc
     in
     let%bind rec_var = fresh_var "record" in
-    let%bind () = add_odefa_natodefa_mapping rec_var in
+    let%bind () = add_odefa_natodefa_mapping rec_var expr in
     let new_body = Ast.Value_body (Ast.Value_record (Ast.Record_value map)) in
     let new_clause = Ast.Clause (rec_var, new_body) in
     return (clist @ [new_clause], rec_var)
@@ -911,12 +913,12 @@ and flatten_expr
     let On_ast.Label(l_string) = lab in
     let l_ident = Ast.Ident(l_string) in
     let%bind proj_var = fresh_var "proj" in
-    let%bind () = add_odefa_natodefa_mapping proj_var in
+    let%bind () = add_odefa_natodefa_mapping proj_var expr in
     let new_clause =
       Ast.Clause(proj_var, Ast.Projection_body(e_var, l_ident))
     in
     return (e_clist @ [new_clause], proj_var)
-  | Match (subject, pat_expr_list) ->
+  | Match (subject, pat_e_list) ->
     begin
       (* We need to convert the subject first *)
       let%bind (subject_clause_list, subj_var) = flatten_expr subject in
@@ -933,12 +935,12 @@ and flatten_expr
             let (curr_pat, curr_pat_expr) = curr_match in
             let%bind bool_var = fresh_var "m_bool" in
             let%bind cond_var = fresh_var "m_cond" in
-            let%bind () = add_odefa_natodefa_mapping bool_var in
-            let%bind () = add_odefa_natodefa_mapping cond_var in
+            let%bind () = add_odefa_natodefa_mapping bool_var expr in
+            let%bind () = add_odefa_natodefa_mapping cond_var expr in
             let%bind () = add_instrument_var bool_var in
             let%bind () = add_instrument_var cond_var in
             let%bind (flat_pat, new_clauses) =
-              flatten_pattern subj_var curr_pat
+              flatten_pattern expr subj_var curr_pat
             in
             let%bind (c_list, _) = flatten_expr curr_pat_expr in
             let c_list' = new_clauses @ c_list in
@@ -956,9 +958,9 @@ and flatten_expr
             return (Ast.Expr([match_clause; cond_clause]))
           end
         | [] ->
-          add_abort_expr match_vars
+          add_abort_expr expr match_vars
       in
-      let%bind match_expr = convert_matches pat_expr_list [] in
+      let%bind match_expr = convert_matches pat_e_list [] in
       let Ast.Expr match_clauses = match_expr in
       let match_last_clause = List.last match_clauses in
       let Ast.Clause (match_last_clause_var, _) = match_last_clause in
@@ -973,16 +975,17 @@ and flatten_expr
       "flatten_expr: List expressions should have been handled!"
   | Assert e ->
     let%bind (flattened_exprs, last_var) = flatten_expr e in
+    (* Helper function *)
+    let add_var var_name =
+      let%bind var = fresh_var var_name in
+      let%bind () = add_odefa_natodefa_mapping var expr in
+      let%bind () = add_instrument_var var in
+      return var
+    in
     (* Variables *)
-    let%bind assert_pred = fresh_var "assert_pred" in
-    let%bind assert_result = fresh_var "assert_res" in
-    let%bind assert_result_inner = fresh_var "assert_res_true" in
-    let%bind () = add_odefa_natodefa_mapping assert_pred in
-    let%bind () = add_odefa_natodefa_mapping assert_result in
-    let%bind () = add_odefa_natodefa_mapping assert_result_inner in
-    let%bind () = add_instrument_var assert_pred in
-    let%bind () = add_instrument_var assert_result in
-    let%bind () = add_instrument_var assert_result_inner in
+    let%bind assert_pred = add_var "assert_pred" in
+    let%bind assert_result = add_var "assert_res" in
+    let%bind assert_result_inner = add_var "assert_res_true" in
     (* Clauses *)
     let alias_clause = Ast.Clause (assert_pred, Var_body last_var) in
     (* We use an empty record as the result value, since no valid operation can
@@ -993,7 +996,7 @@ and flatten_expr
     let t_path =
       Ast.Expr [Clause (assert_result_inner, Value_body res_value)]
     in
-    let%bind f_path = add_abort_expr [assert_result] in
+    let%bind f_path = add_abort_expr expr [assert_result] in
     let cond_clause =
       Ast.Clause (assert_result, Conditional_body(assert_pred, t_path, f_path))
     in
@@ -1038,9 +1041,18 @@ let translate
     let%bind fresh_str = freshness_string in
     let res_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
     let res_clause = Ast.Clause(res_var, Ast.Var_body(last_var)) in
-    (* let%bind odefa_on_info = get_odefa_natodefa_info in *)
-    (* let%bind inst_map = instrument_map in *)
     let%bind odefa_on_maps = odefa_natodefa_maps in
+    lazy_logger `debug (fun () ->
+      let odefa_on_mapping = odefa_on_maps.odefa_var_to_natodefa_expr in
+      let str =
+        odefa_on_mapping
+        |> Ast.Ident_map.enum
+        |> Enum.map (fun (k, v) -> "  " ^ (Ast_pp.show_ident k) ^ " -> " ^ (On_ast_pp.show_expr v))
+        |> List.of_enum
+        |> String.join "\n"
+      in
+      Printf.sprintf "Odefa to natodefa map:\n%s" str
+    );
     return (Ast.Expr(c_list @ [res_clause]), odefa_on_maps)
   in
   let context =

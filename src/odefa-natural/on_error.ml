@@ -1,6 +1,6 @@
 open Batteries;;
 
-open Odefa_ast;;
+(* open Odefa_ast;; *)
 open Odefa_symbolic_interpreter;;
 
 type error_binop = {
@@ -45,11 +45,11 @@ module Error_list : Error_list = struct
   let error_to_string error =
     match error with
     | Error_binop err ->
-      "* Expression : " ^ (On_ast.show_expr err.err_binop_expr)
+      "* Expression : " ^ (On_ast_pp.show_expr err.err_binop_expr)
     | Error_match err ->
-      "* Expression : " ^ (On_ast.show_expr err.err_match_expr)
+      "* Expression : " ^ (On_ast_pp.show_expr err.err_match_expr)
     | Error_value err ->
-      "* Expression : " ^ (On_ast.show_expr err.err_value_expr)
+      "* Expression : " ^ (On_ast_pp.show_expr err.err_value_expr)
   ;;
 
   let wrap error_list = error_list;;
@@ -71,23 +71,29 @@ let odefa_to_natodefa_error
     (odefa_on_maps : On_to_odefa_types.Odefa_natodefa_mappings.t)
     (odefa_err : Error.error)
   : error =
-  let odefa_var_to_on_expr = odefa_on_maps.odefa_var_to_natodefa_expr in
+  let open On_to_odefa_types in
   match odefa_err with
   | Error.Error_binop err ->
     let (Clause (Var (v, _), _)) = err.err_binop_clause in
-    let on_expr = Ast.Ident_map.find v odefa_var_to_on_expr in
+    let on_expr =
+      Odefa_natodefa_mappings.get_natodefa_equivalent_expr odefa_on_maps v
+    in
     Error_binop {
       err_binop_expr = on_expr;
     }
   | Error.Error_match err ->
     let (Clause (Var (v, _), _)) = err.err_match_clause in
-    let on_expr = Ast.Ident_map.find v odefa_var_to_on_expr in
+    let on_expr =
+      Odefa_natodefa_mappings.get_natodefa_equivalent_expr odefa_on_maps v
+    in
     Error_match {
       err_match_expr = on_expr;
     }
   | Error.Error_value err ->
     let (Clause (Var (v, _), _)) = err.err_value_clause in
-    let on_expr = Ast.Ident_map.find v odefa_var_to_on_expr in
+    let on_expr =
+      Odefa_natodefa_mappings.get_natodefa_equivalent_expr odefa_on_maps v
+    in
     Error_value {
       err_value_expr = on_expr;
     }

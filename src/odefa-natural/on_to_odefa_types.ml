@@ -129,8 +129,9 @@ end = struct
     in
     (* Get natodefa expr from odefa var *)
     let natodefa_expr =
-      try Ast.Ident_map.find odefa_ident' odefa_on_map with
-      | Not_found ->
+      try
+        Ast.Ident_map.find odefa_ident' odefa_on_map
+      with Not_found ->
         raise @@ Utils.Invariant_failure
           (Printf.sprintf
             "variable %s not associated with natodefa expr"

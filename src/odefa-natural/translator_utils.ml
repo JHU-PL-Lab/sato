@@ -38,12 +38,11 @@ module TranslationMonad : sig
   val run : translation_context -> 'a m -> 'a
   val fresh_name : string -> string m
   val fresh_var : string -> Ast.var m
-  val update_natodefa_expr : On_ast.expr -> unit m
   val add_var_clause_pair : Ast.var -> Ast.clause -> unit m
   val add_instrument_var : Ast.var -> unit m
   val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
   val is_instrument_var : Ast.var -> bool m
-  val add_odefa_natodefa_mapping : Ast.var -> unit m
+  val add_odefa_natodefa_mapping : Ast.var -> On_ast.expr -> unit m
   val add_natodefa_expr_mapping : On_ast.expr -> On_ast.expr -> unit m
   val instrument_map : Ast.var Ast.Var_map.t m
   val var_clause_mapping : Ast.clause Ast.Ident_map.t m
@@ -108,26 +107,17 @@ end = struct
     Ast.Ident_map.mem i inst_vars
   ;;
 
-  let add_odefa_natodefa_mapping v_key ctx =
+  let add_odefa_natodefa_mapping v_key e_val ctx =
     let (Ast.Var (i_key, _)) = v_key in
-    let expr_val_opt = ctx.tc_current_natodefa_expr in
-    match expr_val_opt with
-    | Some expr_val ->
-      let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
       ctx.tc_odefa_natodefa_mappings
-        <- Odefa_natodefa_mappings.add_odefa_var_on_expr_mapping odefa_on_maps i_key expr_val
-    | None ->
-      failwith (Printf.sprintf "Tried to add mapping of %s to a natodefa expr, but no expr was available!" (Ast.show_ident i_key))
+        <- Odefa_natodefa_mappings.add_odefa_var_on_expr_mapping odefa_on_maps i_key e_val
   ;;
 
   let add_natodefa_expr_mapping k_expr v_expr ctx =
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
       <- Odefa_natodefa_mappings.add_on_expr_to_expr_mapping odefa_on_maps k_expr v_expr
-  ;;
-
-  let update_natodefa_expr expr ctx =
-    ctx.tc_current_natodefa_expr <- Some expr;
   ;;
 
   let instrument_map ctx =

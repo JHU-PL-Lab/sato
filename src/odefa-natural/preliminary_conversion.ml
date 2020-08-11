@@ -50,7 +50,6 @@ let list_transform (e : expr) : expr m =
   let%bind lbl_head_cons = lbl_head_cons_m in
   let%bind lbl_tail = lbl_tail_m in
   let transformer recurse e =
-    let%bind () = update_natodefa_expr e in
     match e with
     | List expr_list ->
       let list_maker element acc =
@@ -147,7 +146,6 @@ let encode_variant_pattern (p : pattern) : pattern m =
    expressions and patterns within it to Record expressions and patterns. *)
 let encode_variant (e : expr) : expr m =
   let transformer recurse e =
-    let%bind () = update_natodefa_expr e in
     match e with
     | VariantExpr (lbl, e') ->
       let%bind record_equivalent = variant_expr_to_record recurse lbl e' in
