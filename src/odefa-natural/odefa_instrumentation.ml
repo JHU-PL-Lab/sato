@@ -277,8 +277,6 @@ let instrument_odefa (odefa_ast : expr) : (expr * Odefa_natodefa_mappings.t) =
     let%bind fresh_str = freshness_string in
     let result_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
     let result_clause = Ast.Clause(result_var, Ast.Var_body(last_var)) in
-    (* let%bind inst_map = instrument_map in *)
-    (* let%bind inst_map_2 = var_clause_mapping in *)
     (* lazy_logger `debug (fun () -> Printf.sprintf "Map size: %d" (Ident_map.cardinal inst_map_2)); *)
     let%bind on_odefa_maps = odefa_natodefa_maps in
     return (Expr(trans_clist @ [result_clause]), on_odefa_maps)

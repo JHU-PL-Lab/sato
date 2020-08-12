@@ -6,9 +6,7 @@ open On_to_odefa_types;;
 type translation_context =
   { tc_fresh_suffix_separator : string;
     tc_contextual_recursion : bool;
-    mutable tc_current_natodefa_expr : On_ast.expr option;
     mutable tc_fresh_name_counter : int;
-    mutable tc_instrumented_var_map : Ast.var Ast.Var_map.t;
     mutable tc_odefa_natodefa_mappings : Odefa_natodefa_mappings.t;
   }
 [@@deriving eq, ord (*, show *)]
@@ -22,31 +20,61 @@ let new_translation_context
   { tc_fresh_name_counter = 0;
     tc_fresh_suffix_separator = suffix;
     tc_contextual_recursion = contextual_recursion;
-    tc_current_natodefa_expr = None;
-    tc_instrumented_var_map = Ast.Var_map.empty;
     tc_odefa_natodefa_mappings = Odefa_natodefa_mappings.empty;
   }
 ;;
 
 module TranslationMonad : sig
   include Monad.Monad;;
+
+  (** Run the monad to completion *)
   val run : translation_context -> 'a m -> 'a
+
+  (** Create a fresh (ie. alphatized) name *)
   val fresh_name : string -> string m
+
+  (** Create a fresh var *)
   val fresh_var : string -> Ast.var m
+
+  (** Map an odefa var to its clause *)
   val add_var_clause_pair : Ast.var -> Ast.clause -> unit m
+
+  (** Add an odefa var to note that it was added during instrumentation (and
+      that it does not have an associated pre-instrumentation clause) *)
   val add_instrument_var : Ast.var -> unit m
+
+  (** Map an odefa clause to its associated pre-instrumentation clause *)
   val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
+
+  (** Returns true if the odefa var was added during instrumentation, 
+      false otherwise.  Used to avoid unnecessary instrumentation. *)
   val is_instrument_var : Ast.var -> bool m
+
+  (** Map an odefa var to a natodefa expression *)
   val add_odefa_natodefa_mapping : Ast.var -> On_ast.expr -> unit m
+
+  (** Map a natodefa expression to another natodefa expression *)
   val add_natodefa_expr_mapping : On_ast.expr -> On_ast.expr -> unit m
-  val instrument_map : Ast.var Ast.Var_map.t m
-  val var_clause_mapping : Ast.clause Ast.Ident_map.t m
+
+  (** Retrieve the odefa-to-natodefa maps from the monad *)
   val odefa_natodefa_maps : Odefa_natodefa_mappings.t m
+
+  (** Retrieve the freshness string from the monad *)
   val freshness_string : string m
+
+  (** Retrieve the contextual recursion boolean value *)
   val acontextual_recursion : bool m
+
+  (** Convert a list of monadic values into a singular monadic value *)
   val sequence : 'a m list -> 'a list m
+
+  (** Left fold in the monad *)
   val list_fold_left_m : ('acc -> 'el -> 'acc m) -> 'acc -> 'el list -> 'acc m
+
+  (** Right fold in the monad *)
   val list_fold_right_m : ('el -> 'acc -> 'acc m) -> 'el list -> 'acc -> 'acc m
+
+  (** @@ in the monad *)
   val (@@@) : ('a -> 'b m) -> 'a m -> 'b m
 end = struct
   include Monad.Make(
@@ -113,14 +141,6 @@ end = struct
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
       <- Odefa_natodefa_mappings.add_on_expr_to_expr_mapping odefa_on_maps k_expr v_expr
-  ;;
-
-  let instrument_map ctx =
-    ctx.tc_instrumented_var_map
-  ;;
-
-  let var_clause_mapping ctx =
-    ctx.tc_odefa_natodefa_mappings.odefa_pre_instrument_clause_mapping
   ;;
 
   let odefa_natodefa_maps ctx =
