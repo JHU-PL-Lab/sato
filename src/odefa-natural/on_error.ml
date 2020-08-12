@@ -22,6 +22,8 @@ type error_match = {
 [@@ deriving show]
 
 type error_value = {
+  err_value_aliases : On_ast.ident list;
+  err_value_val : On_ast.expr;
   err_value_expr : On_ast.expr;
 }
 [@@ deriving show]
@@ -81,10 +83,26 @@ module Error_list : Error_list = struct
       "* Constraint  : " ^ (show_expr err.err_binop_constraint) ^ "\n" ^
       "* Expression  : " ^ (show_expr err.err_binop_expr)
     | Error_match err ->
-      "* Value      : " ^ (alias_str err.err_match_aliases) ^
-                      " = " ^ (show_expr err.err_match_value) ^ "\n" ^
+      let aliases = err.err_match_aliases in
+      let value = err.err_match_value in
+      let val_str =
+        if (List.length aliases) > 0 then
+          (alias_str aliases) ^ " = " ^ (show_expr value)
+        else
+          (show_expr value)
+      in
+      "* Value      : " ^ val_str ^ "\n" ^
       "* Expression : " ^ (show_expr err.err_match_expr)
     | Error_value err ->
+      let aliases = err.err_value_aliases in
+      let value = err.err_value_val in
+      let val_str =
+        if (List.length aliases) > 0 then
+          (alias_str aliases) ^ " = " ^ (show_expr value)
+        else
+          (show_expr value)
+      in
+      "* Value      : " ^ val_str ^ "\n" ^
       "* Expression : " ^ (show_expr err.err_value_expr)
   ;;
 
@@ -198,8 +216,11 @@ let odefa_to_natodefa_error
     end
   | Error.Error_value err ->
     begin
+      let aliases = err.err_value_aliases in
       let (Clause (Var (v, _), _)) = err.err_value_clause in
       Error_value {
+        err_value_aliases = odefa_to_on_aliases aliases;
+        err_value_val = odefa_to_on_value aliases;
         err_value_expr = odefa_to_on_expr v;
       }
     end
