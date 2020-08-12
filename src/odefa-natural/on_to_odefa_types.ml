@@ -1,5 +1,3 @@
-open Jhupllib;;
-
 open Odefa_ast;;
 
 module Odefa_natodefa_mappings : sig
@@ -111,9 +109,9 @@ end = struct
     match Ast.Ident_map.Exceptionless.find odefa_ident' clause_map with
     | Some clause -> clause
     | None ->
-      raise @@ Utils.Invariant_failure
+      raise @@ Invalid_argument
         (Printf.sprintf
-          "%s should have associated clause!"
+          "%s needs to have an associated clause."
           (Ast.show_ident odefa_ident))
   ;;
 
@@ -132,9 +130,9 @@ end = struct
       try
         Ast.Ident_map.find odefa_ident' odefa_on_map
       with Not_found ->
-        raise @@ Utils.Invariant_failure
+        raise @@ Invalid_argument
           (Printf.sprintf
-            "variable %s not associated with natodefa expr"
+            "variable %s is not associated with any natodefa expr."
             (Ast.show_ident odefa_ident'))
     in
     (* Get any original natodefa exprs *)

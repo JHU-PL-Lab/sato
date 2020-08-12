@@ -147,6 +147,9 @@ let rec instrument_clauses
               let%bind b = fresh_var "b_b" in
               let%bind () = add_instrument_var z in
               let%bind () = add_instrument_var b in
+              (* We need to have this line because we are adding a new value
+                 source *)
+              let%bind () = add_odefa_natodefa_mapping z (On_ast.Int 0) in
               (* Clauses *)
               let z_cls = Clause(z, Value_body (Value_int 0)) in
               let b_bod =
