@@ -40,7 +40,7 @@ let run_odefa
   (* Parse AST *)
   try
     let (odefa_ast, on_odefa_maps) =
-      Type_instrumentation.instrument_odefa
+      Odefa_instrumentation.instrument_odefa
         @@ File.with_file_in filename Parser.parse_program
     in
     lazy_logger `debug (fun () ->

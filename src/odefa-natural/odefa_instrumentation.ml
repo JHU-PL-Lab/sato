@@ -6,7 +6,7 @@ open Ast;;
 
 open On_to_odefa_types;;
 
-open Translator_utils.TranslationMonad;;
+open On_to_odefa_monad.TranslationMonad;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "Type_instrumentation";;
 
@@ -283,6 +283,6 @@ let instrument_odefa (odefa_ast : expr) : (expr * Odefa_natodefa_mappings.t) =
     let%bind on_odefa_maps = odefa_natodefa_maps in
     return (Expr(trans_clist @ [result_clause]), on_odefa_maps)
   in
-  let context = Translator_utils.new_translation_context () in
+  let context = On_to_odefa_monad.new_translation_context () in
   run context monad_val
 ;;

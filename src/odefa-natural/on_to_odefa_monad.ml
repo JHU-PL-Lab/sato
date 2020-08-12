@@ -2,11 +2,6 @@ open Batteries;;
 
 open Odefa_ast;;
 open On_to_odefa_types;;
-(* open Odefa_symbolic_interpreter.Interpreter_types;; *)
-
-(* open On_to_odefa_types;; *)
-
-(* open On_to_odefa_types;; *)
 
 type translation_context =
   { tc_fresh_suffix_separator : string;

@@ -2,14 +2,12 @@ open Batteries;;
 open Jhupllib;;
 
 open Odefa_ast;;
-(* open Odefa_symbolic_interpreter;; *)
 
 open Ast_tools;;
 
 open On_to_odefa_types;;
-open Preliminary_conversion;;
-(* open Simplification;; *)
-open Translator_utils;;
+open On_to_odefa_preliminary;;
+open On_to_odefa_monad;;
 
 (** In this module we will translate from odefa-natural to odefa in the
     following order:
@@ -149,7 +147,7 @@ let rec_transform (e : On_ast.expr) : On_ast.expr m =
     | _ ->
       return e
   in
-  Translator_utils.m_transform_expr transformer e
+  On_to_odefa_monad.m_transform_expr transformer e
   end
 ;;
 
@@ -1035,7 +1033,7 @@ let translate
     let%bind (c_list, _) = flatten_expr transformed_e in
     let%bind c_list = (* NEW! *)
       if is_instrumented then
-        Type_instrumentation.instrument_clauses c_list else return c_list
+        Odefa_instrumentation.instrument_clauses c_list else return c_list
     in
     let Clause(last_var, _) = List.last c_list in
     let%bind fresh_str = freshness_string in

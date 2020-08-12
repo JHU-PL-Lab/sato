@@ -35,7 +35,7 @@ let () =
         exit 1
     end else begin
       try
-        Odefa_natural.Type_instrumentation.instrument_odefa @@
+        Odefa_natural.Odefa_instrumentation.instrument_odefa @@
           File.with_file_in args.ga_filename Odefa_parser.Parser.parse_program
       with
       | Sys_error err ->

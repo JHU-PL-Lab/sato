@@ -1071,13 +1071,13 @@ let make_test filename expectations =
         let on_expr = File.with_file_in filename On_parse.parse_program in
         let (e, _) = On_to_odefa.translate on_expr in
         let (instrumented_e, instrument_map) =
-          Type_instrumentation.instrument_odefa e
+          Odefa_instrumentation.instrument_odefa e
         in
         (e, instrumented_e, instrument_map)
       end else begin
         let e = File.with_file_in filename Parser.parse_program in
         let (instrumented_e, instrument_map) =
-          Type_instrumentation.instrument_odefa e
+          Odefa_instrumentation.instrument_odefa e
         in
         (e, instrumented_e, instrument_map)
       end
