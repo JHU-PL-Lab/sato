@@ -1,3 +1,5 @@
+open Batteries;;
+
 open Odefa_ast;;
 
 module Odefa_natodefa_mappings : sig
@@ -136,8 +138,11 @@ end = struct
             (Ast.show_ident odefa_ident'))
     in
     (* Get any original natodefa exprs *)
-    match On_ast.Expr_map.Exceptionless.find natodefa_expr on_expr_map with
-    | Some natodefa_expr' -> natodefa_expr'
-    | None -> natodefa_expr
+    let on_expr_transformer recurse expr : On_ast.expr =
+      match On_ast.Expr_map.Exceptionless.find expr on_expr_map with
+      | Some expr' -> recurse expr'
+      | None -> expr
+    in
+    On_to_odefa_utils.transform_expr on_expr_transformer natodefa_expr
   ;;
 end;;
