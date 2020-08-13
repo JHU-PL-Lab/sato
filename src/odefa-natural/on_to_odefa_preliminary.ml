@@ -1,10 +1,12 @@
 open Batteries;;
-(* open Jhupllib; *)
+open Jhupllib;;
 
 open On_ast;;
 open On_to_odefa_monad;;
 
 open TranslationMonad;;
+
+let lazy_logger = Logger_utils.make_lazy_logger "On_to_odefa_preliminary";;
 
 let _lbl_m name =
   let%bind freshness = freshness_string in
@@ -29,16 +31,20 @@ let rec encode_list_pattern (pat : pattern) : pattern m =
        The corresponding pattern is {~empty = None} *)
     let%bind lbl_empty = lbl_empty_m in
     let empty_rec = Ident_map.add lbl_empty None Ident_map.empty in
-    return @@ RecPat (empty_rec)
+    let empty_rec_pat = RecPat empty_rec in
+    let%bind () = add_natodefa_pattern_mapping empty_rec_pat pat in
+    return empty_rec_pat
   | LstDestructPat (hd_var, tl_var) ->
     let%bind lbl_head = lbl_head_m in
     let%bind lbl_tail = lbl_tail_m in
-    let new_pat =
+    let new_lbls =
       Ident_map.empty
       |> Ident_map.add lbl_head @@ Some hd_var
       |> Ident_map.add lbl_tail @@ Some tl_var
     in
-    return @@ RecPat (new_pat)
+    let new_pat = RecPat new_lbls in
+    let%bind () = add_natodefa_pattern_mapping new_pat pat in
+    return @@ new_pat
   | _ ->
     return pat
 ;;
@@ -50,10 +56,12 @@ let list_transform (e : expr) : expr m =
   let%bind lbl_head_cons = lbl_head_cons_m in
   let%bind lbl_tail = lbl_tail_m in
   let transformer recurse e =
+    lazy_logger `trace (fun () -> Printf.sprintf "Transforming %s" (On_ast_pp.show_expr e));
     match e with
     | List expr_list ->
       let list_maker element acc =
         let%bind clean_elm = recurse element in
+        (* let%bind () = add_natodefa_expr_mapping clean_elm element in *)
         let new_map =
           Ident_map.empty
           |> Ident_map.add lbl_head clean_elm
@@ -134,10 +142,12 @@ let encode_variant_pattern (p : pattern) : pattern m =
   | VariantPat (v_label, v_var) ->
     let Variant_label (v_name) = v_label in
     let%bind variant_ident = lbl_variant_m v_name in
-    let new_pattern =
+    let new_pat_lbls =
       Ident_map.add variant_ident (Some v_var) Ident_map.empty
     in
-    return @@ RecPat (new_pattern)
+    let new_pattern = RecPat new_pat_lbls in
+    let%bind () = add_natodefa_pattern_mapping new_pattern p in
+    return @@ new_pattern
   | _ ->
     return p
 ;;

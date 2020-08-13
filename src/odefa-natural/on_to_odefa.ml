@@ -214,26 +214,22 @@ let rec rename_variable
     let (On_ast.Funsig(id, id_list, fun_e)) = f_sig in
     (* If the old_name is same as the function name, then we don't want
        to change anything. *)
-    if id = old_name then
+    if id = old_name then begin
       e
-    else
-      (
-        (* If the old_name is same as one of the names of the params, then
-           we only want to change the code outside of the function.
-        *)
-        if List.exists (On_ast.Ident.equal old_name) id_list then
-          (
-            let new_e' = recurse e' in
-            On_ast.LetFun (f_sig, new_e')
-          )
-        else (* change both the inside and the outside expressions *)
-          (
-            let new_inner_e = recurse fun_e in
-            let new_outer_e = recurse e' in
-            let new_funsig = On_ast.Funsig(id, id_list, new_inner_e) in
-            On_ast.LetFun(new_funsig, new_outer_e)
-          )
-      )
+    end else begin
+      (* If the old_name is same as one of the names of the params, then
+          we only want to change the code outside of the function.
+      *)
+      if List.exists (On_ast.Ident.equal old_name) id_list then begin
+          let new_e' = recurse e' in
+          On_ast.LetFun (f_sig, new_e')
+      end else begin (* change both the inside and the outside expressions *)
+          let new_inner_e = recurse fun_e in
+          let new_outer_e = recurse e' in
+          let new_funsig = On_ast.Funsig(id, id_list, new_inner_e) in
+          On_ast.LetFun(new_funsig, new_outer_e)
+      end
+    end
   | On_ast.Plus (e1, e2) -> On_ast.Plus(recurse e1, recurse e2)
   | On_ast.Minus (e1, e2) -> On_ast.Minus(recurse e1, recurse e2)
   | On_ast.Times (e1, e2) -> On_ast.Times(recurse e1, recurse e2)
@@ -512,7 +508,9 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
                |> Ident_set.enum
                |> Enum.map
                  (fun ((Ident s) as i) ->
-                    let%bind s' = fresh_name s in
+                    (* FIXME *)
+                    (* let%bind s' = fresh_name s in *)
+                    let%bind s' = return s in
                     return (i, Ident s')
                  )
                |> List.of_enum
@@ -608,6 +606,7 @@ let flatten_pattern
       |> Enum.map on_to_odefa_ident
       |> Ast.Ident_set.of_enum
     in
+    let%bind () = add_odefa_natodefa_labels_mapping rec_pat' rec_pat in
     let%bind projections =
       rec_pat
       |> On_ast.Ident_map.enum
@@ -771,22 +770,18 @@ and flatten_expr
   | Function (id_list, e) ->
     let%bind (fun_c_list, _) = nonempty_body expr @@@ flatten_expr e in
     let body_expr = Ast.Expr(fun_c_list) in
-    let%bind (Expr(fun_clause), return_var) = flatten_fun expr id_list body_expr in
+    let%bind (Expr(fun_clause), return_var) =
+      flatten_fun expr id_list body_expr
+    in
     return (fun_clause, return_var)
   | Appl (e1, e2) ->
     let%bind (e1_clist, e1_var) = flatten_expr e1 in
     let%bind (e2_clist, e2_var) = flatten_expr e2 in
     let%bind appl_var = fresh_var "appl" in
     let%bind () = add_odefa_natodefa_mapping appl_var expr in
-    let new_clause =
-      Ast.Clause (
-        appl_var,
-        Ast.Appl_body(e1_var, e2_var)
-      )
-    in
+    let new_clause = Ast.Clause (appl_var, Ast.Appl_body(e1_var, e2_var)) in
     return (e1_clist @ e2_clist @ [new_clause], appl_var)
   | Let (var_ident, e1, e2) ->
-    begin
     let%bind (e1_clist, e1_var) = flatten_expr e1 in
     let%bind (e2_clist, e2_var) = flatten_expr e2 in
     let Ident(var_name) = var_ident in
@@ -794,9 +789,7 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Ast.Var_body(e1_var)) in
     return (e1_clist @ [assignment_clause] @ e2_clist, e2_var)
-    end
   | LetFun (sign, e) ->
-    begin
     (* TODO: check for bugs!!! *)
     (* Translating the function signature... *)
     let Funsig(fun_name, id_list, fun_e) = sign in
@@ -812,7 +805,6 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Ast.Var_body(return_var)) in
     return (fun_clauses @ [assignment_clause] @ e_clist, e_var)
-    end
   | LetRecFun (_, _) ->
     raise @@
       Utils.Invariant_failure "LetRecFun should not have been passed to flatten_expr"
@@ -1007,12 +999,13 @@ let debug_transform
     (transform : On_ast.expr -> On_ast.expr m)
     (e : On_ast.expr)
   : On_ast.expr m =
+  let open On_ast_pp in
   lazy_logger `trace @@ (fun () ->
-      Printf.sprintf "%s on:\n%s" name (On_ast.show_expr e));
+      Printf.sprintf "%s on:\n%s" name (show_expr e));
   let%bind answer = transform e in
   lazy_logger `trace @@ (fun () ->
       Printf.sprintf "%s on:\n%s\nproduces\n%s"
-        name (On_ast.show_expr e) (On_ast.show_expr answer));
+        name (show_expr e) (show_expr answer));
   return answer
 ;;
 
@@ -1041,15 +1034,8 @@ let translate
     let res_clause = Ast.Clause(res_var, Ast.Var_body(last_var)) in
     let%bind odefa_on_maps = odefa_natodefa_maps in
     lazy_logger `debug (fun () ->
-      let odefa_on_mapping = odefa_on_maps.odefa_var_to_natodefa_expr in
-      let str =
-        odefa_on_mapping
-        |> Ast.Ident_map.enum
-        |> Enum.map (fun (k, v) -> "  " ^ (Ast_pp.show_ident k) ^ " -> " ^ (On_ast_pp.show_expr v))
-        |> List.of_enum
-        |> String.join "\n"
-      in
-      Printf.sprintf "Odefa to natodefa map:\n%s" str
+      Printf.sprintf "Odefa to natodefa maps:\n%s"
+        (Odefa_natodefa_mappings.show odefa_on_maps)
     );
     return (Ast.Expr(c_list @ [res_clause]), odefa_on_maps)
   in

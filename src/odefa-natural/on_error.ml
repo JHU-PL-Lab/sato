@@ -1,7 +1,36 @@
 open Batteries;;
+open Jhupllib;;
 
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
+
+(* **** Types in natodefa **** *)
+
+type on_type =
+  | TopType
+  | IntType
+  | BoolType
+  | FunType
+  | RecType of On_ast.Ident_set.t
+  | ListType
+  | VariantType of On_ast.variant_label
+;;
+
+let pp_on_type formatter on_type =
+  let open On_ast_pp in
+  match on_type with
+  | TopType -> Format.pp_print_string formatter "any"
+  | IntType -> Format.pp_print_string formatter "integer"
+  | BoolType -> Format.pp_print_string formatter "boolean"
+  | FunType -> Format.pp_print_string formatter "function"
+  | ListType -> Format.pp_print_string formatter "list"
+  | RecType lbls -> pp_ident_set formatter lbls
+  | VariantType lbl -> Format.fprintf formatter "`%a" pp_variant_label lbl
+;;
+
+let show_on_type = Pp_utils.pp_to_string pp_on_type;;
+
+(* **** Errors in natodefa **** *)
 
 type error_binop = {
   err_binop_left_aliases : On_ast.ident list;
@@ -11,28 +40,26 @@ type error_binop = {
   err_binop_constraint : On_ast.expr;
   err_binop_expr : On_ast.expr;
 }
-[@@ deriving show]
 ;;
 
 type error_match = {
   err_match_aliases : On_ast.ident list;
   err_match_expr : On_ast.expr;
   err_match_value : On_ast.expr;
+  err_match_expected : on_type;
+  err_match_actual : on_type;
 }
-[@@ deriving show]
 
 type error_value = {
   err_value_aliases : On_ast.ident list;
   err_value_val : On_ast.expr;
   err_value_expr : On_ast.expr;
 }
-[@@ deriving show]
 
 type error =
   | Error_binop of error_binop
   | Error_match of error_match
   | Error_value of error_value
-[@@ deriving show]
 ;;
 
 module type Error_list = sig
@@ -46,10 +73,7 @@ end;;
 
 module Error_list : Error_list = struct
   type t = error list
-  [@@ deriving show]
   ;;
-
-  let _ = show;;
 
   let error_to_string error =
     let open On_ast_pp in
@@ -92,7 +116,9 @@ module Error_list : Error_list = struct
           (show_expr value)
       in
       "* Value      : " ^ val_str ^ "\n" ^
-      "* Expression : " ^ (show_expr err.err_match_expr)
+      "* Expression : " ^ (show_expr err.err_match_expr) ^ "\n" ^
+      "* Expected   : " ^ (show_on_type err.err_match_expected) ^ "\n" ^
+      "* Actual     : " ^ (show_on_type err.err_match_actual)
     | Error_value err ->
       let aliases = err.err_value_aliases in
       let value = err.err_value_val in
@@ -119,6 +145,27 @@ module Error_list : Error_list = struct
     String.join "\n---------------\n" string_list
   ;;
 end
+;;
+
+let odefa_to_on_type
+    (odefa_type : Ast.type_sig)
+  : on_type =
+  match odefa_type with
+  | Ast.Top_type -> TopType
+  | Ast.Int_type -> IntType
+  | Ast.Bool_type -> BoolType
+  | Ast.Fun_type -> FunType
+  | Ast.Rec_type lbls ->
+    let lbls' =
+      lbls
+      |> Ast.Ident_set.enum
+      |> Enum.map (fun (Ast.Ident id) -> On_ast.Ident id)
+      |> On_ast.Ident_set.of_enum
+    in
+    RecType lbls'
+  | Ast.Bottom_type ->
+    raise @@ Jhupllib.Utils.Invariant_failure
+      (Printf.sprintf "Bottom type not in natodefa")
 ;;
 
 let odefa_to_on_binop
@@ -212,6 +259,8 @@ let odefa_to_natodefa_error
         err_match_aliases = odefa_to_on_aliases aliases;
         err_match_expr = odefa_to_on_expr v;
         err_match_value = odefa_to_on_value aliases;
+        err_match_expected = odefa_to_on_type err.err_match_expected_type;
+        err_match_actual = odefa_to_on_type err.err_match_actual_type;
       }
     end
   | Error.Error_value err ->

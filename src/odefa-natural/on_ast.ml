@@ -61,14 +61,17 @@ and expr =
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
   | Assert of expr
-[@@deriving eq, ord, show]
+[@@deriving eq, ord]
 ;;
 
 module Expr = struct
   type t = expr;;
   let equal = equal_expr;;
   let compare = compare_expr;;
-  let show = show_expr;;
 end;;
 
-module Expr_map = Map.Make(Expr);;
+module Pattern = struct
+  type t = pattern;;
+  let equal = equal_pattern;;
+  let compare = compare_pattern;;
+end;;

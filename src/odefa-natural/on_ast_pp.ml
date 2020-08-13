@@ -153,7 +153,7 @@ and pp_expr formatter expr =
     Format.fprintf formatter "match %a with @[%a@]@\nend"
       pp_expr e pp_pattern_expr_lst pattern_expr_list
   | VariantExpr (variant_lbl, e) ->
-    Format.fprintf formatter "`%a (%a)"
+    Format.fprintf formatter "%a (%a)"
       pp_variant_label variant_lbl pp_expr e
   | List e_list ->
     Pp_utils.pp_concat_sep_delim
@@ -170,3 +170,4 @@ and pp_expr formatter expr =
 
 let show_ident = Pp_utils.pp_to_string pp_ident;;
 let show_expr = Pp_utils.pp_to_string pp_expr;;
+let show_pattern = Pp_utils.pp_to_string pp_pattern;;

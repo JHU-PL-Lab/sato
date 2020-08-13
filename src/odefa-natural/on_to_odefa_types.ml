@@ -1,8 +1,47 @@
 open Batteries;;
+open Jhupllib;;
 
 open Odefa_ast;;
 
+let lazy_logger = Logger_utils.make_lazy_logger "On_to_odefa_types";;
+
+module Expr = struct
+  include On_ast.Expr;;
+  let pp = On_ast_pp.pp_expr;;
+  let show = On_ast_pp.show_expr;;
+end;;
+
+module Pattern = struct
+  include On_ast.Pattern;;
+  let pp = On_ast_pp.pp_pattern;;
+  let show = On_ast_pp.show_pattern;;
+end;;
+
+module Expr_map = struct
+  module M = Map.Make(Expr);;
+  include M;;
+  include Pp_utils.Map_pp(M)(Expr);;
+end;;
+
+module Pattern_map = struct
+  module M = Map.Make(Pattern);;
+  include M;;
+  include Pp_utils.Map_pp(M)(Pattern);;
+end;;
+
+module Record_map = struct
+  module M = Map.Make(Ast.Ident_set);;
+  include M;;
+  include Pp_utils.Map_pp(M)(Ast.Ident_set);;
+end;;
+
 module Odefa_natodefa_mappings : sig
+  module Odefa_clause : sig
+    type t = Ast.clause [@@ deriving eq, ord];;
+    val pp : t Pp_utils.pretty_printer;;
+    val show : t -> string;;
+  end;;
+
   type t = {
     (** A set of odefa variables that were added during instrumentation
         (as opposed to being in the original code or added during pre-
@@ -11,7 +50,7 @@ module Odefa_natodefa_mappings : sig
         it aliases.  Note that the value is an Option; it is none if
         the variable has no associated pre-instrumentation alias (namely
         if it was added as a pattern match conditional var). *)
-    odefa_instrument_vars_map : (Ast.ident option) Ast.Ident_map.t;
+    odefa_instrument_vars_map : (Ast.Ident.t option) Ast.Ident_map.t;
 
     (** Mapping between variables that were added during instrumentation
         with the variables whose clauses the instrumenting clause is
@@ -21,17 +60,23 @@ module Odefa_natodefa_mappings : sig
 
     (** Mapping between an odefa variable to the natodefa expr that the
         odefa variable was derived from. *)
-    odefa_var_to_natodefa_expr : On_ast.expr Ast.Ident_map.t;
+    odefa_var_to_natodefa_expr : Expr.t Ast.Ident_map.t;
 
     (** Mapping between two natodefa expressions.  Used to create a
         mapping of natodefa lists and variants with their record
         equivalents as their keys. *)
-    natodefa_expr_to_expr : On_ast.expr On_ast.Expr_map.t;
+    natodefa_expr_to_expr : Expr.t Expr_map.t;
+
+    odefa_lbls_to_natodefa_pat : (On_ast.Ident.t option On_ast.Ident_map.t) Record_map.t;
+
+    natodefa_pat_to_pat : Pattern.t Pattern_map.t;
   }
-  [@@ deriving eq, ord]
+  [@@ deriving eq, ord, show]
   ;;
 
   val empty : t;;
+
+  (* *** Setter functions *** *)
 
   val add_odefa_instrument_var : t -> Ast.ident -> Ast.ident option -> t;;
 
@@ -40,6 +85,13 @@ module Odefa_natodefa_mappings : sig
   val add_odefa_var_on_expr_mapping : t -> Ast.ident -> On_ast.expr -> t;;
 
   val add_on_expr_to_expr_mapping : t -> On_ast.expr -> On_ast.expr -> t;;
+
+  val add_odefa_on_lbls_mapping :
+    t -> Ast.Ident_set.t -> (On_ast.ident option On_ast.Ident_map.t) -> t;;
+
+  val add_on_pat_to_pat_mapping : t -> On_ast.pattern -> On_ast.pattern -> t;;
+
+  (* *** Getter functions *** *)
 
   (** Get an odefa clause that existed before the odefa program was
       instrumented.  If the odefa var was added during type instrumentation,
@@ -51,20 +103,30 @@ module Odefa_natodefa_mappings : sig
   val get_natodefa_equivalent_expr : t -> Ast.ident -> On_ast.expr;;
 
 end = struct
+  module Odefa_clause = struct
+    type t = Ast.clause [@@ deriving eq, ord];;
+    let pp = Ast_pp.pp_clause;;
+    let show = Ast_pp.show_clause;;
+  end;;
+
   type t = {
-    odefa_instrument_vars_map : (Ast.ident option) Ast.Ident_map.t;
-    odefa_pre_instrument_clause_mapping : Ast.clause Ast.Ident_map.t;
-    odefa_var_to_natodefa_expr : On_ast.expr Ast.Ident_map.t;
-    natodefa_expr_to_expr : On_ast.expr On_ast.Expr_map.t;
+    odefa_instrument_vars_map : (Ast.Ident.t option) Ast.Ident_map.t;
+    odefa_pre_instrument_clause_mapping : Odefa_clause.t Ast.Ident_map.t;
+    odefa_var_to_natodefa_expr : Expr.t Ast.Ident_map.t;
+    natodefa_expr_to_expr : Expr.t Expr_map.t;
+    odefa_lbls_to_natodefa_pat : (On_ast.Ident.t option On_ast.Ident_map.t) Record_map.t;
+    natodefa_pat_to_pat : Pattern.t Pattern_map.t;
   }
-  [@@ deriving eq, ord]
+  [@@ deriving eq, ord, show]
   ;;
 
   let empty = {
     odefa_instrument_vars_map = Ast.Ident_map.empty;
     odefa_pre_instrument_clause_mapping = Ast.Ident_map.empty;
     odefa_var_to_natodefa_expr = Ast.Ident_map.empty;
-    natodefa_expr_to_expr = On_ast.Expr_map.empty;
+    natodefa_expr_to_expr = Expr_map.empty;
+    odefa_lbls_to_natodefa_pat = Record_map.empty;
+    natodefa_pat_to_pat = Pattern_map.empty;
   }
   ;;
 
@@ -91,12 +153,30 @@ end = struct
         Ast.Ident_map.add odefa_ident on_expr natodefa_map;
     }
   ;;
+
   let add_on_expr_to_expr_mapping mappings expr1 expr2 =
     let natodefa_expr_map = mappings.natodefa_expr_to_expr in
     { mappings with
       natodefa_expr_to_expr =
-        On_ast.Expr_map.add expr1 expr2 natodefa_expr_map;
+        Expr_map.add expr1 expr2 natodefa_expr_map;
     }
+  ;;
+
+  let add_odefa_on_lbls_mapping mappings labels pat =
+    let labels_map = mappings.odefa_lbls_to_natodefa_pat in
+    { mappings with
+      odefa_lbls_to_natodefa_pat =
+        Record_map.add labels pat labels_map;
+    }
+  ;;
+
+  let add_on_pat_to_pat_mapping mappings pat1 pat2 =
+    let natodefa_pattern_map = mappings.natodefa_pat_to_pat in
+    { mappings with
+      natodefa_pat_to_pat =
+        Pattern_map.add pat1 pat2 natodefa_pattern_map;
+    }
+  ;;
 
   let get_pre_inst_equivalent_clause mappings odefa_ident =
     let inst_map = mappings.odefa_instrument_vars_map in
@@ -117,10 +197,62 @@ end = struct
           (Ast.show_ident odefa_ident))
   ;;
 
+  (** Helper function to recursively map natodefa expressions according to
+      the expression-to-expression mapping (eg. records to lists or variants).
+      We need a custom transformer function, rather than the one in utils, 
+      because we need to first transform the expression, then recurse (whereas
+      transform_expr and transform_expr_m do the other way around). *)
+  let rec on_expr_transformer transformer expr =
+    let open On_ast in
+    let recurse = on_expr_transformer transformer in
+    let expr' = transformer expr in
+    match expr' with
+    | Int _ | Bool _ | Var _ | Input -> expr'
+    | Record record ->
+      let record' =
+        record
+        |> On_ast.Ident_map.enum
+        |> Enum.map (fun (lbl, e) -> (lbl, recurse e))
+        |> On_ast.Ident_map.of_enum
+      in
+      Record record'
+    | Match (e, pat_e_lst) ->
+      let pat_e_lst' =
+        List.map (fun (pat, e) -> (pat, recurse e)) pat_e_lst
+      in
+      Match (recurse e, pat_e_lst')
+    | Function (id_lst, e) -> Function (id_lst, recurse e)
+    | Appl (e1, e2) -> Appl (recurse e1, recurse e2)
+    | Let (id, e1, e2) -> Let (id, recurse e1, recurse e2)
+    | LetRecFun (fs_lst, e) -> LetRecFun (fs_lst, recurse e)
+    | LetFun (fs, e) -> LetFun (fs, recurse e)
+    | Plus (e1, e2) -> Plus (recurse e1, recurse e2)
+    | Minus (e1, e2) -> Minus (recurse e1, recurse e2)
+    | Times (e1, e2) -> Times (recurse e1, recurse e2)
+    | Divide (e1, e2) -> Divide (recurse e1, recurse e2)
+    | Modulus (e1, e2) -> Modulus (recurse e1, recurse e2)
+    | Equal (e1, e2) -> Equal (recurse e1, recurse e2)
+    | Neq (e1, e2) -> Neq (recurse e1, recurse e2)
+    | LessThan (e1, e2) -> LessThan (recurse e1, recurse e2)
+    | Leq (e1, e2) -> Leq (recurse e1, recurse e2)
+    | GreaterThan (e1, e2) -> GreaterThan (recurse e1, recurse e2)
+    | Geq (e1, e2) -> Geq (recurse e1, recurse e2)
+    | And (e1, e2) -> And (recurse e1, recurse e2)
+    | Or (e1, e2) -> Or (recurse e1, recurse e2)
+    | Not e -> Not (recurse e)
+    | If (e1, e2, e3) -> If (recurse e1, recurse e2, recurse e3)
+    | RecordProj (e, lbl) -> RecordProj (recurse e, lbl)
+    | VariantExpr (vlbl, e) -> VariantExpr (vlbl, recurse e)
+    | List (e_lst) -> List (List.map recurse e_lst)
+    | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
+    | Assert e -> Assert (recurse e)
+  ;;
+
   let get_natodefa_equivalent_expr mappings odefa_ident =
     let inst_map = mappings.odefa_instrument_vars_map in
     let odefa_on_map = mappings.odefa_var_to_natodefa_expr in
     let on_expr_map = mappings.natodefa_expr_to_expr in
+    let on_pat_map = mappings.natodefa_pat_to_pat in
     (* Get pre-instrument var *)
     let odefa_ident' =
       match Ast.Ident_map.Exceptionless.find odefa_ident inst_map with
@@ -138,11 +270,45 @@ end = struct
             (Ast.show_ident odefa_ident'))
     in
     (* Get any original natodefa exprs *)
-    let on_expr_transformer recurse expr : On_ast.expr =
-      match On_ast.Expr_map.Exceptionless.find expr on_expr_map with
-      | Some expr' -> recurse expr'
+    let on_expr_transform expr =
+      match Expr_map.Exceptionless.find expr on_expr_map with
+      | Some expr' -> expr'
       | None -> expr
     in
-    On_to_odefa_utils.transform_expr on_expr_transformer natodefa_expr
+    let on_pat_transform expr =
+      match expr with
+      | On_ast.Match (e, pat_e_lst) ->
+        let pat_e_lst' =
+          List.map
+            (fun (pat, e) ->
+              lazy_logger `trace (fun () -> Printf.sprintf "Transforming %s" (Pattern.show pat));
+              match Pattern_map.Exceptionless.find pat on_pat_map with
+              | Some pat' -> (pat', e)
+              | None -> (pat, e)
+            )
+            pat_e_lst
+        in
+        On_ast.Match (e, pat_e_lst')
+      | _ -> expr
+    in
+    natodefa_expr
+    |> on_expr_transformer on_expr_transform
+    |> on_expr_transformer on_pat_transform
   ;;
+
+  (*
+  let get_natodefa_equivalent_pattern mappings odefa_lbls =
+    let odefa_on_lbl_map = mappings.odefa_lbls_to_natodefa_lbls in
+    (* Get natodefa labels from odefa labels *)
+    let natodefa_lbls =
+      try
+        Record_map.find odefa_lbls odefa_on_lbl_map
+      with Not_found ->
+        raise @@ Invalid_argument
+          (Printf.sprintf
+            "labels %s are not associated with any natodefa labels"
+            (Ast.Ident_set.show odefa_lbls))
+    in
+    let natodefa_rec_pat = On_ast.RecPat natodefa_lbls in
+  *)
 end;;
