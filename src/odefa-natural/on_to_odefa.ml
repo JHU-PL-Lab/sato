@@ -157,123 +157,114 @@ let rec rename_variable
     (new_name : On_ast.ident)
     (e : On_ast.expr)
   : On_ast.expr =
+  let open On_ast in
   (* NOTE: the generic homomorphism routine m_env_transform_expr does not allow
      us to change the environment of the homomorphism as we descend or to block
      descending into a given subtree, so we can't use it here. *)
   let recurse = rename_variable old_name new_name in
   match e with
-  | On_ast.Var(id) ->
-    if id = old_name then
-      On_ast.Var(new_name)
-    else
-      On_ast.Var(id)
-  | On_ast.Input -> On_ast.Input
-  | On_ast.Function (id_list, e') ->
-    if (List.exists (On_ast.Ident.equal old_name) id_list) then
+  | Int _ | Bool _ | Input -> e
+  | Var (id) ->
+    if id = old_name then Var new_name else Var id
+  | Function (id_list, e') ->
+    if (List.exists (Ident.equal old_name) id_list) then
       e
     else
-      let new_e' = recurse e' in
-      On_ast.Function(id_list, new_e')
-  | On_ast.Appl(e1, e2) ->
-    On_ast.Appl(recurse e1, recurse e2)
-  | On_ast.Let (id, e1, e2) ->
+      Function (id_list, recurse e')
+  | Let (id, e1, e2) ->
     let new_e1 = recurse e1 in
     if id = old_name then
-      On_ast.Let(id, new_e1, e2)
+      Let(id, new_e1, e2)
     else
       let new_e2 = recurse e2 in
-      On_ast.Let(id, new_e1, new_e2)
-  | On_ast.LetRecFun (f_sigs, e') ->
+      Let(id, new_e1, new_e2)
+  | LetFun (f_sig, e') ->
+    let (Funsig(id, id_list, fun_e)) = f_sig in
+    (* If old_name is same as the function name, then don't change anything *)
+    if id = old_name then begin
+      e
+    end else begin
+      (* If old_name is same as one of the names of the params, then
+          we only want to change the code outside of the function. *)
+      if List.exists (Ident.equal old_name) id_list then begin
+        let new_e' = recurse e' in
+        LetFun (f_sig, new_e')
+      end else begin
+        (* change both the inside and the outside expressions *)
+        let new_inner_e = recurse fun_e in
+        let new_outer_e = recurse e' in
+        let new_funsig = Funsig(id, id_list, new_inner_e) in
+        LetFun(new_funsig, new_outer_e)
+      end
+    end
+  | LetRecFun (f_sigs, e') ->
     let function_names =
       f_sigs
       |> List.enum
-      |> Enum.map (fun (On_ast.Funsig(name,_,_)) -> name)
-      |> On_ast.Ident_set.of_enum
+      |> Enum.map (fun (Funsig (name, _, _)) -> name)
+      |> Ident_set.of_enum
     in
     let f_sigs' =
-      if On_ast.Ident_set.mem old_name function_names then
+      if Ident_set.mem old_name function_names then
         f_sigs
       else
-        f_sigs
-        |> List.map
-          (fun (On_ast.Funsig(name,params,body)) ->
-             if List.exists (On_ast.Ident.equal old_name) params then
-               On_ast.Funsig(name,params,body)
+        List.map
+          (fun (Funsig (name, params, body)) ->
+             if List.exists (Ident.equal old_name) params then
+               Funsig (name, params, body)
              else
-               On_ast.Funsig(name,params,recurse body)
+               Funsig (name, params, recurse body)
           )
+          f_sigs
     in
     let e'' =
-      if On_ast.Ident_set.mem old_name function_names then
+      if Ident_set.mem old_name function_names then
         e'
       else
         recurse e'
     in
-    On_ast.LetRecFun(f_sigs', e'')
-  | On_ast.LetFun (f_sig, e') ->
-    let (On_ast.Funsig(id, id_list, fun_e)) = f_sig in
-    (* If the old_name is same as the function name, then we don't want
-       to change anything. *)
-    if id = old_name then begin
-      e
-    end else begin
-      (* If the old_name is same as one of the names of the params, then
-          we only want to change the code outside of the function.
-      *)
-      if List.exists (On_ast.Ident.equal old_name) id_list then begin
-          let new_e' = recurse e' in
-          On_ast.LetFun (f_sig, new_e')
-      end else begin (* change both the inside and the outside expressions *)
-          let new_inner_e = recurse fun_e in
-          let new_outer_e = recurse e' in
-          let new_funsig = On_ast.Funsig(id, id_list, new_inner_e) in
-          On_ast.LetFun(new_funsig, new_outer_e)
-      end
-    end
-  | On_ast.Plus (e1, e2) -> On_ast.Plus(recurse e1, recurse e2)
-  | On_ast.Minus (e1, e2) -> On_ast.Minus(recurse e1, recurse e2)
-  | On_ast.Times (e1, e2) -> On_ast.Times(recurse e1, recurse e2)
-  | On_ast.Divide (e1, e2) -> On_ast.Divide(recurse e1, recurse e2)
-  | On_ast.Modulus (e1, e2) -> On_ast.Modulus(recurse e1, recurse e2)
-  | On_ast.Equal (e1, e2) -> On_ast.Equal(recurse e1, recurse e2)
-  | On_ast.Neq (e1, e2) -> On_ast.Neq(recurse e1, recurse e2)
-  | On_ast.LessThan (e1, e2) -> On_ast.LessThan(recurse e1, recurse e2)
-  | On_ast.Leq (e1, e2) -> On_ast.Leq(recurse e1, recurse e2)
-  | On_ast.GreaterThan (e1, e2) -> On_ast.GreaterThan(recurse e1, recurse e2)
-  | On_ast.Geq (e1, e2) -> On_ast.Geq(recurse e1, recurse e2)
-  | On_ast.And (e1, e2) -> On_ast.And(recurse e1, recurse e2)
-  | On_ast.Or (e1, e2) -> On_ast.Or(recurse e1, recurse e2)
-  | On_ast.Not e1 -> On_ast.Not(recurse e1)
-  | On_ast.If (e1, e2, e3) -> On_ast.If(recurse e1, recurse e2, recurse e3)
-  | On_ast.Int _
-  | On_ast.Bool _ -> e
-  | On_ast.Record m -> On_ast.Record (On_ast.Ident_map.map recurse m)
-  | On_ast.RecordProj (e1, lbl) -> On_ast.RecordProj(recurse e1, lbl)
-  | On_ast.Match (e0, cases) ->
+    LetRecFun(f_sigs', e'')
+  | Match (e0, cases) ->
     let e0' = recurse e0 in
     let cases' =
-      cases
-      |> List.map
+      List.map
         (fun (pattern, body) ->
-           if On_ast.Ident_set.mem old_name (pat_vars pattern) then
+           if Ident_set.mem old_name (pat_vars pattern) then
              (pattern, body)
            else
              (pattern, recurse body)
         )
+        cases
     in
-    On_ast.Match(e0', cases')
-  | On_ast.VariantExpr (lbl, e1) -> On_ast.VariantExpr(lbl, recurse e1)
-  | On_ast.List es -> On_ast.List(List.map recurse es)
-  | On_ast.ListCons (e1, e2) -> On_ast.ListCons(recurse e1, recurse e2)
-  | On_ast.Assert e -> On_ast.Assert(recurse e)
+    Match(e0', cases')
+  | Appl (e1, e2) -> Appl (recurse e1, recurse e2)
+  | Plus (e1, e2) -> Plus(recurse e1, recurse e2)
+  | Minus (e1, e2) -> Minus(recurse e1, recurse e2)
+  | Times (e1, e2) -> Times(recurse e1, recurse e2)
+  | Divide (e1, e2) -> Divide(recurse e1, recurse e2)
+  | Modulus (e1, e2) -> Modulus(recurse e1, recurse e2)
+  | Equal (e1, e2) -> Equal(recurse e1, recurse e2)
+  | Neq (e1, e2) -> Neq(recurse e1, recurse e2)
+  | LessThan (e1, e2) -> LessThan(recurse e1, recurse e2)
+  | Leq (e1, e2) -> Leq(recurse e1, recurse e2)
+  | GreaterThan (e1, e2) -> GreaterThan(recurse e1, recurse e2)
+  | Geq (e1, e2) -> Geq(recurse e1, recurse e2)
+  | And (e1, e2) -> And(recurse e1, recurse e2)
+  | Or (e1, e2) -> Or(recurse e1, recurse e2)
+  | Not e1 -> Not(recurse e1)
+  | If (e1, e2, e3) -> If(recurse e1, recurse e2, recurse e3)
+  | Record m -> Record (Ident_map.map recurse m)
+  | RecordProj (e1, lbl) -> RecordProj(recurse e1, lbl)
+  | VariantExpr (lbl, e1) -> VariantExpr (lbl, recurse e1)
+  | List es -> List (List.map recurse es)
+  | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
+  | Assert e -> Assert (recurse e)
 ;;
 
 (** This function alphatizes an entire expression.  If a variable is defined
     more than once in the given expression, all but one of the declarations will
-    be alpha-renamed to a fresh name.
-*)
+    be alpha-renamed to a fresh name. *)
 let alphatize (e : On_ast.expr) : On_ast.expr m =
-  let open TranslationMonad in
   let open On_ast in
   (* Given a list of identifiers, a list of expressions, and a list of
      previously declared identifiers, this helper routine renames all previously
@@ -285,279 +276,263 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
   let rec ensure_exprs_unique_names
       (names : Ident.t list)
       (exprs : expr list)
-      (previously_declared : Ident_set.t)
+      (prev_declared : Ident_set.t)
     : (Ident.t list * expr list * Ident_set.t * Ident.t Ident_map.t) m =
     match names with
     | [] ->
-      return ([], exprs, previously_declared, Ident_map.empty)
-    | name::more_names ->
-      let%bind (more_names', exprs', previously_declared', renaming') =
-        ensure_exprs_unique_names more_names exprs previously_declared
+      return ([], exprs, prev_declared, Ident_map.empty)
+    | name :: more_names ->
+      let%bind (more_names', exprs', prev_declared', renaming') =
+        ensure_exprs_unique_names more_names exprs prev_declared
       in
-      if Ident_set.mem name previously_declared' then begin
-        let Ident(s) = name in
+      if Ident_set.mem name prev_declared' then begin
+        let Ident s = name in
         let%bind new_s = fresh_name s in
-        let new_name = Ident(new_s) in
+        let new_name = Ident new_s in
         let exprs'' = List.map (rename_variable name new_name) exprs' in
-        let previously_declared'' =
-          Ident_set.add new_name previously_declared'
-        in
+        let prev_declared'' = Ident_set.add new_name prev_declared' in
         let renaming'' = Ident_map.add name new_name renaming' in
-        return
-          (new_name::more_names', exprs'', previously_declared'', renaming'')
-      end else
-        let previously_declared'' = Ident_set.add name previously_declared' in
-        return (name::more_names', exprs', previously_declared'', renaming')
+        return (new_name :: more_names', exprs'', prev_declared'', renaming'')
+      end else begin
+        let prev_declared'' = Ident_set.add name prev_declared' in
+        return (name :: more_names', exprs', prev_declared'', renaming')
+      end
   in
   let ensure_expr_unique_names names expr seen =
-    let%bind (names',exprs',seen',renaming') =
+    let%bind (names', exprs', seen', renaming') =
       ensure_exprs_unique_names names [expr] seen
     in
-    return (names',List.hd exprs',seen',renaming')
+    return (names', List.hd exprs', seen', renaming')
   in
   let rec walk (expr : expr) (seen_declared : Ident_set.t)
     : (expr * Ident_set.t) m =
     let zero () =
       raise @@ Jhupllib_utils.Invariant_failure "list changed size"
     in
-    match expr with
-    (* In leaf cases, no new variables are defined and so we have no work to
-       do. *)
-    | Var _
-    | Input
-    | Int _
-    | Bool _ ->
-      return (expr, seen_declared)
-    | Function (params, body) ->
-      let%bind body', seen_declared' = walk body seen_declared in
-      (* FIXME?: assuming that parameters in functions are not duplicated;
-                 probably should verify that somewhere *)
-      let%bind (params', body'', seen_declared'', _) =
-        ensure_expr_unique_names params body' seen_declared'
-      in
-      return (Function(params', body''), seen_declared'')
-    | Appl (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return @@ (Appl (e1', e2'), seen_declared'')
-    | Let (x, e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      let%bind (xs,es,seen_declared''',_) =
-        ensure_exprs_unique_names [x] [e1';e2'] seen_declared''
-      in
-      let%orzero ([x'],[e1'';e2'']) = (xs,es) in
-      return (Let(x', e1'', e2''), seen_declared''')
-    | LetRecFun (funsigs, expr) ->
-      let%bind funsigs'rev, seen_declared' =
-        list_fold_left_m
-          (fun (acc, seen) (Funsig(name,params,body)) ->
-             let%bind body', seen' = walk body seen in
-             return ((Funsig(name,params,body'))::acc, seen')
-          )
-          ([], seen_declared)
-          funsigs
-      in
-      let funsigs' = List.rev funsigs'rev in
-      (* FIXME?: assuming that parameters in functions are not duplicated;
-                 probably should verify that somewhere *)
-      (* FIXME?: assuming that function names in recursive groups are not
-                 duplicated; probably should verify that somewhere *)
-      (* First, make sure that all of the function *names* are unique. *)
-      let function_names, function_bodies =
-        List.split @@ List.map (fun (Funsig(name,_,body)) -> name,body) funsigs'
-      in
-      let%bind function_names', out_exprs, seen_declared'', _ =
-        ensure_exprs_unique_names
-          function_names
-          (expr :: function_bodies)
-          seen_declared'
-      in
-      let%orzero (expr' :: function_bodies') = out_exprs in
-      let funsigs'' =
-        List.combine function_names' function_bodies'
-        |> List.combine funsigs'
-        |> List.map
-          (fun ((Funsig(_,params,_)),(name,body)) -> Funsig(name,params,body))
-      in
-      (* Now, for each function, make sure that the *parameters* are unique. *)
-      let%bind funsigs'''_rev, seen_declared''' =
-        funsigs''
-        |> list_fold_left_m
-          (fun (out_funsigs, seen) (Funsig(name,params,body)) ->
-             let%bind (params', body', seen', _) =
-               ensure_expr_unique_names params body seen
-             in
-             return ((Funsig(name, params', body'))::out_funsigs, seen')
-          )
-          ([], seen_declared'')
-      in
-      return (LetRecFun(List.rev funsigs'''_rev, expr'), seen_declared''')
-    | LetFun (funsig, expr) ->
-      (* FIXME?: assuming that parameters in functions are not duplicated;
-                 probably should verify that somewhere *)
-      (* Unpack signature *)
-      let Funsig(name, params, body) = funsig in
-      (* Recurse on the second expression to ensure that it is internally
-         alphatized. *)
-      let%bind (expr', seen_declared') = walk expr seen_declared in
-      (* Perform renamings on any names which we have already seen from the
-         outside. *)
-      let%bind names', expr'', seen_declared'', _ =
-        ensure_expr_unique_names [name] expr' seen_declared'
-      in
-      let%orzero [name'] = names' in
-      (* Recurse on the body expression to ensure that it is internally
-         alphatized. *)
-      let%bind (body', seen_declared''') = walk body seen_declared'' in
-      (* Perform renamings on any names which we have already seen from the
-         outside. *)
-      let%bind params', body'', seen_declared'''', _ =
-        ensure_expr_unique_names params body' seen_declared'''
-      in
-      return (LetFun(Funsig(name', params', body''), expr''), seen_declared'''')
-    | Plus (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Plus(e1', e2'), seen_declared'')
-    | Minus (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Minus(e1', e2'), seen_declared'')
-    | Times (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Times(e1', e2'), seen_declared'')
-    | Divide (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Divide(e1', e2'), seen_declared'')
-    | Modulus (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Modulus(e1', e2'), seen_declared'')
-    | Equal (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Equal(e1', e2'), seen_declared'')
-    | Neq (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Neq(e1', e2'), seen_declared'')
-    | LessThan (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (LessThan(e1', e2'), seen_declared'')
-    | Leq (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Leq(e1', e2'), seen_declared'')
-    | GreaterThan (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (GreaterThan(e1', e2'), seen_declared'')
-    | Geq (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Geq(e1', e2'), seen_declared'')
-    | And (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (And(e1', e2'), seen_declared'')
-    | Or (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Or(e1', e2'), seen_declared'')
-    | Not e1 ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      return (Not e1', seen_declared')
-    | If (e1, e2, e3) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      let%bind e3', seen_declared''' = walk e3 seen_declared'' in
-      return (If(e1', e2', e3'), seen_declared''')
-    | Record mapping ->
-      let%bind mapping', seen_declared' =
-        mapping
-        |> Ident_map.enum
-        |> List.of_enum
-        |> list_fold_left_m
-          (fun (acc,seen) (lbl,expr) ->
-             let%bind expr', seen' = walk expr seen in
-             return ((lbl,expr')::acc, seen')
-          )
-          ([], seen_declared)
-        |> lift1
-          (fun (acc,seen) -> (Ident_map.of_enum @@ List.enum acc, seen))
-      in
-      return (Record mapping', seen_declared')
-    | RecordProj (e1, lbl) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      return (RecordProj(e1', lbl), seen_declared')
-    | Match (e0, cases) ->
-      let%bind e0', seen_declared' = walk e0 seen_declared in
-      let%bind cases_rev, seen_declared'' =
-        cases
-        |> list_fold_left_m
-          (fun (acc, seen) (pat, body) ->
-             (* FIXME?: assuming that patterns contain unique variables.  Should
-                        probably verify that somewhere. *)
-             let vars = pat_vars pat in
-             let%bind renaming =
-               vars
-               |> Ident_set.enum
-               |> Enum.map
-                 (fun ((Ident s) as i) ->
-                    (* FIXME *)
-                    (* let%bind s' = fresh_name s in *)
-                    let%bind s' = return s in
-                    return (i, Ident s')
-                 )
-               |> List.of_enum
-               |> sequence
-               |> lift1 List.enum
-               |> lift1 Ident_map.of_enum
-             in
-             let pat' = pat_rename_vars renaming pat in
-             let body' =
-               Ident_map.enum renaming
-               |> Enum.fold
-                 (fun body_expr (from_ident,to_ident) ->
-                    rename_variable from_ident to_ident body_expr
-                 )
-                 body
-             in
-             let seen' =
-               Ident_set.union seen @@
-               (renaming |> Ident_map.values |> Ident_set.of_enum)
-             in
-             return ((pat', body')::acc, seen')
-          )
-          ([], seen_declared')
-      in
-      let cases' = List.rev cases_rev in
-      return (Match(e0', cases'), seen_declared'')
-    | VariantExpr (lbl, e1) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      return (VariantExpr(lbl, e1'), seen_declared')
-    | List es ->
-      let%bind (es'rev, seen_declared') =
-        es
-        |> list_fold_left_m
-          (fun (ret, seen) e ->
-             let%bind e', seen' = walk e seen in
-             return (e'::ret, seen')
-          )
-          ([], seen_declared)
-      in
-      return (List(List.rev es'rev), seen_declared')
-    | ListCons (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (ListCons(e1', e2'), seen_declared'')
-    | Assert e ->
-      let%bind e', seen_declared' = walk e seen_declared in
-      return (Assert e', seen_declared')
+    let%bind (expr', seen_declared') =
+      match expr with
+      (* In leaf cases, no new variables are defined and so we have no work to
+        do. *)
+      | Var _ | Input | Int _ | Bool _ ->
+        return (expr, seen_declared)
+      | Function (params, body) ->
+        (* Recurse on the body to ensure that it is internally alphatized. *)
+        let%bind body', seen_declared' = walk body seen_declared in
+        (* FIXME?: assuming that parameters in functions are not duplicated;
+                  probably should verify that somewhere *)
+        let%bind (params', body'', seen_declared'', _) =
+          ensure_expr_unique_names params body' seen_declared'
+        in
+        return (Function(params', body''), seen_declared'')
+      | Appl (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return @@ (Appl (e1', e2'), seen_declared'')
+      | Let (x, e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        let%bind (xs, es, seen_declared''', _) =
+          ensure_exprs_unique_names [x] [e1'; e2'] seen_declared''
+        in
+        let%orzero ([x'], [e1''; e2'']) = (xs, es) in
+        return (Let(x', e1'', e2''), seen_declared''')
+      | LetRecFun (funsigs, expr) ->
+        let%bind funsigs'rev, seen_declared' =
+          list_fold_left_m
+            (fun (acc, seen) (Funsig (name, params, body)) ->
+              let%bind body', seen' = walk body seen in
+              return ((Funsig (name, params, body')) :: acc, seen')
+            )
+            ([], seen_declared)
+            funsigs
+        in
+        let funsigs' = List.rev funsigs'rev in
+        (* FIXME?: assuming that parameters in functions are not duplicated;
+                  probably should verify that somewhere *)
+        (* FIXME?: assuming that function names in recursive groups are not
+                  duplicated; probably should verify that somewhere *)
+        (* First, make sure that all of the function *names* are unique. *)
+        let function_names, function_bodies =
+          funsigs'
+          |> List.map (fun (Funsig (name, _, body)) -> name, body) 
+          |> List.split 
+        in
+        let%bind function_names', out_exprs, seen_declared'', _ =
+          ensure_exprs_unique_names
+            function_names
+            (expr :: function_bodies)
+            seen_declared'
+        in
+        let%orzero (expr' :: function_bodies') = out_exprs in
+        let funsigs'' =
+          List.combine function_names' function_bodies'
+          |> List.combine funsigs'
+          |> List.map
+            (fun ((Funsig (_, params, _)), (name, body)) ->
+              Funsig (name, params, body))
+        in
+        (* Now, for each function, make sure that the *parameters* are unique. *)
+        let%bind funsigs'''_rev, seen_declared''' =
+          funsigs''
+          |> list_fold_left_m
+            (fun (out_funsigs, seen) (Funsig (name, params, body)) ->
+              let%bind (params', body', seen', _) =
+                ensure_expr_unique_names params body seen
+              in
+              return ((Funsig(name, params', body')) :: out_funsigs, seen')
+            )
+            ([], seen_declared'')
+        in
+        return (LetRecFun(List.rev funsigs'''_rev, expr'), seen_declared''')
+      | LetFun (funsig, expr) ->
+        (* FIXME?: assuming that parameters in functions are not duplicated;
+                  probably should verify that somewhere *)
+        (* Unpack signature *)
+        let Funsig(name, params, body) = funsig in
+        (* Recurse on the second expression to ensure that it is internally
+          alphatized. *)
+        let%bind (expr', seen_declared') = walk expr seen_declared in
+        (* Perform renamings on any names which we have already seen from the
+          outside. *)
+        let%bind names', expr'', seen_declared'', _ =
+          ensure_expr_unique_names [name] expr' seen_declared'
+        in
+        let%orzero [name'] = names' in
+        (* Recurse on the body expression to ensure that it is internally
+          alphatized. *)
+        let%bind (body', seen_declared''') = walk body seen_declared'' in
+        (* Perform renamings on any names which we have already seen from the
+          outside. *)
+        let%bind params', body'', seen_declared'''', _ =
+          ensure_expr_unique_names params body' seen_declared'''
+        in
+        return (LetFun(Funsig(name', params', body''), expr''), seen_declared'''')
+      | Plus (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Plus(e1', e2'), seen_declared'')
+      | Minus (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Minus(e1', e2'), seen_declared'')
+      | Times (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Times(e1', e2'), seen_declared'')
+      | Divide (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Divide(e1', e2'), seen_declared'')
+      | Modulus (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Modulus(e1', e2'), seen_declared'')
+      | Equal (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Equal(e1', e2'), seen_declared'')
+      | Neq (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Neq(e1', e2'), seen_declared'')
+      | LessThan (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (LessThan(e1', e2'), seen_declared'')
+      | Leq (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Leq(e1', e2'), seen_declared'')
+      | GreaterThan (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (GreaterThan(e1', e2'), seen_declared'')
+      | Geq (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Geq(e1', e2'), seen_declared'')
+      | And (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (And(e1', e2'), seen_declared'')
+      | Or (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Or(e1', e2'), seen_declared'')
+      | Not e1 ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        return (Not e1', seen_declared')
+      | If (e1, e2, e3) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        let%bind e3', seen_declared''' = walk e3 seen_declared'' in
+        return (If(e1', e2', e3'), seen_declared''')
+      | Record mapping ->
+        let%bind mapping', seen_declared' =
+          mapping
+          |> Ident_map.enum
+          |> List.of_enum
+          |> list_fold_left_m
+            (fun (acc,seen) (lbl,expr) ->
+              let%bind expr', seen' = walk expr seen in
+              return ((lbl,expr')::acc, seen')
+            )
+            ([], seen_declared)
+          |> lift1
+            (fun (acc,seen) -> (Ident_map.of_enum @@ List.enum acc, seen))
+        in
+        return (Record mapping', seen_declared')
+      | RecordProj (e1, lbl) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        return (RecordProj(e1', lbl), seen_declared')
+      | Match (e0, cases) ->
+        let%bind e0', seen_declared' = walk e0 seen_declared in
+        let%bind cases_rev, seen_declared'' =
+          cases
+          |> list_fold_left_m
+            (fun (acc, seen) (pat, body) ->
+              let%bind body', seen' = walk body seen in
+              let vars = pat_vars pat in
+              let var_list = Ident_set.to_list vars in
+              let%bind (_, body'', seen'', renaming) =
+                ensure_expr_unique_names var_list body' seen'
+              in
+              let pat' = pat_rename_vars renaming pat in
+              return ((pat', body'') :: acc, seen'')
+            )
+            ([], seen_declared')
+        in
+        let cases' = List.rev cases_rev in
+        return (Match (e0', cases'), seen_declared'')
+      | VariantExpr (lbl, e1) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        return (VariantExpr(lbl, e1'), seen_declared')
+      | List es ->
+        let%bind (es'rev, seen_declared') =
+          es
+          |> list_fold_left_m
+            (fun (ret, seen) e ->
+              let%bind e', seen' = walk e seen in
+              return (e'::ret, seen')
+            )
+            ([], seen_declared)
+        in
+        return (List(List.rev es'rev), seen_declared')
+      | ListCons (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (ListCons(e1', e2'), seen_declared'')
+      | Assert e ->
+        let%bind e', seen_declared' = walk e seen_declared in
+        return (Assert e', seen_declared')
+    in
+    let%bind () =
+      if not @@ equal_expr expr' expr then
+        add_natodefa_expr_mapping expr' expr
+      else
+        return ()
+    in
+    return (expr', seen_declared')
   in
   lift1 fst @@ walk e Ident_set.empty
 ;;
