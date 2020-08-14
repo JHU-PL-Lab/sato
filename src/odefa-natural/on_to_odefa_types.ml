@@ -67,6 +67,8 @@ module Odefa_natodefa_mappings : sig
         equivalents as their keys. *)
     natodefa_expr_to_expr : Expr.t Expr_map.t;
 
+    natodefa_var_to_var : On_ast.Ident.t On_ast.Ident_map.t;
+  
     odefa_lbls_to_natodefa_pat : (On_ast.Ident.t option On_ast.Ident_map.t) Record_map.t;
 
     natodefa_pat_to_pat : Pattern.t Pattern_map.t;
@@ -91,6 +93,8 @@ module Odefa_natodefa_mappings : sig
 
   val add_on_pat_to_pat_mapping : t -> On_ast.pattern -> On_ast.pattern -> t;;
 
+  val add_on_var_to_var_mapping : t -> On_ast.ident -> On_ast.ident -> t;;
+
   (* *** Getter functions *** *)
 
   (** Get an odefa clause that existed before the odefa program was
@@ -114,6 +118,7 @@ end = struct
     odefa_pre_instrument_clause_mapping : Odefa_clause.t Ast.Ident_map.t;
     odefa_var_to_natodefa_expr : Expr.t Ast.Ident_map.t;
     natodefa_expr_to_expr : Expr.t Expr_map.t;
+    natodefa_var_to_var : On_ast.Ident.t On_ast.Ident_map.t;
     odefa_lbls_to_natodefa_pat : (On_ast.Ident.t option On_ast.Ident_map.t) Record_map.t;
     natodefa_pat_to_pat : Pattern.t Pattern_map.t;
   }
@@ -125,6 +130,7 @@ end = struct
     odefa_pre_instrument_clause_mapping = Ast.Ident_map.empty;
     odefa_var_to_natodefa_expr = Ast.Ident_map.empty;
     natodefa_expr_to_expr = Expr_map.empty;
+    natodefa_var_to_var = On_ast.Ident_map.empty;
     odefa_lbls_to_natodefa_pat = Record_map.empty;
     natodefa_pat_to_pat = Pattern_map.empty;
   }
@@ -175,6 +181,14 @@ end = struct
     { mappings with
       natodefa_pat_to_pat =
         Pattern_map.add pat1 pat2 natodefa_pattern_map;
+    }
+  ;;
+
+  let add_on_var_to_var_mapping mappings var1 var2 =
+    let natodefa_var_map = mappings.natodefa_var_to_var in
+    { mappings with
+      natodefa_var_to_var =
+        On_ast.Ident_map.add var1 var2 natodefa_var_map
     }
   ;;
 
@@ -252,7 +266,8 @@ end = struct
     let inst_map = mappings.odefa_instrument_vars_map in
     let odefa_on_map = mappings.odefa_var_to_natodefa_expr in
     let on_expr_map = mappings.natodefa_expr_to_expr in
-    let on_pat_map = mappings.natodefa_pat_to_pat in
+    let on_ident_map = mappings.natodefa_var_to_var in
+    (* let on_pat_map = mappings.natodefa_pat_to_pat in *)
     (* Get pre-instrument var *)
     let odefa_ident' =
       match Ast.Ident_map.Exceptionless.find odefa_ident inst_map with
@@ -275,6 +290,7 @@ end = struct
       | Some expr' -> expr'
       | None -> expr
     in
+    (*
     let on_pat_transform expr =
       match expr with
       | On_ast.Match (e, pat_e_lst) ->
@@ -291,9 +307,69 @@ end = struct
         On_ast.Match (e, pat_e_lst')
       | _ -> expr
     in
+    *)
+    let on_ident_transform expr =
+      let open On_ast in
+      let find_ident ident =
+        Ident_map.find_default ident ident on_ident_map
+      in
+      match expr with
+      | Var ident -> Var (find_ident ident)
+      | Function (ident_list, body) ->
+        Function (List.map find_ident ident_list, body)
+      | Let (ident, e1, e2) -> Let (find_ident ident, e1, e2)
+      | LetFun (funsig, e) ->
+        let (Funsig (fun_ident, arg_ident_list, body)) = funsig in
+        let fun_ident' = find_ident fun_ident in
+        let arg_ident_list' = List.map find_ident arg_ident_list in
+        LetFun (Funsig (fun_ident', arg_ident_list', body), e)
+      | LetRecFun (funsig_list, e) ->
+        let funsig_list' =
+          List.map
+            (fun (Funsig (fun_ident, arg_ident_list, body)) ->
+              let fun_ident' = find_ident fun_ident in
+              let arg_ident_list' = List.map find_ident arg_ident_list in
+              Funsig (fun_ident', arg_ident_list', body)
+            )
+            funsig_list
+        in
+        LetRecFun (funsig_list', e)
+      | Match (e, pat_e_list) ->
+        let pat_e_list' =
+          List.map
+            (fun (pat, expr) ->
+              let pat' =
+                match pat with
+                | RecPat record ->
+                  let record' =
+                    record
+                    |> Ident_map.enum
+                    |> Enum.map
+                      (fun (lbl, x_opt) ->
+                        match x_opt with
+                        | Some x -> (lbl, Some (find_ident x))
+                        | None -> (lbl, None)
+                      )
+                    |> Ident_map.of_enum
+                  in
+                  RecPat record'
+                | VariantPat (vlbl, x) -> VariantPat (vlbl, find_ident x)
+                | VarPat x -> VarPat (find_ident x)
+                | LstDestructPat (x1, x2) -> LstDestructPat (find_ident x1, find_ident x2)
+                | _ -> pat
+              in
+              (pat', expr)
+            )
+            pat_e_list
+        in
+        Match (e, pat_e_list')
+      | _ -> expr
+    in
     natodefa_expr
+    |> on_expr_transformer on_ident_transform
     |> on_expr_transformer on_expr_transform
-    |> on_expr_transformer on_pat_transform
+    (* |> on_expr_transformer on_ident_transform *)
+    (* |> on_expr_transformer on_pat_transform *)
   ;;
 
   (*

@@ -50,7 +50,7 @@ let rec pat_vars (pat : On_ast.pattern) : On_ast.Ident_set.t =
 ;;
 
 (** Performs variable substitution on a pattern. *)
-let rec pat_rename_vars
+let pat_rename_vars
     (name_map : On_ast.Ident.t On_ast.Ident_map.t)
     (pattern : On_ast.pattern)
   : On_ast.pattern =
@@ -222,6 +222,7 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
         let Ident s = name in
         let%bind new_s = fresh_name s in
         let new_name = Ident new_s in
+        let%bind () = add_natodefa_var_mapping new_name name in
         let exprs'' = List.map (rename_variable name new_name) exprs' in
         let prev_declared'' = Ident_set.add new_name prev_declared' in
         let renaming'' = Ident_map.add name new_name renaming' in
@@ -926,7 +927,7 @@ let translate
   let (e_m_with_info : (Ast.expr * Odefa_natodefa_mappings.t) m) =
     let%bind transformed_e =
       return e
-      >>= debug_transform "pre-alphatize" alphatize
+      (* >>= debug_transform "pre-alphatize" alphatize *)
       >>= debug_transform "preliminary encoding" preliminary_encode_expr
       >>= debug_transform "post-alphatize" alphatize
     in

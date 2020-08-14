@@ -62,6 +62,8 @@ module TranslationMonad : sig
   val add_natodefa_pattern_mapping :
     On_ast.pattern -> On_ast.pattern -> unit m
 
+  val add_natodefa_var_mapping : On_ast.ident -> On_ast.ident -> unit m
+
   (** Retrieve the odefa-to-natodefa maps from the monad *)
   val odefa_natodefa_maps : Odefa_natodefa_mappings.t m
 
@@ -161,6 +163,11 @@ end = struct
       <- Odefa_natodefa_mappings.add_on_pat_to_pat_mapping odefa_on_maps k_pat v_pat
   ;;
 
+  let add_natodefa_var_mapping k_var v_var ctx =
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- Odefa_natodefa_mappings.add_on_var_to_var_mapping odefa_on_maps k_var v_var
+  ;;
   let odefa_natodefa_maps ctx =
     ctx.tc_odefa_natodefa_mappings
   ;;
