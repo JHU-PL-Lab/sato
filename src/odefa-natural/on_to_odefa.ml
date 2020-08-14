@@ -995,8 +995,10 @@ let translate
       return e
       >>= debug_transform "pre-alphatize" alphatize
       >>= debug_transform "encode recursion" rec_transform
-      >>= debug_transform "encode lists" list_transform
-      >>= debug_transform "encode variants" encode_variant
+      (* >>= debug_transform "encode lists" list_transform *)
+      (* >>= debug_transform "encode variants" encode_variant *)
+      (* >>= debug_transform "encode match exprs" encode_match *)
+      >>= debug_transform "preliminary encoding" preliminary_encode_expr
       >>= debug_transform "post-alphatize" alphatize
     in
     let%bind (c_list, _) = flatten_expr transformed_e in
