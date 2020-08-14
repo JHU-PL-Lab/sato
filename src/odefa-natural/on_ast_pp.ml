@@ -50,7 +50,7 @@ let pp_variant_label formatter (Variant_label label) =
 ;;
 
 let rec pp_funsig formatter (Funsig (x, ident_list, e)) =
-  Format.fprintf formatter "fun %a %a -> @[%a@]"
+  Format.fprintf formatter "%a %a = @[%a@]"
     pp_ident x pp_ident_list ident_list pp_expr e
 
 and pp_variant_content formatter (variant_label, ident) =
@@ -97,7 +97,7 @@ and pp_expr formatter expr =
         formatter
         (List.enum funsig_lst)
     in
-    Format.fprintf formatter "let %a in @[%a@]"
+    Format.fprintf formatter "let rec %a in @[%a@]"
       pp_funsig_list funsig_lst pp_expr e
   | LetFun (funsig, e) ->
     Format.fprintf formatter "let %a in @[%a@]"

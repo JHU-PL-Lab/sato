@@ -23,58 +23,6 @@ let lbl_tail_m : Ident.t m = _lbl_m "tail";;
 let lbl_variant_m (s : string) : Ident.t m = _lbl_m ("variant_" ^ s);;
 let lbl_value_m : Ident.t m = _lbl_m "value";;
 
-(* This function transforms all lists in the expression to records. *)
-let list_transform (e : expr) : expr m =
-  let%bind lbl_empty = lbl_empty_m in
-  let%bind lbl_head = lbl_head_m in
-  let%bind lbl_head_cons = lbl_head_cons_m in
-  let%bind lbl_tail = lbl_tail_m in
-  let transformer recurse e =
-    (* lazy_logger `trace (fun () -> Printf.sprintf "Transforming %s" (On_ast_pp.show_expr e)); *)
-    match e with
-    | List expr_list ->
-      let list_maker element acc =
-        let%bind clean_elm = recurse element in
-        (* let%bind () = add_natodefa_expr_mapping clean_elm element in *)
-        let new_map =
-          Ident_map.empty
-          |> Ident_map.add lbl_head clean_elm
-          |> Ident_map.add lbl_tail acc
-        in
-        return @@ Record new_map
-      in
-      let empty_rec = Record Ident_map.empty in
-      let empty_rec' =
-        Record (Ident_map.add lbl_empty empty_rec Ident_map.empty)
-      in
-      let%bind record_equivalent =
-        list_fold_right_m list_maker expr_list empty_rec'
-      in
-      let%bind () = add_natodefa_expr_mapping record_equivalent e in
-      return record_equivalent
-    (* Here  we "cons" the expression with the list during natodefa-to-odefa translation. 
-       Simple, but can introduce pitfalls such as:
-       - How do we know if what we are consing to is not a list? How do we typecheck?
-       - What if we wish to lazily cons, eg. as part of a freeze Fun x -> x :: [y]
-      The latter question should be a non-issue due to the encoding, however. - KQ
-    *)
-    | ListCons (expr, expr_list) ->
-      let%bind clean_expr = recurse expr in
-      let%bind record_list = recurse expr_list in
-      let new_map =
-        Ident_map.empty
-        |> Ident_map.add lbl_head_cons clean_expr
-        |> Ident_map.add lbl_tail record_list
-      in
-      let record_equivalent = Record new_map in
-      let%bind () = add_natodefa_expr_mapping record_equivalent e in
-      return record_equivalent
-    | _ ->
-      return e
-  in
-  m_transform_expr transformer e
-;;
-
 let list_expr_to_record recurse (expr_lst : expr list) =
   (* Record labels *)
   let%bind lbl_empty = lbl_empty_m in
@@ -99,6 +47,12 @@ let list_expr_to_record recurse (expr_lst : expr list) =
   return record_equivalent
 ;;
 
+(* Here  we "cons" the expression with the list during natodefa-to-odefa translation. 
+    Simple, but can introduce pitfalls such as:
+    - How do we know if what we are consing to is not a list? How do we typecheck?
+    - What if we wish to lazily cons, eg. as part of a freeze Fun x -> x :: [y]
+  The latter question should be a non-issue due to the encoding, however. - KQ
+*)
 let list_cons_expr_to_record recurse (expr : expr) (list_expr : expr) =
   (* Record labels *)
   let%bind lbl_head_cons = lbl_head_cons_m in
@@ -138,22 +92,6 @@ let variant_expr_to_record recurse
   return res_record
 ;;
 
-(* Overall Function that takes an expression and converts all of the Variant
-   expressions and patterns within it to Record expressions and patterns. *)
-let encode_variant (e : expr) : expr m =
-  let transformer recurse e =
-    match e with
-    | VariantExpr (lbl, e') ->
-      let%bind record_equivalent = variant_expr_to_record recurse lbl e' in
-      let%bind () = add_natodefa_expr_mapping record_equivalent e in
-      return record_equivalent
-    | _ ->
-      return e
-  in
-  m_transform_expr transformer e
-;;
-
-
 let encode_pattern (pattern : pattern) : pattern m =
   match pattern with
   (* Encode list patterns *)
@@ -191,31 +129,6 @@ let encode_pattern (pattern : pattern) : pattern m =
     return pattern
 ;;
 
-let encode_match (e : expr) : expr m =
-  let transformer recurse e =
-    match e with
-    | Match (match_e, pat_expr_list) ->
-      let%bind new_match_e = recurse match_e in
-      (* routine to pass into List.map to edit all of the pattern/expression
-         tuples. *)
-      let pat_expr_list_changer pat_expr_tuple =
-        let (curr_pat, curr_expr) = pat_expr_tuple in
-        let%bind new_pat = encode_pattern curr_pat in
-        let%bind new_expr = recurse curr_expr in
-        return (new_pat, new_expr)
-      in
-      let%bind new_pat_expr_list =
-        sequence @@ List.map pat_expr_list_changer pat_expr_list
-      in
-      let new_expr = Match (new_match_e, new_pat_expr_list) in
-      let%bind () = add_natodefa_expr_mapping new_expr e in
-      return new_expr
-    | _ ->
-      return e
-  in
-  m_transform_expr transformer e
-;;
-
 let encode_match_exprs recurse
     (match_expr : expr)
     (pat_expr_lst : (pattern * expr) list) =
@@ -235,6 +148,90 @@ let encode_match_exprs recurse
   return @@ Match (new_match_expr, new_pat_expr_lst)
 ;;
 
+(** Transform a let rec expression into one that uses functions.
+    E.g. let rec f n = ... in f 10
+    becomes
+      let f = fun f' a ->
+        let f = f' f' in
+        ...
+      in
+      let f'' = f f in f'' 10
+    E.g. let rec f a = ... with g b = ... in f 10
+    becomes
+      let f = fun f' g' a ->
+        let f'' = f' f' g' in
+        let g'' = g' f' g' in
+        ...
+      in
+      let g = fun f' g' b ->
+        let f'' = f' f' g' in
+        let g'' = g' f' g' in
+        ...
+      in
+      let f''' = f'' f'' g'' in
+      let g''' = g'' f'' g'' in
+      f''' 10
+*)
+let letrec_expr_to_fun recurse fun_sig_list rec_expr =
+  (* Translate inner expression *)
+  let%bind transformed_rec_expr = recurse rec_expr in
+  (* Come up with new names for functions *)
+  let original_names =
+    List.map (fun (Funsig (id, _, _)) -> id) fun_sig_list
+  in
+  let%bind new_names =
+    sequence @@ List.map
+      (fun (Ident old_name) ->
+        let%bind new_name = fresh_name old_name in
+        return @@ Ident new_name
+      )
+      original_names
+  in
+  let name_pairs = List.combine original_names new_names in
+  (* Create repeated function applications, eg. f g h ... *)
+  let%bind appls_for_funs =
+    list_fold_left_m
+      (fun appl_dict base_fun ->
+        let (original_fun_name, new_fun_name) = base_fun in
+        let sub_appl =
+          List.fold_left
+            (fun acc fun_name -> Appl(acc, Var (fun_name)))
+            (Var (new_fun_name))
+            new_names
+        in
+        return @@ Ident_map.add original_fun_name sub_appl appl_dict
+      )
+      Ident_map.empty
+      name_pairs
+  in
+  (* Create let fun expressions *)
+  let lt_maker_fun fun_name acc =
+      let cur_appl_expr = Ident_map.find fun_name appls_for_funs in
+      Let (fun_name, cur_appl_expr, acc)
+  in
+  let transformed_outer_expr =
+    List.fold_right lt_maker_fun original_names transformed_rec_expr
+  in
+  let sig_name_pairs = List.combine fun_sig_list new_names in
+  (* Final expression *)
+  let%bind ret_expr =
+    list_fold_right_m
+      (fun (fun_sig, fun_new_name) acc ->
+        let (Funsig (_, param_list, cur_f_expr)) = fun_sig in
+        let%bind transformed_cur_f_expr = recurse cur_f_expr in
+        let new_param_list = new_names @ param_list in
+        let new_fun_expr =
+          List.fold_right lt_maker_fun original_names transformed_cur_f_expr
+        in
+        let new_fun = Function (new_param_list, new_fun_expr) in
+        return @@ Let (fun_new_name, new_fun, acc)
+      )
+      sig_name_pairs
+      transformed_outer_expr
+  in
+  return ret_expr
+;;
+
 let preliminary_encode_expr (e : expr) : expr m =
   let transformer recurse expr =
     match expr with
@@ -252,6 +249,10 @@ let preliminary_encode_expr (e : expr) : expr m =
       return expr'
     | Match (match_e, pat_e_lst) ->
       let%bind expr' = encode_match_exprs recurse match_e pat_e_lst in
+      let%bind () = add_natodefa_expr_mapping expr' expr in
+      return expr'
+    | LetRecFun (fun_sig_list, rec_e) ->
+      let%bind expr' = letrec_expr_to_fun recurse fun_sig_list rec_e in
       let%bind () = add_natodefa_expr_mapping expr' expr in
       return expr'
     | _ -> return expr

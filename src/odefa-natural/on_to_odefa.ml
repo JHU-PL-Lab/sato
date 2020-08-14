@@ -13,10 +13,7 @@ open On_to_odefa_monad;;
     following order:
 
     * Alphatize program
-    * Annotate recursive call sites
-    * Desugar let rec
-    * Desugar lists
-    * Desugar variants
+    * Desugar let rec, lists, variants, and list/variant patterns
     * Alphatize program again (to allow above to introduce dupes)
     * Flatten odefa-natural expressions to odefa expressions
 *)
@@ -24,6 +21,8 @@ open On_to_odefa_monad;;
 open TranslationMonad;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "On_to_odefa";;
+
+(* **** Variable alphatization **** *)
 
 (** Determines all variables contained within a pattern. *)
 let rec pat_vars (pat : On_ast.pattern) : On_ast.Ident_set.t =
@@ -83,72 +82,6 @@ let rec pat_rename_vars
     let h' = Ident_map.find_default h h name_map in
     let t' = Ident_map.find_default t t name_map in
     LstDestructPat (h', t')
-;;
-
-(** Transform an expression to eliminate "let rec" expressions by encoding with
-   self-passing. *)
-let rec_transform (e : On_ast.expr) : On_ast.expr m =
-  begin
-  let transformer recurse e =
-    match e with
-    | On_ast.LetRecFun(fun_sig_list, rec_expr) ->
-      let%bind transformed_rec_expr = recurse rec_expr in
-      let original_names =
-        List.map (fun single_sig ->
-            let (On_ast.Funsig (id, _, _)) = single_sig
-            in id) fun_sig_list
-      in
-      let%bind new_names =
-        sequence @@ List.map
-          (fun (On_ast.Ident old_name) ->
-             let%bind new_name = fresh_name old_name in
-             return @@ On_ast.Ident new_name
-          )
-          original_names
-      in
-      let name_pairs = List.combine original_names new_names in
-      let%bind appls_for_funs =
-        list_fold_left_m
-          (fun appl_dict -> fun base_fun ->
-             let (original_fun_name, new_fun_name) = base_fun in
-             let sub_appl =
-               List.fold_left
-                 (fun acc fun_name -> On_ast.Appl(acc, Var(fun_name)))
-                 (Var(new_fun_name)) new_names in
-             return @@
-             On_ast.Ident_map.add
-               original_fun_name sub_appl appl_dict)
-          On_ast.Ident_map.empty name_pairs
-      in
-      let let_maker_fun = (fun fun_name -> fun acc ->
-          let cur_appl_expr = On_ast.Ident_map.find fun_name appls_for_funs in
-          On_ast.Let(fun_name, cur_appl_expr, acc))
-      in
-      let transformed_outer_expr =
-        List.fold_right let_maker_fun original_names transformed_rec_expr
-      in
-      let sig_name_pairs = List.combine fun_sig_list new_names in
-      let%bind ret_expr =
-        list_fold_right_m (fun (fun_sig, fun_new_name) -> fun acc ->
-            let (On_ast.Funsig (_, param_list, cur_f_expr)) = fun_sig in
-            let%bind transformed_cur_f_expr = recurse cur_f_expr in
-            let new_param_list = new_names @ param_list in
-            let new_fun_expr =
-              List.fold_right
-                let_maker_fun original_names transformed_cur_f_expr
-            in
-            return @@
-            On_ast.Let(fun_new_name,
-                       Function (new_param_list, new_fun_expr),
-                       acc)
-          ) sig_name_pairs transformed_outer_expr
-      in
-      return ret_expr
-    | _ ->
-      return e
-  in
-  On_to_odefa_monad.m_transform_expr transformer e
-  end
 ;;
 
 (** Performs alpha substitution on a given expression. *)
@@ -538,7 +471,7 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
   lift1 fst @@ walk e Ident_set.empty
 ;;
 
-(* **** Expression flattening + helper functions **** *)
+(* **** Expression flattening **** *)
 
 (** Returns the body of a function or conditional with its return variable *)
 let nonempty_body (expr : On_ast.expr) ((body : Ast.clause list), (var : Ast.var))
@@ -994,10 +927,6 @@ let translate
     let%bind transformed_e =
       return e
       >>= debug_transform "pre-alphatize" alphatize
-      >>= debug_transform "encode recursion" rec_transform
-      (* >>= debug_transform "encode lists" list_transform *)
-      (* >>= debug_transform "encode variants" encode_variant *)
-      (* >>= debug_transform "encode match exprs" encode_match *)
       >>= debug_transform "preliminary encoding" preliminary_encode_expr
       >>= debug_transform "post-alphatize" alphatize
     in
