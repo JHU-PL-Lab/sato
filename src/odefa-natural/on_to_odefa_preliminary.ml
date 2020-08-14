@@ -56,7 +56,7 @@ let list_transform (e : expr) : expr m =
   let%bind lbl_head_cons = lbl_head_cons_m in
   let%bind lbl_tail = lbl_tail_m in
   let transformer recurse e =
-    lazy_logger `trace (fun () -> Printf.sprintf "Transforming %s" (On_ast_pp.show_expr e));
+    (* lazy_logger `trace (fun () -> Printf.sprintf "Transforming %s" (On_ast_pp.show_expr e)); *)
     match e with
     | List expr_list ->
       let list_maker element acc =
@@ -146,7 +146,7 @@ let encode_variant_pattern (p : pattern) : pattern m =
       Ident_map.add variant_ident (Some v_var) Ident_map.empty
     in
     let new_pattern = RecPat new_pat_lbls in
-    let%bind () = add_natodefa_pattern_mapping new_pattern p in
+    (* let%bind () = add_natodefa_pattern_mapping new_pattern p in *)
     return @@ new_pattern
   | _ ->
     return p
@@ -159,7 +159,7 @@ let encode_variant (e : expr) : expr m =
     match e with
     | VariantExpr (lbl, e') ->
       let%bind record_equivalent = variant_expr_to_record recurse lbl e' in
-      let%bind () = add_natodefa_expr_mapping record_equivalent e in
+      (* let%bind () = add_natodefa_expr_mapping record_equivalent e in *)
       return record_equivalent
     | Match (match_e, pat_expr_list) ->
       let%bind new_match_e = recurse match_e in
@@ -175,7 +175,7 @@ let encode_variant (e : expr) : expr m =
         sequence @@ List.map pat_expr_list_changer pat_expr_list
       in
       let new_expr = Match (new_match_e, new_pat_expr_list) in
-      let%bind () = add_natodefa_expr_mapping new_expr e in
+      (* let%bind () = add_natodefa_expr_mapping new_expr e in *)
       return new_expr
     | _ ->
       return e

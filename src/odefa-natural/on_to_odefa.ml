@@ -488,12 +488,10 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
       | Match (e0, cases) ->
         let%bind e0', seen_declared' = walk e0 seen_declared in
         let%bind cases_rev, seen_declared'' =
-          cases
-          |> list_fold_left_m
+          list_fold_left_m
             (fun (acc, seen) (pat, body) ->
               let%bind body', seen' = walk body seen in
-              let vars = pat_vars pat in
-              let var_list = Ident_set.to_list vars in
+              let var_list = Ident_set.to_list @@ pat_vars pat in
               let%bind (_, body'', seen'', renaming) =
                 ensure_expr_unique_names var_list body' seen'
               in
@@ -501,6 +499,7 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
               return ((pat', body'') :: acc, seen'')
             )
             ([], seen_declared')
+            cases
         in
         let cases' = List.rev cases_rev in
         return (Match (e0', cases'), seen_declared'')
@@ -517,21 +516,23 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
             )
             ([], seen_declared)
         in
-        return (List(List.rev es'rev), seen_declared')
+        return (List (List.rev es'rev), seen_declared')
       | ListCons (e1, e2) ->
         let%bind e1', seen_declared' = walk e1 seen_declared in
         let%bind e2', seen_declared'' = walk e2 seen_declared' in
-        return (ListCons(e1', e2'), seen_declared'')
+        return (ListCons (e1', e2'), seen_declared'')
       | Assert e ->
         let%bind e', seen_declared' = walk e seen_declared in
         return (Assert e', seen_declared')
     in
+    (*
     let%bind () =
       if not @@ equal_expr expr' expr then
         add_natodefa_expr_mapping expr' expr
       else
         return ()
     in
+    *)
     return (expr', seen_declared')
   in
   lift1 fst @@ walk e Ident_set.empty
