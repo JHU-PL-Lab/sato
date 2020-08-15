@@ -86,10 +86,6 @@ module Odefa_natodefa_mappings : sig
 
     natodefa_var_to_var : On_ast.Ident.t On_ast.Ident_map.t;
   
-    odefa_lbls_to_natodefa_pat : (On_ast.Ident.t option On_ast.Ident_map.t) Record_map.t;
-
-    natodefa_pat_to_pat : Pattern.t Pattern_map.t;
-
     natodefa_idents_to_types : on_type_sig On_labels_map.t;
   }
   [@@ deriving eq, ord, show]
@@ -106,11 +102,6 @@ module Odefa_natodefa_mappings : sig
   val add_odefa_var_on_expr_mapping : t -> Ast.ident -> On_ast.expr -> t;;
 
   val add_on_expr_to_expr_mapping : t -> On_ast.expr -> On_ast.expr -> t;;
-
-  val add_odefa_on_lbls_mapping :
-    t -> Ast.Ident_set.t -> (On_ast.ident option On_ast.Ident_map.t) -> t;;
-
-  val add_on_pat_to_pat_mapping : t -> On_ast.pattern -> On_ast.pattern -> t;;
 
   val add_on_var_to_var_mapping : t -> On_ast.ident -> On_ast.ident -> t;;
 
@@ -142,8 +133,6 @@ end = struct
     odefa_var_to_natodefa_expr : Expr.t Ast.Ident_map.t;
     natodefa_expr_to_expr : Expr.t Expr_map.t;
     natodefa_var_to_var : On_ast.Ident.t On_ast.Ident_map.t;
-    odefa_lbls_to_natodefa_pat : (On_ast.Ident.t option On_ast.Ident_map.t) Record_map.t;
-    natodefa_pat_to_pat : Pattern.t Pattern_map.t;
     natodefa_idents_to_types : on_type_sig On_labels_map.t;
   }
   [@@ deriving eq, ord, show]
@@ -155,8 +144,6 @@ end = struct
     odefa_var_to_natodefa_expr = Ast.Ident_map.empty;
     natodefa_expr_to_expr = Expr_map.empty;
     natodefa_var_to_var = On_ast.Ident_map.empty;
-    odefa_lbls_to_natodefa_pat = Record_map.empty;
-    natodefa_pat_to_pat = Pattern_map.empty;
     natodefa_idents_to_types = On_labels_map.empty;
   }
   ;;
@@ -190,22 +177,6 @@ end = struct
     { mappings with
       natodefa_expr_to_expr =
         Expr_map.add expr1 expr2 natodefa_expr_map;
-    }
-  ;;
-
-  let add_odefa_on_lbls_mapping mappings labels pat =
-    let labels_map = mappings.odefa_lbls_to_natodefa_pat in
-    { mappings with
-      odefa_lbls_to_natodefa_pat =
-        Record_map.add labels pat labels_map;
-    }
-  ;;
-
-  let add_on_pat_to_pat_mapping mappings pat1 pat2 =
-    let natodefa_pattern_map = mappings.natodefa_pat_to_pat in
-    { mappings with
-      natodefa_pat_to_pat =
-        Pattern_map.add pat1 pat2 natodefa_pattern_map;
     }
   ;;
 
@@ -271,8 +242,17 @@ end = struct
     | Function (id_lst, e) -> Function (id_lst, recurse e)
     | Appl (e1, e2) -> Appl (recurse e1, recurse e2)
     | Let (id, e1, e2) -> Let (id, recurse e1, recurse e2)
-    | LetRecFun (fs_lst, e) -> LetRecFun (fs_lst, recurse e)
-    | LetFun (fs, e) -> LetFun (fs, recurse e)
+    | LetFun (fs, e) ->
+      let Funsig (fs_ident, fs_args, e_body) = fs in
+      let fs' = Funsig (fs_ident, fs_args, recurse e_body) in
+      LetFun (fs', recurse e)
+    | LetRecFun (fs_lst, e) ->
+      let fs_lst' =
+        List.map
+          (fun (Funsig (id, args, e')) -> Funsig (id, args, recurse e'))
+          fs_lst
+      in
+      LetRecFun (fs_lst', recurse e)
     | Plus (e1, e2) -> Plus (recurse e1, recurse e2)
     | Minus (e1, e2) -> Minus (recurse e1, recurse e2)
     | Times (e1, e2) -> Times (recurse e1, recurse e2)
@@ -323,28 +303,16 @@ end = struct
       | Some expr' -> expr'
       | None -> expr
     in
-    (*
-    let on_pat_transform expr =
-      match expr with
-      | On_ast.Match (e, pat_e_lst) ->
-        let pat_e_lst' =
-          List.map
-            (fun (pat, e) ->
-              lazy_logger `trace (fun () -> Printf.sprintf "Transforming %s" (Pattern.show pat));
-              match Pattern_map.Exceptionless.find pat on_pat_map with
-              | Some pat' -> (pat', e)
-              | None -> (pat, e)
-            )
-            pat_e_lst
-        in
-        On_ast.Match (e, pat_e_lst')
-      | _ -> expr
-    in
-    *)
     let on_ident_transform expr =
       let open On_ast in
       let find_ident ident =
         Ident_map.find_default ident ident on_ident_map
+      in
+      let transform_funsig funsig =
+        let (Funsig (fun_ident, arg_ident_list, body)) = funsig in
+        let fun_ident' = find_ident fun_ident in
+        let arg_ident_list' = List.map find_ident arg_ident_list in
+        Funsig (fun_ident', arg_ident_list', body)
       in
       match expr with
       | Var ident -> Var (find_ident ident)
@@ -352,47 +320,36 @@ end = struct
         Function (List.map find_ident ident_list, body)
       | Let (ident, e1, e2) -> Let (find_ident ident, e1, e2)
       | LetFun (funsig, e) ->
-        let (Funsig (fun_ident, arg_ident_list, body)) = funsig in
-        let fun_ident' = find_ident fun_ident in
-        let arg_ident_list' = List.map find_ident arg_ident_list in
-        LetFun (Funsig (fun_ident', arg_ident_list', body), e)
+        LetFun (transform_funsig funsig, e)
       | LetRecFun (funsig_list, e) ->
-        let funsig_list' =
-          List.map
-            (fun (Funsig (fun_ident, arg_ident_list, body)) ->
-              let fun_ident' = find_ident fun_ident in
-              let arg_ident_list' = List.map find_ident arg_ident_list in
-              Funsig (fun_ident', arg_ident_list', body)
-            )
-            funsig_list
-        in
-        LetRecFun (funsig_list', e)
+        LetRecFun (List.map transform_funsig funsig_list, e)
       | Match (e, pat_e_list) ->
+        let transform_pattern pat =
+          match pat with
+          | RecPat record ->
+            let record' =
+              record
+              |> Ident_map.enum
+              |> Enum.map
+                (fun (lbl, x_opt) ->
+                  match x_opt with
+                  | Some x -> (lbl, Some (find_ident x))
+                  | None -> (lbl, None)
+                )
+              |> Ident_map.of_enum
+            in
+            RecPat record'
+          | VariantPat (vlbl, x) ->
+            VariantPat (vlbl, find_ident x)
+          | VarPat x ->
+            VarPat (find_ident x)
+          | LstDestructPat (x1, x2) ->
+            LstDestructPat (find_ident x1, find_ident x2)
+          | AnyPat | IntPat | BoolPat | FunPat | EmptyLstPat -> pat
+        in
         let pat_e_list' =
           List.map
-            (fun (pat, expr) ->
-              let pat' =
-                match pat with
-                | RecPat record ->
-                  let record' =
-                    record
-                    |> Ident_map.enum
-                    |> Enum.map
-                      (fun (lbl, x_opt) ->
-                        match x_opt with
-                        | Some x -> (lbl, Some (find_ident x))
-                        | None -> (lbl, None)
-                      )
-                    |> Ident_map.of_enum
-                  in
-                  RecPat record'
-                | VariantPat (vlbl, x) -> VariantPat (vlbl, find_ident x)
-                | VarPat x -> VarPat (find_ident x)
-                | LstDestructPat (x1, x2) -> LstDestructPat (find_ident x1, find_ident x2)
-                | _ -> pat
-              in
-              (pat', expr)
-            )
+            (fun (pat, expr) -> (transform_pattern pat, expr))
             pat_e_list
         in
         Match (e, pat_e_list')
@@ -401,25 +358,7 @@ end = struct
     natodefa_expr
     |> on_expr_transformer on_ident_transform
     |> on_expr_transformer on_expr_transform
-    (* |> on_expr_transformer on_ident_transform *)
-    (* |> on_expr_transformer on_pat_transform *)
   ;;
-
-  (*
-  let get_natodefa_equivalent_pattern mappings odefa_lbls =
-    let odefa_on_lbl_map = mappings.odefa_lbls_to_natodefa_lbls in
-    (* Get natodefa labels from odefa labels *)
-    let natodefa_lbls =
-      try
-        Record_map.find odefa_lbls odefa_on_lbl_map
-      with Not_found ->
-        raise @@ Invalid_argument
-          (Printf.sprintf
-            "labels %s are not associated with any natodefa labels"
-            (Ast.Ident_set.show odefa_lbls))
-    in
-    let natodefa_rec_pat = On_ast.RecPat natodefa_lbls in
-  *)
 
   let check_type_of_idents mappings odefa_idents =
     let on_idents =

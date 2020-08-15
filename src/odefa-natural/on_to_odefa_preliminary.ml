@@ -134,9 +134,7 @@ let encode_pattern (pattern : pattern) : pattern m =
         (On_to_odefa_types.ListType)
     in
     let empty_rec = Ident_map.add lbl_empty None Ident_map.empty in
-    let empty_rec_pat = RecPat empty_rec in
-    let%bind () = add_natodefa_pattern_mapping empty_rec_pat pattern in
-    return empty_rec_pat
+    return @@ RecPat empty_rec
   | LstDestructPat (hd_var, tl_var) ->
     let%bind lbl_head = lbl_head_m in
     let%bind lbl_tail = lbl_tail_m in
@@ -150,9 +148,7 @@ let encode_pattern (pattern : pattern) : pattern m =
       |> Ident_map.add lbl_head @@ Some hd_var
       |> Ident_map.add lbl_tail @@ Some tl_var
     in
-    let new_pattern = RecPat new_lbls in
-    let%bind () = add_natodefa_pattern_mapping new_pattern pattern in
-    return new_pattern
+    return @@ RecPat new_lbls
   (* Encode variant patterns *)
   | VariantPat (v_label, v_var) ->
     let Variant_label (v_name) = v_label in
@@ -168,9 +164,7 @@ let encode_pattern (pattern : pattern) : pattern m =
       |> Ident_map.add variant_lbl None
       |> Ident_map.add value_lbl (Some v_var)
     in
-    let new_pattern = RecPat record in
-    let%bind () = add_natodefa_pattern_mapping new_pattern pattern in
-    return new_pattern
+    return @@ RecPat record
   (* All other patterns: don't encode *)
   | AnyPat | IntPat | BoolPat | FunPat | RecPat _ | VarPat _ ->
     return pattern

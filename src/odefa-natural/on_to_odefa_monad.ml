@@ -56,12 +56,6 @@ module TranslationMonad : sig
   (** Map a natodefa expression to another natodefa expression *)
   val add_natodefa_expr_mapping : On_ast.expr -> On_ast.expr -> unit m
 
-  val add_odefa_natodefa_labels_mapping :
-    Ast.Ident_set.t -> (On_ast.ident option On_ast.Ident_map.t) -> unit m
-
-  val add_natodefa_pattern_mapping :
-    On_ast.pattern -> On_ast.pattern -> unit m
-
   val add_natodefa_var_mapping : On_ast.ident -> On_ast.ident -> unit m
 
   val add_natodefa_type_mapping : On_ast.Ident_set.t -> on_type_sig -> unit m
@@ -151,18 +145,6 @@ end = struct
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
       <- Odefa_natodefa_mappings.add_on_expr_to_expr_mapping odefa_on_maps k_expr v_expr
-  ;;
-
-  let add_odefa_natodefa_labels_mapping k_lbls v_pat ctx =
-    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
-    ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_odefa_on_lbls_mapping odefa_on_maps k_lbls v_pat
-  ;;
-
-  let add_natodefa_pattern_mapping k_pat v_pat ctx =
-    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
-    ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_on_pat_to_pat_mapping odefa_on_maps k_pat v_pat
   ;;
 
   let add_natodefa_var_mapping k_var v_var ctx =

@@ -516,7 +516,6 @@ let flatten_pattern
       |> Enum.map on_to_odefa_ident
       |> Ast.Ident_set.of_enum
     in
-    let%bind () = add_odefa_natodefa_labels_mapping rec_pat' rec_pat in
     let%bind projections =
       rec_pat
       |> On_ast.Ident_map.enum
