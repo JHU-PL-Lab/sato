@@ -894,19 +894,27 @@ and flatten_expr
     return (all_clauses, assert_result)
 ;;
 
-let debug_transform
-    (name : string)
-    (transform : On_ast.expr -> On_ast.expr m)
-    (e : On_ast.expr)
+let debug_transform_on
+    (trans_name : string)
+    (transform : 'a -> On_ast.expr m)
+    (e : 'a)
   : On_ast.expr m =
-  let open On_ast_pp in
-  lazy_logger `trace @@ (fun () ->
-      Printf.sprintf "%s on:\n%s" name (show_expr e));
-  let%bind answer = transform e in
-  lazy_logger `trace @@ (fun () ->
-      Printf.sprintf "%s on:\n%s\nproduces\n%s"
-        name (show_expr e) (show_expr answer));
-  return answer
+  let%bind e' = transform e in
+  lazy_logger `debug (fun () ->
+    Printf.sprintf "Result of %s:\n%s" trans_name (On_ast_pp.show_expr e'));
+  return e'
+;;
+
+let debug_transform_odefa
+    (trans_name : string)
+    (transform : 'a -> Ast.clause list m)
+    (e : 'a)
+  : Ast.clause list m =
+    let%bind c_list = transform e in
+    let e' = Ast.Expr c_list in
+    lazy_logger `debug (fun () ->
+      Printf.sprintf "Result of %s:\n%s" trans_name (Ast_pp.show_expr e'));
+    return c_list
 ;;
 
 let translate
@@ -915,28 +923,43 @@ let translate
     (e : On_ast.expr)
   : (Ast.expr * Odefa_natodefa_mappings.t) =
   let (e_m_with_info : (Ast.expr * Odefa_natodefa_mappings.t) m) =
-    let%bind transformed_e =
-      return e
-      (* >>= debug_transform "pre-alphatize" alphatize *)
-      >>= debug_transform "preliminary encoding" preliminary_encode_expr
-      >>= debug_transform "post-alphatize" alphatize
+    (* Odefa transformations *)
+    let flatten e : Ast.clause list m =
+      let%bind (c_list, _) = flatten_expr e in
+      return c_list
     in
-    let%bind (c_list, _) = flatten_expr transformed_e in
-    let%bind c_list = (* NEW! *)
+    let instrument c_list : Ast.clause list m =
       if is_instrumented then
-        Odefa_instrumentation.instrument_clauses c_list else return c_list
+        Odefa_instrumentation.instrument_clauses c_list
+      else
+        return c_list
     in
-    let Clause(last_var, _) = List.last c_list in
-    let%bind fresh_str = freshness_string in
-    let res_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
-    let res_clause = Ast.Clause(res_var, Ast.Var_body(last_var)) in
+    let append_res_var c_list : Ast.clause list m =
+      let Ast.Clause(last_var, _) = List.last c_list in
+      let%bind fresh_str = freshness_string in
+      let res_var = Ast.Var (Ident(fresh_str ^ "result"), None) in
+      let res_clause = Ast.Clause(res_var, Var_body(last_var)) in
+      return (c_list @ [res_clause])
+    in
+    (* Translation sequence *)
+    lazy_logger `debug (fun () ->
+      Printf.sprintf "Initial program:\n%s" (On_ast_pp.show_expr e));
+    let%bind translation_result =
+      return e
+      >>= debug_transform_on "desugaring" preliminary_encode_expr
+      >>= debug_transform_on "alphatizing" alphatize
+      >>= debug_transform_odefa "flatteing" flatten
+      >>= debug_transform_odefa "instrumentation" instrument
+      >>= debug_transform_odefa "adding ~result" append_res_var
+    in
     let%bind odefa_on_maps = odefa_natodefa_maps in
     lazy_logger `debug (fun () ->
       Printf.sprintf "Odefa to natodefa maps:\n%s"
         (Odefa_natodefa_mappings.show odefa_on_maps)
     );
-    return (Ast.Expr(c_list @ [res_clause]), odefa_on_maps)
+    return (Ast.Expr translation_result, odefa_on_maps)
   in
+  (* Set up context and run *)
   let context =
     match translation_context with
     | None -> new_translation_context ()

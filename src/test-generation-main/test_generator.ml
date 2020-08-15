@@ -43,8 +43,6 @@ let () =
         exit 1
     end
   in
-  lazy_logger `debug (fun () ->
-    Printf.sprintf "Program:\n%s" (Ast_pp.show_expr ast));
   (* Check well-formedness of AST *)
   begin
     try

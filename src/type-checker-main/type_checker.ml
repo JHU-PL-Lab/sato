@@ -43,8 +43,6 @@ let run_odefa
       Odefa_instrumentation.instrument_odefa
         @@ File.with_file_in filename Parser.parse_program
     in
-    lazy_logger `debug (fun () ->
-      Printf.sprintf "Translated program:\n%s" (Ast_pp.show_expr odefa_ast));
     Ast_wellformedness.check_wellformed_expr odefa_ast;
     (* Prepare and create generator *)
     Ans.set_odefa_natodefa_map on_odefa_maps;

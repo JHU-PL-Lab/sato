@@ -270,14 +270,19 @@ let rec instrument_clauses
 let instrument_odefa (odefa_ast : expr) : (expr * Odefa_natodefa_mappings.t) =
   let (monad_val : (expr * Odefa_natodefa_mappings.t) m) =
     (* Transform odefa program *)
+    lazy_logger `debug (fun () ->
+      Printf.sprintf "Initial program:\n%s" (Ast_pp.show_expr odefa_ast));
     let Expr(odefa_clist) = odefa_ast in
     let%bind trans_clist = instrument_clauses odefa_clist in
+    lazy_logger `debug (fun () ->
+      Printf.sprintf "Result of instrumentation:\n%s"
+        (Ast_pp.show_expr (Expr trans_clist))
+    );
     (* Add "~result" to the end of the program *)
     let Clause(last_var, _) = List.last trans_clist in
     let%bind fresh_str = freshness_string in
     let result_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
     let result_clause = Ast.Clause(result_var, Ast.Var_body(last_var)) in
-    (* lazy_logger `debug (fun () -> Printf.sprintf "Map size: %d" (Ident_map.cardinal inst_map_2)); *)
     let%bind on_odefa_maps = odefa_natodefa_maps in
     return (Expr(trans_clist @ [result_clause]), on_odefa_maps)
   in
