@@ -9,13 +9,13 @@ open On_to_odefa_types;;
 open On_to_odefa_preliminary;;
 open On_to_odefa_monad;;
 
-(** In this module we will translate from odefa-natural to odefa in the
+(** In this module we will translate from natodefa to odefa in the
     following order:
 
-    * Alphatize program
     * Desugar let rec, lists, variants, and list/variant patterns
-    * Alphatize program again (to allow above to introduce dupes)
-    * Flatten odefa-natural expressions to odefa expressions
+    * Alphatize program again (do this after to allow above to introduce dupes)
+    * Flatten natodefa expressions to odefa expressions
+    * Instrument odefa with type/error constriants
 *)
 
 open TranslationMonad;;
@@ -34,12 +34,12 @@ let rec pat_vars (pat : On_ast.pattern) : On_ast.Ident_set.t =
     record
     |> Ident_map.enum
     |> Enum.fold
-        (fun idents (_, x_opt) ->
-          match x_opt with
-          | Some x -> Ident_set.add x idents
-          | None -> idents
-        )
-         Ident_set.empty
+      (fun idents (_, x_opt) ->
+        match x_opt with
+        | Some x -> Ident_set.add x idents
+        | None -> idents
+      )
+      Ident_set.empty
   | VariantPat (_, x) ->  Ident_set.singleton x
   | VarPat x ->  Ident_set.singleton x
   | EmptyLstPat ->  Ident_set.empty
@@ -459,14 +459,6 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
         let%bind e', seen_declared' = walk e seen_declared in
         return (Assert e', seen_declared')
     in
-    (*
-    let%bind () =
-      if not @@ equal_expr expr' expr then
-        add_natodefa_expr_mapping expr' expr
-      else
-        return ()
-    in
-    *)
     return (expr', seen_declared')
   in
   lift1 fst @@ walk e Ident_set.empty
@@ -878,7 +870,6 @@ and flatten_expr
     let add_var var_name =
       let%bind var = fresh_var var_name in
       let%bind () = add_odefa_natodefa_mapping var expr in
-      let%bind () = add_instrument_var var in
       return var
     in
     (* Variables *)
