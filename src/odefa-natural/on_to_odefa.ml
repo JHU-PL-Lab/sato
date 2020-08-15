@@ -742,7 +742,7 @@ and flatten_expr
     let%bind (e_clist, e_var) = flatten_expr e in
     let%bind true_var = fresh_var "true" in
     let%bind binop_var = fresh_var "binop" in
-    let%bind () = add_odefa_natodefa_mapping true_var expr in
+    let%bind () = add_odefa_natodefa_mapping true_var (Bool true) in
     let%bind () = add_odefa_natodefa_mapping binop_var expr in
     let binop = Ast.Binary_operator_xor in
     let true_body = Ast.Value_body(Value_bool true) in
