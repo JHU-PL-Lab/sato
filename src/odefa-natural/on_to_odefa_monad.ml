@@ -55,8 +55,10 @@ module TranslationMonad : sig
   (** Map a natodefa expression to another natodefa expression *)
   val add_natodefa_expr_mapping : On_ast.expr -> On_ast.expr -> unit m
 
+  (** Map a natodefa ident to another ident. *)
   val add_natodefa_var_mapping : On_ast.ident -> On_ast.ident -> unit m
 
+  (** Map a set of natodefa idents to a natodefa type. *)
   val add_natodefa_type_mapping : On_ast.Ident_set.t -> On_ast.type_sig -> unit m
 
   (** Retrieve the odefa-to-natodefa maps from the monad *)

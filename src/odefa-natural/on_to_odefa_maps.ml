@@ -49,11 +49,17 @@ type t = {
 
   (** Mapping between two natodefa expressions.  Used to create a
       mapping of natodefa lists and variants with their record
-      equivalents as their keys. *)
+      equivalents as their keys, as well as mappings between let recs and
+      their desugared versions. *)
   natodefa_expr_to_expr : Expr.t Expr_map.t;
 
+  (** Mapping between two natodefa idents.  Used to create a mapping from
+      post- to pre-alphatization variables. *)
   natodefa_var_to_var : On_ast.Ident.t On_ast.Ident_map.t;
 
+  (** Mapping between sets of natodefa idents and natodefa type sigs.  Used to
+      determine if a record was originally a list, variant, or record, depending
+      on its labels. *)
   natodefa_idents_to_types : On_ast.type_sig On_labels_map.t;
 }
 [@@ deriving show]
