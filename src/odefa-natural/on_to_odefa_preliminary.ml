@@ -13,12 +13,9 @@ let _lbl_m name =
   return @@ Ident (freshness ^ name)
 ;;
 
-(* Note: We have two labels in order to distinguish between list heads that
-   were added via consing from heads that were originally part of lists. *)
-
 let lbl_empty_m : Ident.t m = _lbl_m "empty";;
 let lbl_head_m : Ident.t m = _lbl_m "head";;
-let lbl_head_cons_m : Ident.t m = _lbl_m "head_cons";;
+let lbl_cons_m : Ident.t m = _lbl_m "cons";;
 let lbl_tail_m : Ident.t m = _lbl_m "tail";;
 let lbl_variant_m (s : string) : Ident.t m = _lbl_m ("variant_" ^ s);;
 let lbl_value_m : Ident.t m = _lbl_m "value";;
@@ -28,6 +25,16 @@ let list_expr_to_record recurse (expr_lst : expr list) =
   let%bind lbl_empty = lbl_empty_m in
   let%bind lbl_head = lbl_head_m in
   let%bind lbl_tail = lbl_tail_m in
+  (* Add appropriate types *)
+  let empty_list_lbls = Ident_set.singleton lbl_empty in
+  let nonempty_list_lbls =
+    Ident_set.empty
+    |> Ident_set.add lbl_head
+    |> Ident_set.add lbl_tail
+  in
+  let lst_type = On_to_odefa_types.ListType in
+  let%bind () = add_natodefa_type_mapping empty_list_lbls lst_type in
+  let%bind () = add_natodefa_type_mapping nonempty_list_lbls lst_type in
   (* Make record *)
   let list_maker element acc =
     let%bind clean_elm = recurse element in
@@ -55,16 +62,30 @@ let list_expr_to_record recurse (expr_lst : expr list) =
 *)
 let list_cons_expr_to_record recurse (expr : expr) (list_expr : expr) =
   (* Record labels *)
-  let%bind lbl_head_cons = lbl_head_cons_m in
+  (* Note: We need to add extra cons label to distinguish list cons from regular
+     lists *)
+  let%bind lbl_head = lbl_head_m in
+  let%bind lbl_cons = lbl_cons_m in
   let%bind lbl_tail = lbl_tail_m in
+  (* Add appropriate types *)
+  let lst_lbls =
+    Ident_set.empty
+    |> Ident_set.add lbl_head
+    |> Ident_set.add lbl_cons
+    |> Ident_set.add lbl_tail
+  in
+  let%bind () =
+    add_natodefa_type_mapping lst_lbls On_to_odefa_types.ListType
+  in
   (* Recurse over inner expr *)
   let%bind clean_expr = recurse expr in
   let%bind record_list = recurse list_expr in
   (* Make record *)
   let new_map =
     Ident_map.empty
-    |> Ident_map.add lbl_head_cons clean_expr
+    |> Ident_map.add lbl_head clean_expr
     |> Ident_map.add lbl_tail record_list
+    |> Ident_map.add lbl_cons (Record Ident_map.empty)
   in
   let record_equivalent = Record new_map in
   return record_equivalent
@@ -80,6 +101,14 @@ let variant_expr_to_record recurse
   let Variant_label v_name = v_label in
   let%bind lbl_variant = lbl_variant_m v_name in
   let%bind lbl_value = lbl_value_m in
+  (* Add appropriate types *)
+  let variant_lbl_set =
+    Ident_set.empty
+    |> Ident_set.add lbl_variant
+    |> Ident_set.add lbl_value
+  in
+  let variant_typ = On_to_odefa_types.VariantType v_label in
+  let%bind () = add_natodefa_type_mapping variant_lbl_set variant_typ in
   (* Recurse over inner expr *)
   let%bind encoded_v_expr = recurse v_expr in
   (* Make record *)
@@ -99,6 +128,11 @@ let encode_pattern (pattern : pattern) : pattern m =
     (* The empty list is encoded as {~empty = {}}
        The corresponding pattern is {~empty = None} *)
     let%bind lbl_empty = lbl_empty_m in
+    let%bind () =
+      add_natodefa_type_mapping
+        (Ident_set.singleton lbl_empty)
+        (On_to_odefa_types.ListType)
+    in
     let empty_rec = Ident_map.add lbl_empty None Ident_map.empty in
     let empty_rec_pat = RecPat empty_rec in
     let%bind () = add_natodefa_pattern_mapping empty_rec_pat pattern in
@@ -106,6 +140,11 @@ let encode_pattern (pattern : pattern) : pattern m =
   | LstDestructPat (hd_var, tl_var) ->
     let%bind lbl_head = lbl_head_m in
     let%bind lbl_tail = lbl_tail_m in
+    let%bind () =
+      add_natodefa_type_mapping
+        (Ident_set.empty |> Ident_set.add lbl_head |> Ident_set.add lbl_tail)
+        (On_to_odefa_types.ListType)
+    in
     let new_lbls =
       Ident_map.empty
       |> Ident_map.add lbl_head @@ Some hd_var
@@ -117,11 +156,19 @@ let encode_pattern (pattern : pattern) : pattern m =
   (* Encode variant patterns *)
   | VariantPat (v_label, v_var) ->
     let Variant_label (v_name) = v_label in
-    let%bind variant_ident = lbl_variant_m v_name in
-    let new_pat_lbls =
-      Ident_map.add variant_ident (Some v_var) Ident_map.empty
+    let%bind variant_lbl = lbl_variant_m v_name in
+    let%bind value_lbl = lbl_value_m in
+    let%bind () =
+      add_natodefa_type_mapping
+        (Ident_set.empty |> Ident_set.add variant_lbl |> Ident_set.add value_lbl)
+        (On_to_odefa_types.VariantType v_label)
     in
-    let new_pattern = RecPat new_pat_lbls in
+    let record =
+      Ident_map.empty
+      |> Ident_map.add variant_lbl None
+      |> Ident_map.add value_lbl (Some v_var)
+    in
+    let new_pattern = RecPat record in
     let%bind () = add_natodefa_pattern_mapping new_pattern pattern in
     return new_pattern
   (* All other patterns: don't encode *)

@@ -6,26 +6,16 @@ open Odefa_symbolic_interpreter;;
 
 (* **** Types in natodefa **** *)
 
-type on_type =
-  | TopType
-  | IntType
-  | BoolType
-  | FunType
-  | RecType of On_ast.Ident_set.t
-  | ListType
-  | VariantType of On_ast.variant_label
-;;
-
-let pp_on_type formatter on_type =
+let pp_on_type formatter (on_type : On_to_odefa_types.on_type_sig) =
   let open On_ast_pp in
   match on_type with
-  | TopType -> Format.pp_print_string formatter "any"
-  | IntType -> Format.pp_print_string formatter "integer"
-  | BoolType -> Format.pp_print_string formatter "boolean"
-  | FunType -> Format.pp_print_string formatter "function"
-  | ListType -> Format.pp_print_string formatter "list"
-  | RecType lbls -> pp_ident_set formatter lbls
-  | VariantType lbl -> Format.fprintf formatter "`%a" pp_variant_label lbl
+  | TopType -> Format.pp_print_string formatter "Any"
+  | IntType -> Format.pp_print_string formatter "Integer"
+  | BoolType -> Format.pp_print_string formatter "Boolean"
+  | FunType -> Format.pp_print_string formatter "Function"
+  | ListType -> Format.pp_print_string formatter "List"
+  | RecType lbls -> Format.fprintf formatter "Record %a" pp_ident_set lbls
+  | VariantType lbl -> Format.fprintf formatter "Variant %a" pp_variant_label lbl
 ;;
 
 let show_on_type = Pp_utils.pp_to_string pp_on_type;;
@@ -46,8 +36,8 @@ type error_match = {
   err_match_aliases : On_ast.ident list;
   err_match_expr : On_ast.expr;
   err_match_value : On_ast.expr;
-  err_match_expected : on_type;
-  err_match_actual : on_type;
+  err_match_expected : On_to_odefa_types.on_type_sig;
+  err_match_actual : On_to_odefa_types.on_type_sig;
 }
 
 type error_value = {
@@ -147,27 +137,6 @@ module Error_list : Error_list = struct
 end
 ;;
 
-let odefa_to_on_type
-    (odefa_type : Ast.type_sig)
-  : on_type =
-  match odefa_type with
-  | Ast.Top_type -> TopType
-  | Ast.Int_type -> IntType
-  | Ast.Bool_type -> BoolType
-  | Ast.Fun_type -> FunType
-  | Ast.Rec_type lbls ->
-    let lbls' =
-      lbls
-      |> Ast.Ident_set.enum
-      |> Enum.map (fun (Ast.Ident id) -> On_ast.Ident id)
-      |> On_ast.Ident_set.of_enum
-    in
-    RecType lbls'
-  | Ast.Bottom_type ->
-    raise @@ Jhupllib.Utils.Invariant_failure
-      (Printf.sprintf "Bottom type not in natodefa")
-;;
-
 let odefa_to_on_binop
     (odefa_binop : Ast.binary_operator)
   : (On_ast.expr -> On_ast.expr -> On_ast.expr) =
@@ -213,6 +182,18 @@ let odefa_to_natodefa_error
         raise @@ Jhupllib.Utils.Invariant_failure "Can't have empty alias list!"
     in
     odefa_to_on_expr last_var
+  in
+  let odefa_to_on_type (typ : Ast.type_sig) : on_type_sig =
+    match typ with
+    | Ast.Top_type -> TopType
+    | Ast.Int_type -> IntType
+    | Ast.Bool_type -> BoolType
+    | Ast.Fun_type -> FunType
+    | Ast.Rec_type lbls ->
+      Odefa_natodefa_mappings.check_type_of_idents odefa_on_maps lbls
+    | Ast.Bottom_type ->
+      raise @@ Jhupllib.Utils.Invariant_failure
+        (Printf.sprintf "Bottom type not in natodefa")
   in
   (* Odefa to natodefa *)
   match odefa_err with

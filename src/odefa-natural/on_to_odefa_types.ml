@@ -5,6 +5,17 @@ open Odefa_ast;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "On_to_odefa_types";;
 
+type on_type_sig =
+  | TopType
+  | IntType
+  | BoolType
+  | FunType
+  | RecType of On_ast.Ident_set.t
+  | ListType
+  | VariantType of On_ast.variant_label
+[@@ deriving eq, ord, show]
+;;
+
 module Expr = struct
   include On_ast.Expr;;
   let pp = On_ast_pp.pp_expr;;
@@ -33,6 +44,12 @@ module Record_map = struct
   module M = Map.Make(Ast.Ident_set);;
   include M;;
   include Pp_utils.Map_pp(M)(Ast.Ident_set);;
+end;;
+
+module On_labels_map = struct
+  module M = Map.Make(On_ast.Ident_set);;
+  include M;;
+  include Pp_utils.Map_pp(M)(On_ast.Ident_set);;
 end;;
 
 module Odefa_natodefa_mappings : sig
@@ -72,6 +89,8 @@ module Odefa_natodefa_mappings : sig
     odefa_lbls_to_natodefa_pat : (On_ast.Ident.t option On_ast.Ident_map.t) Record_map.t;
 
     natodefa_pat_to_pat : Pattern.t Pattern_map.t;
+
+    natodefa_idents_to_types : on_type_sig On_labels_map.t;
   }
   [@@ deriving eq, ord, show]
   ;;
@@ -95,6 +114,8 @@ module Odefa_natodefa_mappings : sig
 
   val add_on_var_to_var_mapping : t -> On_ast.ident -> On_ast.ident -> t;;
 
+  val add_on_idents_to_type_mapping : t -> On_ast.Ident_set.t -> on_type_sig -> t;;
+
   (* *** Getter functions *** *)
 
   (** Get an odefa clause that existed before the odefa program was
@@ -105,6 +126,8 @@ module Odefa_natodefa_mappings : sig
   val get_pre_inst_equivalent_clause : t -> Ast.ident -> Ast.clause;;
 
   val get_natodefa_equivalent_expr : t -> Ast.ident -> On_ast.expr;;
+
+  val check_type_of_idents : t -> Ast.Ident_set.t -> on_type_sig;;
 
 end = struct
   module Odefa_clause = struct
@@ -121,6 +144,7 @@ end = struct
     natodefa_var_to_var : On_ast.Ident.t On_ast.Ident_map.t;
     odefa_lbls_to_natodefa_pat : (On_ast.Ident.t option On_ast.Ident_map.t) Record_map.t;
     natodefa_pat_to_pat : Pattern.t Pattern_map.t;
+    natodefa_idents_to_types : on_type_sig On_labels_map.t;
   }
   [@@ deriving eq, ord, show]
   ;;
@@ -133,6 +157,7 @@ end = struct
     natodefa_var_to_var = On_ast.Ident_map.empty;
     odefa_lbls_to_natodefa_pat = Record_map.empty;
     natodefa_pat_to_pat = Pattern_map.empty;
+    natodefa_idents_to_types = On_labels_map.empty;
   }
   ;;
 
@@ -189,6 +214,14 @@ end = struct
     { mappings with
       natodefa_var_to_var =
         On_ast.Ident_map.add var1 var2 natodefa_var_map
+    }
+  ;;
+
+  let add_on_idents_to_type_mapping mappings idents type_sig =
+    let natodefa_idents_type_map = mappings.natodefa_idents_to_types in
+    { mappings with
+      natodefa_idents_to_types =
+        On_labels_map.add idents type_sig natodefa_idents_type_map
     }
   ;;
 
@@ -387,4 +420,17 @@ end = struct
     in
     let natodefa_rec_pat = On_ast.RecPat natodefa_lbls in
   *)
+
+  let check_type_of_idents mappings odefa_idents =
+    let on_idents =
+      odefa_idents
+      |> Ast.Ident_set.enum
+      |> Enum.map (fun (Ast.Ident lbl) -> On_ast.Ident lbl)
+      |> On_ast.Ident_set.of_enum
+    in
+    let on_idents_type_map = mappings.natodefa_idents_to_types in
+    match On_labels_map.Exceptionless.find on_idents on_idents_type_map with
+    | Some typ -> typ
+    | None -> RecType on_idents
+  ;;
 end;;
