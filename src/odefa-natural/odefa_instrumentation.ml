@@ -4,8 +4,6 @@ open Jhupllib;;
 open Odefa_ast;;
 open Ast;;
 
-open On_to_odefa_types;;
-
 open On_to_odefa_monad.TranslationMonad;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "Type_instrumentation";;
@@ -267,8 +265,8 @@ let rec instrument_clauses
   | [] -> return []
 ;;
 
-let instrument_odefa (odefa_ast : expr) : (expr * Odefa_natodefa_mappings.t) =
-  let (monad_val : (expr * Odefa_natodefa_mappings.t) m) =
+let instrument_odefa (odefa_ast : expr) : (expr * On_to_odefa_maps.t) =
+  let (monad_val : (expr * On_to_odefa_maps.t) m) =
     (* Transform odefa program *)
     lazy_logger `debug (fun () ->
       Printf.sprintf "Initial program:\n%s" (Ast_pp.show_expr odefa_ast));

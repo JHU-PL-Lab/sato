@@ -9,7 +9,6 @@ open Odefa_symbolic_interpreter.Interpreter_types;;
 open Odefa_symbolic_interpreter.Interpreter;;
 
 open Odefa_natural;;
-open On_to_odefa_types;;
 
 (* let lazy_logger = Jhupllib.Logger_utils.make_lazy_logger "Generator_answer";; *)
 
@@ -19,7 +18,7 @@ module type Answer = sig
   type t;;
   val answer_from_result : expr -> ident -> evaluation_result -> t;;
   val answer_from_string : string -> t;;
-  val set_odefa_natodefa_map : Odefa_natodefa_mappings.t -> unit;;
+  val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
   val show : t -> string;;
   val count : t -> int;;
   val count_list : t list -> int;;
@@ -71,7 +70,7 @@ module Input_sequence : Answer = struct
   ;;
 
   (* Unused for input sequence generation. *)
-  let set_odefa_natodefa_map (_ : Odefa_natodefa_mappings.t) = ();;
+  let set_odefa_natodefa_map (_ : On_to_odefa_maps.t) = ();;
 
   let show inputs_opt =
     match inputs_opt with
@@ -118,32 +117,33 @@ module Type_errors : Answer = struct
   (* **** Remove variables added during instrumentation **** *)
 
   let remove_instrument_vars_error
-      (odefa_on_maps : Odefa_natodefa_mappings.t)
+      (odefa_on_maps : On_to_odefa_maps.t)
       (error : error)
     : error =
     match error with
     | Error_binop err ->
       begin
-        let instrument_vars = odefa_on_maps.odefa_instrument_vars_map in
         let binop_cls = err.err_binop_clause in
         let left_aliases = err.err_binop_left_aliases in
         let right_aliases = err.err_binop_right_aliases in
         let (Clause (Var (b_ident, _), _)) = binop_cls in
         let binop_cls' =
           try
-            Odefa_natodefa_mappings.get_pre_inst_equivalent_clause
+            On_to_odefa_maps.get_pre_inst_equivalent_clause
               odefa_on_maps b_ident
           with Not_found ->
             binop_cls
         in
         let left_aliases' =
           List.filter
-            (fun a -> not @@ Ident_map.mem a instrument_vars)
+            (fun a -> not @@
+              On_to_odefa_maps.is_var_instrumenting odefa_on_maps a)
             left_aliases
         in
         let right_aliases' =
           List.filter
-            (fun a -> not @@ Ident_map.mem a instrument_vars)
+            (fun a -> not @@
+              On_to_odefa_maps.is_var_instrumenting odefa_on_maps a)
             right_aliases
         in
         Error_binop {
@@ -155,18 +155,18 @@ module Type_errors : Answer = struct
       end
     | Error_match err ->
       begin
-        let instrument_vars = odefa_on_maps.odefa_instrument_vars_map in
         let match_cls = err.err_match_clause in
         let (Clause (Var (v_match, _), _)) = match_cls in
         let match_aliases = err.err_match_aliases in
         let match_aliases' =
           List.filter
             (* Stacks aren't set during instrumenting, so we're safe *)
-            (fun a -> not @@ Ident_map.mem a instrument_vars)
+            (fun a -> not @@
+              On_to_odefa_maps.is_var_instrumenting odefa_on_maps a)
             match_aliases
         in
         let match_cls' =
-          Odefa_natodefa_mappings.get_pre_inst_equivalent_clause
+          On_to_odefa_maps.get_pre_inst_equivalent_clause
             odefa_on_maps v_match
         in
         Error_match {
@@ -177,17 +177,17 @@ module Type_errors : Answer = struct
       end
     | Error_value err ->
       begin
-        let instrument_vars = odefa_on_maps.odefa_instrument_vars_map in
         let aliases = err.err_value_aliases in
         let val_clause = err.err_value_clause in
         let (Clause (Var (x, _), _)) = val_clause in
         let aliases' =
           List.filter
-            (fun a -> not @@ Ident_map.mem a instrument_vars)
+            (fun a -> not @@
+              On_to_odefa_maps.is_var_instrumenting odefa_on_maps a)
             aliases
         in
         let clause' =
-          Odefa_natodefa_mappings.get_pre_inst_equivalent_clause
+          On_to_odefa_maps.get_pre_inst_equivalent_clause
             odefa_on_maps x
         in
         Error_value {
@@ -199,7 +199,7 @@ module Type_errors : Answer = struct
   ;;
 
   let remove_instrument_vars
-      (odefa_on_maps : Odefa_natodefa_mappings.t)
+      (odefa_on_maps : On_to_odefa_maps.t)
       (error : t)
     : t =
     let rm_inst_var_fn = remove_instrument_vars_error odefa_on_maps in

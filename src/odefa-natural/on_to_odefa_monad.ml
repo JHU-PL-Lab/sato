@@ -1,15 +1,14 @@
 open Batteries;;
 
 open Odefa_ast;;
-open On_to_odefa_types;;
 
 type translation_context =
   { tc_fresh_suffix_separator : string;
     tc_contextual_recursion : bool;
     mutable tc_fresh_name_counter : int;
-    mutable tc_odefa_natodefa_mappings : Odefa_natodefa_mappings.t;
+    mutable tc_odefa_natodefa_mappings : On_to_odefa_maps.t;
   }
-[@@deriving eq, ord (*, show *)]
+(* [@@deriving eq, ord] *)
 ;;
 
 let new_translation_context
@@ -20,7 +19,7 @@ let new_translation_context
   { tc_fresh_name_counter = 0;
     tc_fresh_suffix_separator = suffix;
     tc_contextual_recursion = contextual_recursion;
-    tc_odefa_natodefa_mappings = Odefa_natodefa_mappings.empty;
+    tc_odefa_natodefa_mappings = On_to_odefa_maps.empty;
   }
 ;;
 
@@ -58,10 +57,10 @@ module TranslationMonad : sig
 
   val add_natodefa_var_mapping : On_ast.ident -> On_ast.ident -> unit m
 
-  val add_natodefa_type_mapping : On_ast.Ident_set.t -> on_type_sig -> unit m
+  val add_natodefa_type_mapping : On_ast.Ident_set.t -> On_ast.type_sig -> unit m
 
   (** Retrieve the odefa-to-natodefa maps from the monad *)
-  val odefa_natodefa_maps : Odefa_natodefa_mappings.t m
+  val odefa_natodefa_maps : On_to_odefa_maps.t m
 
   (** Retrieve the freshness string from the monad *)
   val freshness_string : string m
@@ -110,14 +109,14 @@ end = struct
     let (Ast.Var (i_key, _)) = v_key in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_odefa_var_clause_mapping odefa_on_maps i_key cls_val
+      <- On_to_odefa_maps.add_odefa_var_clause_mapping odefa_on_maps i_key cls_val
   ;;
 
   let add_instrument_var v ctx =
     let (Ast.Var (i, _)) = v in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_odefa_instrument_var odefa_on_maps i None
+      <- On_to_odefa_maps.add_odefa_instrument_var odefa_on_maps i None
   ;;
 
   let add_instrument_var_pair v_key v_val ctx =
@@ -125,38 +124,38 @@ end = struct
     let (Ast.Var (i_val, _)) = v_val in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_odefa_instrument_var odefa_on_maps i_key (Some i_val);
+      <- On_to_odefa_maps.add_odefa_instrument_var odefa_on_maps i_key (Some i_val);
   ;;
 
   let is_instrument_var v ctx =
     let (Ast.Var (i, _)) =  v in
-    let inst_vars = ctx.tc_odefa_natodefa_mappings.odefa_instrument_vars_map in
-    Ast.Ident_map.mem i inst_vars
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    On_to_odefa_maps.is_var_instrumenting odefa_on_maps i
   ;;
 
   let add_odefa_natodefa_mapping v_key e_val ctx =
     let (Ast.Var (i_key, _)) = v_key in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
       ctx.tc_odefa_natodefa_mappings
-        <- Odefa_natodefa_mappings.add_odefa_var_on_expr_mapping odefa_on_maps i_key e_val
+        <- On_to_odefa_maps.add_odefa_var_on_expr_mapping odefa_on_maps i_key e_val
   ;;
 
   let add_natodefa_expr_mapping k_expr v_expr ctx =
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_on_expr_to_expr_mapping odefa_on_maps k_expr v_expr
+      <- On_to_odefa_maps.add_on_expr_to_expr_mapping odefa_on_maps k_expr v_expr
   ;;
 
   let add_natodefa_var_mapping k_var v_var ctx =
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_on_var_to_var_mapping odefa_on_maps k_var v_var
+      <- On_to_odefa_maps.add_on_var_to_var_mapping odefa_on_maps k_var v_var
   ;;
 
   let add_natodefa_type_mapping k_idents v_type ctx =
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_on_idents_to_type_mapping odefa_on_maps k_idents v_type
+      <- On_to_odefa_maps.add_on_idents_to_type_mapping odefa_on_maps k_idents v_type
   ;;
 
   let odefa_natodefa_maps ctx =

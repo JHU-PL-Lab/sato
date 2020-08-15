@@ -2,7 +2,6 @@ open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
 open Odefa_natural;;
-open On_to_odefa_types;;
 
 exception Parse_failure;;
 
@@ -23,7 +22,7 @@ module type Answer = sig
   (** Set the odefa/natodefa mappings as a global, which will be needed to
       remove any variables added during instrumentation, convert from odefa
       back to natodefa, etc. *)
-  val set_odefa_natodefa_map : Odefa_natodefa_mappings.t -> unit;;
+  val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
 
   (** Convert the answer into a string. *)
   val show : t -> string;;

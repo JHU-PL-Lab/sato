@@ -6,7 +6,7 @@ open Odefa_symbolic_interpreter;;
 
 (* **** Types in natodefa **** *)
 
-let pp_on_type formatter (on_type : On_to_odefa_types.on_type_sig) =
+let pp_on_type formatter (on_type : On_ast.type_sig) =
   let open On_ast_pp in
   match on_type with
   | TopType -> Format.pp_print_string formatter "Any"
@@ -36,8 +36,8 @@ type error_match = {
   err_match_aliases : On_ast.ident list;
   err_match_expr : On_ast.expr;
   err_match_value : On_ast.expr;
-  err_match_expected : On_to_odefa_types.on_type_sig;
-  err_match_actual : On_to_odefa_types.on_type_sig;
+  err_match_expected : On_ast.type_sig;
+  err_match_actual : On_ast.type_sig;
 }
 
 type error_value = {
@@ -157,13 +157,12 @@ let odefa_to_on_binop
 ;;
 
 let odefa_to_natodefa_error
-    (odefa_on_maps : On_to_odefa_types.Odefa_natodefa_mappings.t)
+    (odefa_on_maps : On_to_odefa_maps.t)
     (odefa_err : Error.error)
   : error =
-  let open On_to_odefa_types in
   (* Helper functions *)
   let odefa_to_on_expr =
-    Odefa_natodefa_mappings.get_natodefa_equivalent_expr odefa_on_maps
+    On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps
   in
   let odefa_to_on_aliases (aliases : Ast.ident list) : On_ast.ident list =
     List.filter_map
@@ -183,14 +182,14 @@ let odefa_to_natodefa_error
     in
     odefa_to_on_expr last_var
   in
-  let odefa_to_on_type (typ : Ast.type_sig) : on_type_sig =
+  let odefa_to_on_type (typ : Ast.type_sig) : On_ast.type_sig =
     match typ with
     | Ast.Top_type -> TopType
     | Ast.Int_type -> IntType
     | Ast.Bool_type -> BoolType
     | Ast.Fun_type -> FunType
     | Ast.Rec_type lbls ->
-      Odefa_natodefa_mappings.check_type_of_idents odefa_on_maps lbls
+      On_to_odefa_maps.get_type_from_idents odefa_on_maps lbls
     | Ast.Bottom_type ->
       raise @@ Jhupllib.Utils.Invariant_failure
         (Printf.sprintf "Bottom type not in natodefa")

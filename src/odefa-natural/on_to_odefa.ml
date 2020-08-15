@@ -5,7 +5,6 @@ open Odefa_ast;;
 
 open Ast_tools;;
 
-open On_to_odefa_types;;
 open On_to_odefa_preliminary;;
 open On_to_odefa_monad;;
 
@@ -921,8 +920,8 @@ let translate
     ?translation_context:(translation_context=None)
     ?is_instrumented:(is_instrumented=false)
     (e : On_ast.expr)
-  : (Ast.expr * Odefa_natodefa_mappings.t) =
-  let (e_m_with_info : (Ast.expr * Odefa_natodefa_mappings.t) m) =
+  : (Ast.expr * On_to_odefa_maps.t) =
+  let (e_m_with_info : (Ast.expr * On_to_odefa_maps.t) m) =
     (* Odefa transformations *)
     let flatten e : Ast.clause list m =
       let%bind (c_list, _) = flatten_expr e in
@@ -955,7 +954,7 @@ let translate
     let%bind odefa_on_maps = odefa_natodefa_maps in
     lazy_logger `debug (fun () ->
       Printf.sprintf "Odefa to natodefa maps:\n%s"
-        (Odefa_natodefa_mappings.show odefa_on_maps)
+        (On_to_odefa_maps.show odefa_on_maps)
     );
     return (Ast.Expr translation_result, odefa_on_maps)
   in

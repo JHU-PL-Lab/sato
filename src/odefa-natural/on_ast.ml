@@ -75,3 +75,14 @@ module Pattern = struct
   let equal = equal_pattern;;
   let compare = compare_pattern;;
 end;;
+
+type type_sig =
+  | TopType
+  | IntType
+  | BoolType
+  | FunType
+  | RecType of Ident_set.t
+  | ListType
+  | VariantType of variant_label
+[@@ deriving eq, ord, show]
+;;
