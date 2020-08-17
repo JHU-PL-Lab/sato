@@ -300,3 +300,96 @@ let odefa_to_natodefa_error
       }
     end
 ;;
+
+(* **** Parse error from string **** *)
+
+exception Parse_failure of string;;
+
+let _parse_aliases alias_str =
+  alias_str
+  |> Str.split (Str.regexp "[ ]+=[ ]+")
+  |> List.map (fun str -> On_ast.Ident str)
+;;
+
+let _parse_expr expr_str =
+  let expr_lst =
+    try
+      On_parse.parse_expression_string expr_str
+    with On_parse.Parse_error _ ->
+      raise @@ Parse_failure (Printf.sprintf "Cannot parse clause %s" expr_str)
+  in
+  match expr_lst with
+  | [expr] -> expr
+  | [] -> raise @@ Parse_failure "Missing expression"
+  | _ -> raise @@ Parse_failure "More than one expression"
+;;
+
+let _parse_type_sig type_str =
+  let open On_ast in
+  match type_str with
+  | "int" | "integer" | "Integer" -> IntType
+  | "bool" | "boolean" | "Boolean" -> BoolType
+  | "fun" | "function" | "Function" -> FunType
+  | "rec" | "record" | "Record" -> RecType (Ident_set.empty)
+  | "list" | "List" -> ListType
+  | _ ->
+    let is_rec_str =
+      Str.string_match (Str.regexp "{.*}") type_str 0
+    in
+    let is_variant_str =
+      Str.string_match (Str.regexp "`.*") type_str 0
+    in
+    if is_rec_str then begin
+      let lbl_set =
+        type_str
+        |> String.lchop
+        |> String.rchop
+        |> Str.split (Str.regexp ",")
+        |> List.map String.trim
+        |> List.map (fun lbl -> Ident lbl)
+        |> Ident_set.of_list
+      in
+      RecType lbl_set
+    end else if is_variant_str then begin
+      VariantType (Variant_label (String.lchop type_str))
+    end else begin
+      raise @@ Parse_failure (Printf.sprintf "Cannot parse type %s" type_str)
+    end
+;;
+
+let parse_error error_str =
+  let args_list =
+    error_str
+    |> String.trim
+    |> String.lchop
+    |> String.rchop
+    |> Str.split (Str.regexp "\[ ]*\"")
+  in
+  match args_list with
+  | [err_str; l_alias_str; l_val_str; r_alias_str; r_val_str; op_str; expr_str]
+    when String.equal err_str "binop" ->
+    Error_binop {
+      err_binop_left_aliases = _parse_aliases l_alias_str;
+      err_binop_right_aliases = _parse_aliases r_alias_str;
+      err_binop_left_value = _parse_expr l_val_str;
+      err_binop_right_value = _parse_expr r_val_str;
+      err_binop_constraint = _parse_expr op_str;
+      err_binop_expr = _parse_expr expr_str;
+    }
+  | [err_str; alias_str; val_str; expr_str; expected_str; actual_str]
+    when String.equal err_str "match" ->
+    Error_match {
+      err_match_aliases = _parse_aliases alias_str;
+      err_match_value = _parse_expr val_str;
+      err_match_expr = _parse_expr expr_str;
+      err_match_expected = _parse_type_sig expected_str;
+      err_match_actual = _parse_type_sig actual_str;
+    }
+  | [err_str; alias_str; val_str; expr_str]
+    when String.equal err_str "value" ->
+    Error_value {
+      err_value_aliases = _parse_aliases alias_str;
+      err_value_val = _parse_expr val_str;
+      err_value_expr = _parse_expr expr_str;
+    }
+  | _ -> raise @@ Parse_failure "Missing or spurious arguments"
