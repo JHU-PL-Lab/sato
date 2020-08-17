@@ -15,13 +15,38 @@ exception TypeCheckComplete;;
 
 exception GenerationComplete;;
 
-module Type_error_generator = Generator.Make(Generator_answer.Type_errors);;
-module Ans = Type_error_generator.Answer;;
+let parse_program
+    (args: Type_checker_parser.type_checker_args) 
+  : (Ast.expr * On_to_odefa_maps.t) =
+  let filename = args.tc_filename in
+  match Filename.extension filename with
+  | ".natodefa" ->
+    begin
+      let natodefa_ast = File.with_file_in filename On_parse.parse_program in
+      let (odefa_ast, on_odefa_maps) =
+        On_to_odefa.translate ~is_instrumented:true natodefa_ast
+      in
+      Ast_wellformedness.check_wellformed_expr odefa_ast;
+      (odefa_ast, on_odefa_maps)
+    end
+  | ".odefa" ->
+    begin
+      let pre_inst_ast = File.with_file_in filename Parser.parse_program in
+      let (odefa_ast, on_odefa_maps) =
+        Odefa_instrumentation.instrument_odefa pre_inst_ast
+      in
+      Ast_wellformedness.check_wellformed_expr odefa_ast;
+      (odefa_ast, on_odefa_maps)
+    end
+  | _ ->
+    raise @@ Invalid_argument
+      (Printf.sprintf "Filetype %s not supported" filename)
+;;
 
-module Natodefa_type_error_generator = Generator.Make(Generator_answer.Natodefa_type_errors);;
-module On_ans = Natodefa_type_error_generator.Answer;;
-
-let print_results (is_completed : bool) (total_errors : int) : unit =
+let print_results
+    (is_completed : bool)
+    (total_errors : int)
+  : unit =
   (* Display number of type errors. *)
   if total_errors = 0 then
     print_endline "No errors found."
@@ -34,25 +59,23 @@ let print_results (is_completed : bool) (total_errors : int) : unit =
     print_endline "Further control flows may exist."
 ;;
 
-let run_odefa
-    (filename : string)
-    (args : Type_checker_parser.type_checker_args) =
-  (* Parse AST *)
+let run_error_check
+    (module Error_generator : Generator.Generator)
+    (args : Type_checker_parser.type_checker_args)
+    (on_odefa_maps : On_to_odefa_maps.t)
+    (expr : Ast.expr)
+  : unit =
+  let module Ans = Error_generator.Answer in
+  Ans.set_odefa_natodefa_map on_odefa_maps;
   try
-    let (odefa_ast, on_odefa_maps) =
-      Odefa_instrumentation.instrument_odefa
-        @@ File.with_file_in filename Parser.parse_program
-    in
-    Ast_wellformedness.check_wellformed_expr odefa_ast;
     (* Prepare and create generator *)
-    Ans.set_odefa_natodefa_map on_odefa_maps;
     let results_remaining = ref args.tc_maximum_results in
     let total_errors = ref 0 in
     let generator =
-      Type_error_generator.create
+      Error_generator.create
         ~exploration_policy:args.tc_exploration_policy
         args.tc_generator_configuration
-        odefa_ast
+        expr
         args.tc_target_var
     in
     let generation_callback
@@ -69,111 +92,30 @@ let run_odefa
     (* Run generator *)
     try
       let _, generator_opt =
-        Type_error_generator.generate_answers
+        Error_generator.generate_answers
           ~generation_callback:generation_callback
           args.tc_maximum_steps
           generator
       in
       print_results (Option.is_none generator_opt) (!total_errors);
     with GenerationComplete ->
-      print_endline "Type errors found; terminating";
-  with
-  | Sys_error err ->
-    begin
-      prerr_endline err;
-      exit 1
-    end
-  | Ast_wellformedness.Illformedness_found ills ->
-    begin
-      print_endline "Program is ill_formed.";
-      let print_ill ill =
-        print_string "* ";
-        print_endline @@ Ast_wellformedness.show_illformedness ill;
-      in
-      List.iter print_ill ills;
-      exit 1
-    end
-  | Odefa_symbolic_interpreter.Interpreter.Invalid_query msg ->
+      print_endline "Errors found; terminating";
+  (* Exception for when the user inputs a target var not in the program *)
+  with Odefa_symbolic_interpreter.Interpreter.Invalid_query msg ->
     prerr_endline msg
 ;;
-
-let run_natodefa
-    (filename : string)
-    (args : Type_checker_parser.type_checker_args) =
-  try
-    (* Parse AST *)
-    let natodefa_ast =
-      File.with_file_in filename On_parse.parse_program
-    in
-    let (odefa_ast, on_odefa_maps) =
-      On_to_odefa.translate ~is_instrumented:true natodefa_ast
-    in
-    lazy_logger `debug (fun () ->
-      Printf.sprintf "Translated program:\n%s" (Ast_pp.show_expr odefa_ast));
-    Ast_wellformedness.check_wellformed_expr odefa_ast;
-    (* Prepare and create generator *)
-    On_ans.set_odefa_natodefa_map on_odefa_maps;
-    let results_remaining = ref args.tc_maximum_results in
-    let total_errors = ref 0 in
-    let generator =
-      Natodefa_type_error_generator.create
-        ~exploration_policy:args.tc_exploration_policy
-        args.tc_generator_configuration
-        odefa_ast
-        args.tc_target_var
-    in
-    let generation_callback
-      (type_errors : On_ans.t) (steps: int) : unit =
-      let _ = steps in (* Temp *)
-      print_endline (On_ans.show type_errors);
-      flush stdout;
-      total_errors := !total_errors + On_ans.count type_errors;
-      results_remaining := (Option.map (fun n -> n - 1) !results_remaining);
-      if !results_remaining = Some 0 then begin
-        raise GenerationComplete
-      end;
-    in
-    (* Run generator *)
-    try
-      let _, generator_opt =
-        Natodefa_type_error_generator.generate_answers
-          ~generation_callback:generation_callback
-          args.tc_maximum_steps
-          generator
-      in
-      print_results (Option.is_none generator_opt) (!total_errors);
-    with GenerationComplete ->
-      print_endline "Type errors found; terminating";
-  with
-  | Sys_error err ->
-    begin
-      prerr_endline err;
-      exit 1
-    end
-  | Ast_wellformedness.Illformedness_found ills ->
-    begin
-      print_endline "Program is ill_formed.";
-      let print_ill ill =
-        print_string "* ";
-        print_endline @@ Ast_wellformedness.show_illformedness ill;
-      in
-      List.iter print_ill ills;
-      exit 1
-    end
-  | Odefa_symbolic_interpreter.Interpreter.Invalid_query msg ->
-    prerr_endline msg
-
 
 (* TODO: Add variable of operation where type error occured *)
 let () =
   let args = Type_checker_parser.parse_args () in
-  let filename : string = args.tc_filename in
-  let is_natodefa = Filename.extension filename = ".natodefa" in
-  let is_odefa = Filename.extension filename = ".odefa" in
-  if is_natodefa then
-    run_natodefa filename args
-  else if is_odefa then
-    run_odefa filename args
-  else
-    raise @@ Invalid_argument "Filetype not supported"
+  let (odefa_expr, on_odefa_maps) = parse_program args in
+  let error_generator =
+    if On_to_odefa_maps.is_natodefa on_odefa_maps then
+      (module Generator.Make(Generator_answer.Natodefa_type_errors)
+        : Generator.Generator)
+    else
+      (module Generator.Make(Generator_answer.Type_errors)
+        : Generator.Generator)
+  in
+  run_error_check error_generator args on_odefa_maps odefa_expr
 ;;
