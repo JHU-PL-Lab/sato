@@ -1,8 +1,8 @@
 open Batteries;;
+open Jhupllib;;
 
 open Odefa_ast;;
 open Ast;;
-open Ast_pp;;
 
 (* open Constraint;; *)
 
@@ -16,7 +16,7 @@ type error_binop = {
   err_binop_left_aliases : ident list;
   err_binop_right_aliases : ident list;
 }
-[@@ deriving eq, show]
+[@@ deriving eq]
 ;;
 
 type error_match = {
@@ -26,7 +26,7 @@ type error_match = {
   err_match_expected_type : type_sig;
   err_match_actual_type : type_sig;
 }
-[@@ deriving eq, show]
+[@@ deriving eq]
 ;;
 
 type error_value = {
@@ -34,15 +34,167 @@ type error_value = {
   err_value_val : clause_body;
   err_value_clause : clause;
 }
-[@@ deriving eq, show]
+[@@ deriving eq]
 ;;
 
 type error =
   | Error_binop of error_binop
   | Error_match of error_match
   | Error_value of error_value
-  [@@ deriving eq, show]
+  [@@ deriving eq]
 ;;
+
+(* **** Pretty-print error **** *)
+
+let pp_alias_list formatter aliases =
+  Pp_utils.pp_concat_sep
+    "="
+    (fun formatter x -> Ast_pp.pp_ident formatter x)
+    formatter
+    (List.enum aliases)
+;;
+
+let pp_error_binop formatter err =
+  let open Ast_pp in
+  let pp_left_value formatter err =
+    let l_aliases = err.err_binop_left_aliases in
+    let l_value = err.err_binop_left_val in
+    if (List.length l_aliases) > 0 then
+      Format.fprintf formatter
+        "@[* Left Value  : @[%a@ =@ %a@]@]@,"
+        pp_alias_list l_aliases
+        pp_clause_body l_value
+    else
+      Format.pp_print_string formatter ""
+  in
+  let pp_right_value formatter err =
+    let r_aliases = err.err_binop_right_aliases in
+    let r_value = err.err_binop_right_val in
+    if (List.length r_aliases) > 0 then
+      Format.fprintf formatter
+        "@[* Right Value : @[%a@ =@ %a@]@]@,"
+        pp_alias_list r_aliases
+        pp_clause_body r_value
+    else
+      Format.pp_print_string formatter ""
+  in
+  let pp_constraint formatter err =
+    let l_value = err.err_binop_left_val in
+    let r_value = err.err_binop_right_val in
+    let op = err.err_binop_operation in
+    let l_alias_opt = List.Exceptionless.hd err.err_binop_left_aliases in
+    let r_alias_opt = List.Exceptionless.hd err.err_binop_right_aliases in
+    match (l_alias_opt, r_alias_opt) with
+    | (Some l_alias, Some r_alias) ->
+      Format.fprintf formatter
+        "@[* Constraint  : @[%a@ %a@ %a@]@]@,"
+        pp_ident l_alias
+        pp_binary_operator op
+        pp_ident r_alias
+    | (None, Some r_alias) ->
+      Format.fprintf formatter
+        "@[* Constraint  : @[%a@ %a@ %a@]@]@,"
+        pp_clause_body l_value
+        pp_binary_operator op
+        pp_ident r_alias
+    | (Some l_alias, None) ->
+      Format.fprintf formatter
+        "@[* Constraint  : @[%a@ %a@ %a@]@]@,"
+        pp_ident l_alias
+        pp_binary_operator op
+        pp_clause_body r_value
+    | (None, None) ->
+      Format.fprintf formatter
+        "@[* Constraint  : @[%a@ %a@ %a@]@]@,"
+        pp_clause_body l_value
+        pp_binary_operator op
+        pp_clause_body r_value
+  in
+  let pp_clause formatter err =
+    Format.fprintf formatter
+      "@[* Clause      : @[%a@]@]"
+      pp_clause err.err_binop_clause
+  in
+  Format.fprintf formatter
+    "@[<v 0>%a%a%a%a@]"
+    pp_left_value err
+    pp_right_value err
+    pp_constraint err
+    pp_clause err
+;;
+
+let pp_error_match formatter err =
+  let open Ast_pp in
+  let pp_value formatter err =
+    let aliases = err.err_match_aliases in
+    let value = err.err_match_value in
+    if not @@ List.is_empty aliases then
+      Format.fprintf formatter 
+        "@[* Value    : @[%a@ =@ %a@]@]@,"
+        pp_alias_list aliases
+        pp_clause_body value
+    else
+      Format.fprintf formatter 
+        "@[* Value    : @[%a@]@]@,"
+        pp_clause_body value
+  in
+  let pp_clause formatter err =
+    Format.fprintf formatter
+      "@[* Clause   : @[%a@]@]@,"
+      pp_clause err.err_match_clause
+  in
+  let pp_expected formatter err =
+    Format.fprintf formatter
+      "@[* Expected : @[%a@]@]@,"
+      pp_type_sig err.err_match_expected_type
+  in
+  let pp_actual formatter err =
+    Format.fprintf formatter
+      "@[* Actual   : @[%a@]@]"
+      pp_type_sig err.err_match_actual_type
+  in
+  Format.fprintf formatter
+    "@[<v 0>%a%a%a%a@]"
+    pp_value err
+    pp_clause err
+    pp_expected err
+    pp_actual err
+;;
+
+let pp_error_value formatter err =
+  let open Ast_pp in
+  let pp_value formatter err =
+    let aliases = err.err_value_aliases in
+    let value = err.err_value_val in
+    if not @@ List.is_empty aliases then
+      Format.fprintf formatter 
+        "@[* Value    : @[%a@ =@ %a@]@]@,"
+        pp_alias_list aliases
+        pp_clause_body value
+    else
+      Format.fprintf formatter 
+        "@[* Value    : @[%a@]@]@,"
+        pp_clause_body value
+  in
+  let pp_clause formatter err =
+    Format.fprintf formatter
+      "@[* Clause   : @[%a@]@]"
+      pp_clause err.err_value_clause
+  in
+  Format.fprintf formatter
+    "@[<v 0>%a%a@]"
+    pp_value err
+    pp_clause err
+;;
+
+let pp formatter error =
+  match error with
+  | Error_binop err -> pp_error_binop formatter err
+  | Error_match err -> pp_error_match formatter err
+  | Error_value err -> pp_error_value formatter err
+;;
+
+let show = Pp_utils.pp_to_string pp;;
 
 exception Parse_failure of string;;
 
@@ -66,10 +218,7 @@ module Error_tree : Error_tree = struct
     | Node of t * t
     | Error of error
     | Empty
-    [@@ deriving show]
   ;;
-
-  let _ = show;;
 
   let singleton error = Error error;;
 
@@ -120,89 +269,9 @@ module Error_tree : Error_tree = struct
     | Empty -> []
   ;;
 
-  let error_to_string error =
-    match error with
-    | Error_value value_err ->
-      begin
-        let alias_str =
-          value_err.err_value_aliases
-          |> List.map show_ident
-          |> String.join " = "
-        in
-        "* Value  : " ^ alias_str ^ " = " ^ (show_clause_body value_err.err_value_val) ^ "\n" ^
-        "* Clause : " ^ (show_clause value_err.err_value_clause)
-      end
-    | Error_binop binop_err ->
-      begin
-        let l_aliases = binop_err.err_binop_left_aliases in
-        let r_aliases = binop_err.err_binop_right_aliases in
-        let l_val = binop_err.err_binop_left_val in
-        let r_val = binop_err.err_binop_right_val in
-        let (left_str, l_aliases_str_opt) =
-          let l_val_str = show_clause_body l_val in
-          let l_alias_str = String.join " = " @@ List.map show_ident l_aliases in
-          if List.length l_aliases > 0 then
-            (show_ident @@ List.first l_aliases, Some (l_alias_str ^ " = " ^ l_val_str))
-          else
-            (l_val_str, None)
-        in
-        let op_str =
-          show_binary_operator binop_err.err_binop_operation
-        in
-        let (right_str, r_aliases_str_opt) =
-          let r_val_str = show_clause_body r_val in
-          let r_alias_str = String.join " = " @@ List.map show_ident r_aliases in
-          if List.length r_aliases > 0 then
-            (show_ident @@ List.first r_aliases, Some (r_alias_str ^ " = " ^ r_val_str))
-          else
-            (r_val_str, None)
-        in
-        let l_str =
-          match l_aliases_str_opt with
-          | Some str -> "* Left Value  : " ^ str ^ "\n"
-          | None -> ""
-        in
-        let r_str =
-          match r_aliases_str_opt with
-          | Some str -> "* Right Value : " ^ str ^ "\n"
-          | None -> ""
-        in
-        let operation_str =
-          left_str ^ " " ^ op_str ^ " " ^ right_str
-        in
-        let clause_str =
-          binop_err.err_binop_clause
-          (* Delete context stack information for end-user *)
-          |> Ast_tools.map_clause_vars (fun (Var (x, _)) -> Var (x, None))
-          |> show_clause
-        in
-        "* Constraint  : " ^ operation_str ^ "\n" ^ l_str ^ r_str ^
-        "* Clause      : " ^ clause_str
-      end
-    | Error_match match_err ->
-      begin
-        let alias_str =
-          let a_chain = match_err.err_match_aliases in
-          let a_str = String.join " = " @@ List.map show_ident a_chain in
-          if not @@ List.is_empty a_chain then a_str ^ " = " else a_str
-        in
-        let val_str = show_clause_body match_err.err_match_value in
-        let clause_str =
-          match_err.err_match_clause
-          (* Delete context stack information for end-user *)
-          |> Ast_tools.map_clause_vars (fun (Var (x, _)) -> Var (x, None))
-          |> show_clause
-        in
-        "* Value    : " ^ alias_str ^ val_str ^ "\n" ^
-        "* Clause   : " ^ clause_str ^ "\n" ^
-        "* Expected : " ^ (show_type_sig match_err.err_match_expected_type) ^ "\n" ^
-        "* Actual   : " ^ (show_type_sig match_err.err_match_actual_type)
-      end
-  ;;
-
   let to_string error_tree =
     let error_list = _flatten_tree error_tree in
-    let string_list = List.map error_to_string error_list in
+    let string_list = List.map show error_list in
     String.join "\n---------------\n" string_list
   ;;
   
