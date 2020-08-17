@@ -2,7 +2,7 @@ open Odefa_ast;;
 
 type t [@@deriving show];;
 
-val empty : t;;
+val empty : bool -> t;;
 
 (* **** Setter functions **** *)
 
@@ -49,6 +49,10 @@ val get_natodefa_equivalent_expr : t -> Ast.ident -> On_ast.expr;;
 (** Get the natodefa type that a set of record labels corresponds to.  If
     there is no mapping that exists, return a record type by default. *)
 val get_type_from_idents : t -> Ast.Ident_set.t -> On_ast.type_sig;;
+
+(** Returns whether the mapping was created during a translation of natodefa
+    code or not. *)
+val is_natodefa : t -> bool;;
 
 (** Returns true if the ident was added during instrumentation, false
     otherwise. *)

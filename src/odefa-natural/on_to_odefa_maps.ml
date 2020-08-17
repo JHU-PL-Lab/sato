@@ -28,6 +28,12 @@ module Odefa_clause = struct
 end;;
 
 type t = {
+
+  (** True if the mapping was created during natodefa-to-odefa
+      translation, false otherwise (e.g. after instrumenting on
+      odefa code). *)
+  is_natodefa : bool;
+
   (** A set of odefa variables that were added during instrumentation
       (as opposed to being in the original code or added during pre-
       instrumentation translation).  The instrumentation variable
@@ -65,7 +71,8 @@ type t = {
 [@@ deriving show]
 ;;
 
-let empty = {
+let empty is_natodefa = {
+  is_natodefa = is_natodefa;
   odefa_instrument_vars_map = Ast.Ident_map.empty;
   odefa_pre_instrument_clause_mapping = Ast.Ident_map.empty;
   odefa_var_to_natodefa_expr = Ast.Ident_map.empty;
@@ -298,6 +305,8 @@ let get_type_from_idents mappings odefa_idents =
   | Some typ -> typ
   | None -> RecType on_idents
 ;;
+
+let is_natodefa mappings = mappings.is_natodefa;;
 
 let is_var_instrumenting mappings odefa_ident =
   let inst_map = mappings.odefa_instrument_vars_map in

@@ -963,7 +963,7 @@ let translate
   (* Set up context and run *)
   let context =
     match translation_context with
-    | None -> new_translation_context ()
+    | None -> new_translation_context ~is_natodefa:true ()
     | Some ctx -> ctx
   in
   run context e_m_with_info

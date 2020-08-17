@@ -12,6 +12,7 @@ type translation_context =
 ;;
 
 let new_translation_context
+    ?is_natodefa:(is_natodefa=(false))
     ?suffix:(suffix=("~"))
     ?contextual_recursion:(contextual_recursion=(true))
     ()
@@ -19,7 +20,7 @@ let new_translation_context
   { tc_fresh_name_counter = 0;
     tc_fresh_suffix_separator = suffix;
     tc_contextual_recursion = contextual_recursion;
-    tc_odefa_natodefa_mappings = On_to_odefa_maps.empty;
+    tc_odefa_natodefa_mappings = On_to_odefa_maps.empty is_natodefa;
   }
 ;;
 

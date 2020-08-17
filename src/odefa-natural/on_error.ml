@@ -363,7 +363,7 @@ let parse_error error_str =
     |> String.trim
     |> String.lchop
     |> String.rchop
-    |> Str.split (Str.regexp "\[ ]*\"")
+    |> Str.split (Str.regexp "\"[ ]*\"")
   in
   match args_list with
   | [err_str; l_alias_str; l_val_str; r_alias_str; r_val_str; op_str; expr_str]
