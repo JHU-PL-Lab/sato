@@ -466,7 +466,9 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
 (* **** Expression flattening **** *)
 
 (** Returns the body of a function or conditional with its return variable *)
-let nonempty_body (expr : On_ast.expr) ((body : Ast.clause list), (var : Ast.var))
+let nonempty_body
+    (expr : On_ast.expr)
+    ((body, var) : (Ast.clause list * Ast.var))
   : (Ast.clause list * Ast.var) m =
   match body with
   | [] ->
@@ -946,8 +948,8 @@ let translate
     let%bind translation_result =
       return e
       >>= debug_transform_on "desugaring" preliminary_encode_expr
-      >>= debug_transform_on "alphatizing" alphatize
-      >>= debug_transform_odefa "flatteing" flatten
+      >>= debug_transform_on "alphatization" alphatize
+      >>= debug_transform_odefa "flattening" flatten
       >>= debug_transform_odefa "instrumentation" instrument
       >>= debug_transform_odefa "adding ~result" append_res_var
     in

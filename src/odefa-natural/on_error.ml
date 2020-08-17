@@ -52,6 +52,121 @@ type error =
   | Error_value of error_value
 ;;
 
+(* Error pretty-printers *)
+
+let pp_alias_list formatter aliases =
+  Pp_utils.pp_concat_sep
+    "@ =@ "
+    (fun formatter x -> On_ast_pp.pp_ident formatter x)
+    formatter
+    (List.enum aliases)
+;;
+
+let pp_error_binop formatter err =
+  let open On_ast_pp in
+  let pp_left_value formatter (l_aliases, l_value) =
+    if (List.length l_aliases) > 0 then
+      Format.fprintf formatter
+        "@[* Left Value  : @[%a@ =@ %a@]@]@,"
+        pp_alias_list l_aliases
+        pp_expr l_value
+    else
+      Format.pp_print_string formatter ""
+  in
+  let pp_right_value formatter (r_aliases, r_value) =
+    if (List.length r_aliases) > 0 then
+      Format.fprintf formatter
+        "@[* Right Value : @[%a@ =@ %a@]@]@,"
+        pp_alias_list r_aliases
+        pp_expr r_value
+    else
+      Format.pp_print_string formatter ""
+  in
+  let pp_constraint formatter constraint_expr =
+    Format.fprintf formatter
+      "@[* Constraint  : @[%a@]@]@,"
+      pp_expr constraint_expr
+  in
+  let pp_expression formatter binop_expr =
+    Format.fprintf formatter
+      "@[* Expression  : @[%a@]@]"
+      pp_expr binop_expr
+  in
+  Format.fprintf formatter
+    "@[<v 0>%a%a%a%a@]"
+    pp_left_value (err.err_binop_left_aliases, err.err_binop_left_value)
+    pp_right_value (err.err_binop_right_aliases, err.err_binop_right_value)
+    pp_constraint err.err_binop_constraint
+    pp_expression err.err_binop_expr
+;;
+
+let pp_error_match formatter err =
+  let open On_ast_pp in
+  let pp_value formatter (aliases, value) =
+    if (List.length aliases) > 0 then
+      Format.fprintf formatter 
+        "@[* Value       : @[%a@ =@ %a@]@]@,"
+        pp_alias_list aliases
+        pp_expr value
+    else
+      Format.pp_print_string formatter ""
+  in
+  let pp_expression formatter match_expr =
+    Format.fprintf formatter
+      "@[* Expression  : @[%a@]@]@,"
+      pp_expr match_expr
+  in
+  let pp_expected formatter expected_type =
+    Format.fprintf formatter
+      "@[* Expected    : @[%a@]@]@,"
+      pp_on_type expected_type
+  in
+  let pp_actual formatter actual_type =
+    Format.fprintf formatter
+      "@[* Actual      : @[%a@]@]"
+      pp_on_type actual_type
+  in
+  Format.fprintf formatter
+    "@[<v 0>%a%a%a%a@]"
+    pp_value (err.err_match_aliases, err.err_match_value)
+    pp_expression err.err_match_expr
+    pp_expected err.err_match_expected
+    pp_actual err.err_match_actual
+;;
+
+let pp_error_value formatter err =
+  let open On_ast_pp in
+  let pp_value formatter (aliases, value) =
+    if (List.length aliases) > 0 then
+      Format.fprintf formatter 
+        "@[* Value       : @[%a@ =@ %a@]@]@,"
+        pp_alias_list aliases
+        pp_expr value
+    else
+      Format.pp_print_string formatter ""
+  in
+  let pp_expression formatter value_expr =
+    Format.fprintf formatter
+      "@[* Expression  : @[%a@]@]"
+      pp_expr value_expr
+  in
+  Format.fprintf formatter
+    "@[<v 0>%a%a@]"
+    pp_value (err.err_value_aliases, err.err_value_val)
+    pp_expression err.err_value_expr
+;;
+
+let pp formatter error =
+  match error with
+  | Error_binop err -> pp_error_binop formatter err
+  | Error_match err -> pp_error_match formatter err
+  | Error_value err -> pp_error_value formatter err
+;;
+
+let show = Pp_utils.pp_to_string pp;;
+
+(* **** Error list submodule **** *)
+
 module type Error_list = sig
   type t;;
   val wrap : error list -> t;;
@@ -65,63 +180,6 @@ module Error_list : Error_list = struct
   type t = error list
   ;;
 
-  let error_to_string error =
-    let open On_ast_pp in
-    (* Helper functions *)
-    let alias_str aliases =
-      String.join " = "
-        @@ List.map show_ident aliases
-    in
-    (* String creation *)
-    match error with
-    | Error_binop err ->
-      let l_aliases = err.err_binop_left_aliases in
-      let r_aliases = err.err_binop_right_aliases in
-      let l_value = err.err_binop_left_value in
-      let r_value = err.err_binop_right_value in
-      let l_val_str =
-        if (List.length l_aliases) > 0 then
-          "* Left Value  : " ^ (alias_str l_aliases) ^
-                           " = " ^ (show_expr l_value) ^ "\n"
-        else
-          ""
-      in
-      let r_val_str =
-        if (List.length r_aliases) > 0 then
-          "* Right Value : " ^ (alias_str r_aliases) ^
-                           " = " ^ (show_expr r_value) ^ "\n"
-        else
-          ""
-      in
-      l_val_str ^ r_val_str ^
-      "* Constraint  : " ^ (show_expr err.err_binop_constraint) ^ "\n" ^
-      "* Expression  : " ^ (show_expr err.err_binop_expr)
-    | Error_match err ->
-      let aliases = err.err_match_aliases in
-      let value = err.err_match_value in
-      let val_str =
-        if (List.length aliases) > 0 then
-          (alias_str aliases) ^ " = " ^ (show_expr value)
-        else
-          (show_expr value)
-      in
-      "* Value      : " ^ val_str ^ "\n" ^
-      "* Expression : " ^ (show_expr err.err_match_expr) ^ "\n" ^
-      "* Expected   : " ^ (show_on_type err.err_match_expected) ^ "\n" ^
-      "* Actual     : " ^ (show_on_type err.err_match_actual)
-    | Error_value err ->
-      let aliases = err.err_value_aliases in
-      let value = err.err_value_val in
-      let val_str =
-        if (List.length aliases) > 0 then
-          (alias_str aliases) ^ " = " ^ (show_expr value)
-        else
-          (show_expr value)
-      in
-      "* Value      : " ^ val_str ^ "\n" ^
-      "* Expression : " ^ (show_expr err.err_value_expr)
-  ;;
-
   let wrap error_list = error_list;;
 
   let empty = [];;
@@ -131,7 +189,8 @@ module Error_list : Error_list = struct
   let count error_list = List.length error_list;;
 
   let to_string error_list =
-    let string_list = List.map error_to_string error_list in
+    (* let string_list = List.map error_to_string error_list in *)
+    let string_list = List.map show error_list in
     String.join "\n---------------\n" string_list
   ;;
 end
