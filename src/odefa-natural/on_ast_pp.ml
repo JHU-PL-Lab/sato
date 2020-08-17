@@ -173,3 +173,16 @@ and pp_expr formatter expr =
 let show_ident = Pp_utils.pp_to_string pp_ident;;
 let show_expr = Pp_utils.pp_to_string pp_expr;;
 let show_pattern = Pp_utils.pp_to_string pp_pattern;;
+
+let pp_on_type formatter (on_type : On_ast.type_sig) =
+  match on_type with
+  | TopType -> Format.pp_print_string formatter "Any"
+  | IntType -> Format.pp_print_string formatter "Integer"
+  | BoolType -> Format.pp_print_string formatter "Boolean"
+  | FunType -> Format.pp_print_string formatter "Function"
+  | ListType -> Format.pp_print_string formatter "List"
+  | RecType lbls -> Format.fprintf formatter "Record %a" pp_ident_set lbls
+  | VariantType lbl -> Format.fprintf formatter "Variant %a" pp_variant_label lbl
+;;
+
+let show_on_type = Pp_utils.pp_to_string pp_on_type;;

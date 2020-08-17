@@ -4,22 +4,6 @@ open Jhupllib;;
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
-(* **** Types in natodefa **** *)
-
-let pp_on_type formatter (on_type : On_ast.type_sig) =
-  let open On_ast_pp in
-  match on_type with
-  | TopType -> Format.pp_print_string formatter "Any"
-  | IntType -> Format.pp_print_string formatter "Integer"
-  | BoolType -> Format.pp_print_string formatter "Boolean"
-  | FunType -> Format.pp_print_string formatter "Function"
-  | ListType -> Format.pp_print_string formatter "List"
-  | RecType lbls -> Format.fprintf formatter "Record %a" pp_ident_set lbls
-  | VariantType lbl -> Format.fprintf formatter "Variant %a" pp_variant_label lbl
-;;
-
-let show_on_type = Pp_utils.pp_to_string pp_on_type;;
-
 (* **** Errors in natodefa **** *)
 
 type error_binop = {
@@ -193,7 +177,6 @@ module Error_list : Error_list = struct
   let count error_list = List.length error_list;;
 
   let to_string error_list =
-    (* let string_list = List.map error_to_string error_list in *)
     let string_list = List.map show error_list in
     String.join "\n---------------\n" string_list
   ;;
