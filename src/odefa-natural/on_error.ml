@@ -52,7 +52,7 @@ type error =
   | Error_value of error_value
 ;;
 
-(* Error pretty-printers *)
+(* **** Error pretty-printers **** *)
 
 let pp_alias_list formatter aliases =
   Pp_utils.pp_concat_sep
@@ -109,7 +109,9 @@ let pp_error_match formatter err =
         pp_alias_list aliases
         pp_expr value
     else
-      Format.pp_print_string formatter ""
+      Format.fprintf formatter
+        "@[* Value       : @[%a@]@]@,"
+        pp_expr value
   in
   let pp_expression formatter match_expr =
     Format.fprintf formatter
@@ -143,7 +145,9 @@ let pp_error_value formatter err =
         pp_alias_list aliases
         pp_expr value
     else
-      Format.pp_print_string formatter ""
+      Format.fprintf formatter
+        "@[* Value       : @[%a@]@,"
+        pp_expr value
   in
   let pp_expression formatter value_expr =
     Format.fprintf formatter

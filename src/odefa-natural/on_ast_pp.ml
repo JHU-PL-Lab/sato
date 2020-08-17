@@ -152,7 +152,7 @@ and pp_expr formatter expr =
         formatter
         (List.enum pat_expr_list)
     in
-    Format.fprintf formatter "match@ %a@ with@,@[%a@]@,end"
+    Format.fprintf formatter "match@ %a@ with@ @[%a@]@ end"
       pp_expr e pp_pattern_expr_lst pattern_expr_list
   | VariantExpr (variant_lbl, e) ->
     Format.fprintf formatter "%a@ (%a)"
