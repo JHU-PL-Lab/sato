@@ -40,7 +40,7 @@ type error =
 
 let pp_alias_list formatter aliases =
   Pp_utils.pp_concat_sep
-    "@ =@ "
+    " ="
     (fun formatter x -> On_ast_pp.pp_ident formatter x)
     formatter
     (List.enum aliases)
