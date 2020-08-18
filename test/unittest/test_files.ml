@@ -68,7 +68,6 @@ open Ast_pp;;
 open Ast_wellformedness;;
 open Generator_answer;;
 open Generator_configuration;;
-open On_to_odefa_types;;
 open Toploop_options;;
 open Toploop_types;;
 open Ddpa_abstract_ast;;
@@ -86,7 +85,6 @@ exception Input_generation_complete;;
 module String_map = Map.Make(String);;
 
 module Input_generator = Generator.Make(Input_sequence);;
-module Type_error_generator = Generator.Make(Type_errors);;
 
 let string_of_int_list int_list =
   "[" ^ (String.join ", " @@ List.map string_of_int int_list) ^ "]"
@@ -99,7 +97,6 @@ let string_of_input_sequence input_sequence =
 let string_of_input_sequences input_sequences =
   String.join ", " @@ List.map string_of_input_sequence input_sequences
 ;;
-
 type test_expectation =
   (* Can the expression successfully evaluate? *)
   | Expect_evaluate
@@ -130,7 +127,7 @@ type test_expectation =
   (* Which type errors? *)
   | Expect_type_error of
     string * (* variable to look up from *)
-    Type_error_generator.Answer.t (* the sequence of type errors *)
+    string (* the sequence of type errors *)
 ;;
 
 (* **** Expectation utility functions **** *)
@@ -167,8 +164,7 @@ let pp_test_expectation formatter expectation =
   | Expect_type_error_count n ->
     Format.fprintf formatter "Expect %d type errors" n
   | Expect_type_error (_, errors) ->
-    Format.fprintf formatter "Expect_type_error %s"
-      (Type_error_generator.Answer.show errors)
+    Format.fprintf formatter "Expect_type_error %s" errors
 ;;
 
 let name_of_expectation expectation =
@@ -374,18 +370,7 @@ let _parse_type_errors args_lst =
     begin
       match rest_args with
       | [type_errs] ->
-        begin
-          try
-            let type_errs =
-              Type_error_generator.Answer.answer_from_string type_errs
-            in
-            Expect_type_error (var_name, type_errs)
-          with
-            | Generator_answer.Parse_failure | Not_found -> (* TODO: Catch Not_found in answer_from_string *)
-              raise @@ Expectation_parse_failure "Cannot parse type error string"
-            | Odefa_symbolic_interpreter.Error.Parse_failure s ->
-              raise @@ Expectation_parse_failure s
-        end
+        Expect_type_error (var_name, type_errs)
       | [] ->
         raise @@ Expectation_parse_failure "No type errors listed"
       | _ ->
@@ -897,10 +882,20 @@ let test_sato
     (expect_left : test_expectation list ref)
     (stack_module_choice : expectation_stack_decision)
     (generation_steps : int)
-    (odefa_on_map : Odefa_natodefa_mappings.t)
+    (odefa_on_map : On_to_odefa_maps.t)
     (expr : expr)
   : unit =
   let observation = _observation filename in
+  (* Set modules depending on filetype *)
+  let is_natodefa = On_to_odefa_maps.is_natodefa odefa_on_map in
+  let error_generator =
+    if is_natodefa then
+      (module Generator.Make(Natodefa_type_errors) : Generator.Generator)
+    else
+      (module Generator.Make(Type_errors) : Generator.Generator)
+  in
+  let module Error_generator = (val error_generator) in
+  let module Error = Error_generator.Answer in
   (* Configure Sato options. *)
   (* Select the appropriate context stack for DDPA. *)
   let chosen_module_option =
@@ -919,7 +914,20 @@ let test_sato
       assert_failure
         "Test specified input sequence requirement without context model."
   in
-  (* Retrieve type error expectations *)
+  (* Retrieve and parse type error expectations *)
+  let parse_error err_str =
+    (* We need to parse the error string here because we don't know if the
+       program is odefa or natodefa in advance. *)
+    try
+      Error.answer_from_string err_str
+    with
+    | Generator_answer.Parse_failure
+    | Not_found -> (* TODO: Catch Not_found in answer_from_string *)
+      raise @@ Expectation_parse_failure "Cannot parse type error string"
+    | Odefa_symbolic_interpreter.Error.Parse_failure s
+    | Odefa_natural.On_error.Parse_failure s ->
+      raise @@ Expectation_parse_failure s
+  in
   let type_err_expectations =
     (* Separate out input sequence expectations from the other expectations *)
     let (type_err_expectations, remaining_expectations) =
@@ -927,7 +935,7 @@ let test_sato
         (fun (type_err_expects, remaining_expects) expectation ->
           match expectation with
           | Expect_type_error (x, type_errs) ->
-            ((x, type_errs) :: type_err_expects, remaining_expects)
+            ((x, parse_error type_errs) :: type_err_expects, remaining_expects)
           | _ ->
             (type_err_expects, expectation :: remaining_expects))
         ([],[])
@@ -954,27 +962,27 @@ let test_sato
   let total_err_lst = ref [] in
   let total_err_num = ref 0 in
   (* Set the odefa/natodefa mappings *)
-  Type_error_generator.Answer.set_odefa_natodefa_map odefa_on_map;
+  Error.set_odefa_natodefa_map odefa_on_map;
   (* Run tests *)
   let run_type_checker x =
     let generator =
-      Type_error_generator.create
+      Error_generator.create
         ?exploration_policy:(Some (Explore_least_relative_stack_repetition))
         configuration
         expr
         (Ident x)
     in
     let callback
-        (type_errors : Type_error_generator.Answer.t)
+        (type_errors : Error.t)
         (steps : int)
       : unit =
       let _ = steps in
       total_err_lst := (x, type_errors) :: (!total_err_lst);
       total_err_num :=
-        !total_err_num + Type_error_generator.Answer.count type_errors;
+        !total_err_num + Error.count type_errors;
     in
     let _ =
-      Type_error_generator.generate_answers
+      Error_generator.generate_answers
         ~generation_callback:callback
         (Some generation_steps)
         generator
@@ -1027,7 +1035,7 @@ let test_sato
         try
           let errors = String_map.find expected_x total_err_multimap in
           let is_mem =
-            Type_error_generator.Answer.test_mem errors expected_err
+            Error.test_mem errors expected_err
           in
           if not is_mem then Some expected_err else None
         with Not_found -> None
@@ -1036,7 +1044,7 @@ let test_sato
   in
   let unfound_expected_errs_msg =
     List.map
-      (fun e -> "error not found:\n" ^ (Type_error_generator.Answer.show e))
+      (fun e -> "error not found:\n" ^ (Error.show e))
       unfound_expected_errs
   in
   let err_msgs =
