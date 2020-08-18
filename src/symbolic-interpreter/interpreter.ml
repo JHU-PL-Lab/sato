@@ -611,7 +611,8 @@ struct
             play defensively; it saves us a bind. *)
         if not @@ List.is_empty lookup_stack' then begin
           raise @@ Jhupllib.Utils.Not_yet_implemented
-            "Non-singleton lookup stack in Binop rule!"
+            (Printf.sprintf "Non-singleton lookup stack on %s in Binop rule!"
+              (show_ident lookup_var))
         end;
         lazy_logger `trace (fun () ->
           Printf.sprintf "Binop rule discovers %s = %s %s %s"
@@ -680,6 +681,9 @@ struct
         (* Build the popped relative stack. *)
         let%orzero Abs_clause(Abs_var xr, Abs_appl_body (Abs_var xf, _)) = c in
         let%orzero Some relstack' = Relative_stack.pop relstack xr in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Performing Function Enter Non-Local rule on %s; will add %s to lookup stack"
+            (show_ident x) (show_ident xf));
         (* Record this wiring decision. *)
         let cc = Ident_map.find xr env.le_clause_mapping in
         let%bind () = record_decision relstack x'' cc x' in
@@ -879,7 +883,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Look up the record itself and identify the symbol it uses. *)
         (* We ignore the stacks here intentionally; see note 1 above. *)
-        let%bind record_symbol = recurse [x'] acl1 relstack in
+        let%bind record_symbol = recurse (x' :: lookup_stack') acl1 relstack in
         (* Now record the constraint that the lookup variable must be the
             projection of the label from that record. *)
         let lookup_symbol = Symbol (lookup_var, relstack) in
@@ -893,10 +897,13 @@ struct
             are the only non-bottom elements of the lookup stack.  So instead,
             we'll just skip the check here and play defensively; it saves us
             a bind. *)
+        (*
         if not @@ List.is_empty lookup_stack' then begin
           raise @@ Jhupllib.Utils.Not_yet_implemented
-            "Non-singleton lookup stack in Binop rule!"
+            (Printf.sprintf "Non-singleton lookup stack on %s in Record Proj rule!"
+              (show_ident lookup_var))
         end;
+        *)
         (* And we're finished. *)
         lazy_logger `trace (fun () ->
           Printf.sprintf "Record Projection rule completed on %s = %s.%s"
