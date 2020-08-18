@@ -890,20 +890,6 @@ struct
         let%bind () = record_constraint @@
           Constraint_projection (lookup_symbol, record_symbol, lbl)
         in
-        (* We should have a "further" clause similar to the Binop rule: if the
-            lookup stack is non-empty, we have to look up all that stuff to
-            make sure this control flow is valid.  That should never happen
-            because our projection only works on non-functions and functions
-            are the only non-bottom elements of the lookup stack.  So instead,
-            we'll just skip the check here and play defensively; it saves us
-            a bind. *)
-        (*
-        if not @@ List.is_empty lookup_stack' then begin
-          raise @@ Jhupllib.Utils.Not_yet_implemented
-            (Printf.sprintf "Non-singleton lookup stack on %s in Record Proj rule!"
-              (show_ident lookup_var))
-        end;
-        *)
         (* And we're finished. *)
         lazy_logger `trace (fun () ->
           Printf.sprintf "Record Projection rule completed on %s = %s.%s"
