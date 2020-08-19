@@ -14,6 +14,7 @@ type error_binop = {
   err_binop_constraint : On_ast.expr;
   err_binop_expr : On_ast.expr;
 }
+[@@ deriving eq]
 ;;
 
 type error_match = {
@@ -23,17 +24,22 @@ type error_match = {
   err_match_expected : On_ast.type_sig;
   err_match_actual : On_ast.type_sig;
 }
+[@@ deriving eq]
+;;
 
 type error_value = {
   err_value_aliases : On_ast.ident list;
   err_value_val : On_ast.expr;
   err_value_expr : On_ast.expr;
 }
+[@@ deriving eq]
+;;
 
 type error =
   | Error_binop of error_binop
   | Error_match of error_match
   | Error_value of error_value
+[@@ deriving eq]
 ;;
 
 (* **** Error pretty-printers **** *)
@@ -184,7 +190,7 @@ module Error_list : Error_list = struct
 
   let mem_singleton (errors : t) (error: t) =
     match error with
-    | [err] -> List.mem err errors
+    | [err] -> List.exists (equal_error err) errors
     | _ -> failwith "mem_singleton can only test single error!"
   ;;
 end
