@@ -882,12 +882,12 @@ let test_sato
     (expect_left : test_expectation list ref)
     (stack_module_choice : expectation_stack_decision)
     (generation_steps : int)
+    (is_natodefa : bool)
     (odefa_on_map : On_to_odefa_maps.t)
     (expr : expr)
   : unit =
   let observation = _observation filename in
   (* Set modules depending on filetype *)
-  let is_natodefa = On_to_odefa_maps.is_natodefa odefa_on_map in
   let error_generator =
     if is_natodefa then
       (module Generator.Make(Natodefa_type_errors) : Generator.Generator)
@@ -950,8 +950,8 @@ let test_sato
     |> List.unique
   in
   (* We always want to include a test from the last variable, especially if we
-     are expecting no type errors. Add the last variable if it hasn't been
-     included yet. *)
+     are expecting no type errors.  Add the last variable if it hasn't been
+     included yet.  This is important to test if there are no errors. *)
   let Var (Ident (last_ident), _) = Ast_tools.retv expr in
   let target_var_list =
     if List.mem last_ident target_list then
@@ -1073,9 +1073,9 @@ let make_test filename expectations =
     (* Using a mutable list of not-yet-handled expectations. *)
     let expectations_left = ref expectations in
     (* Translate code if it's natodefa *)
-    let is_nato = String.ends_with filename "natodefa" in
-    let (expr, i_expr, i_map) =
-      if is_nato then begin
+    let is_on = String.ends_with filename "natodefa" in
+    let (_, i_expr, i_map) =
+      if is_on then begin
         let on_expr = File.with_file_in filename On_parse.parse_program in
         let (e, _) = On_to_odefa.translate on_expr in
         let (instrumented_e, instrument_map) =
@@ -1103,9 +1103,9 @@ let make_test filename expectations =
       Option.default 10000 !gen_steps_ref (* TODO: Increase from 10000 *)
     in
     (* Perform tests *)
-    test_ddpa filename expectations_left !module_choice expr;
-    test_ddse filename expectations_left !module_choice gen_steps expr;
-    test_sato filename expectations_left !module_choice gen_steps i_map i_expr;
+    test_ddpa filename expectations_left !module_choice i_expr;
+    test_ddse filename expectations_left !module_choice gen_steps i_expr;
+    test_sato filename expectations_left !module_choice gen_steps is_on i_map i_expr;
     (* Now assert that every expectation has been addressed. *)
     match !expectations_left with
     | [] -> ()
@@ -1211,7 +1211,8 @@ let tests =
     @ make_tests_from_dir "test-sources/odefa-input"
     @ make_tests_from_dir "test-sources/odefa-stack"
     @ make_tests_from_dir "test-sources/odefa-types"
-    @ make_tests_from_dir "test-sources/natodefa-basic"
+    (* @ make_tests_from_dir "test-sources/natodefa-basic" *)
+    (* @ make_tests_from_dir "test-sources/natodefa-types" *)
     (* @ make_tests_from_dir "test-sources/natodefa-input" *)
   )
 ;;

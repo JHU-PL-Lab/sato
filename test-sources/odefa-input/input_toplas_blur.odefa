@@ -1,5 +1,7 @@
 # EXPECT-WELL-FORMED
 # EXPECT-INPUT-SEQUENCES-REACH c [ 0 ]
+# # EXPECT-NO-TYPE-ERRORS
+
 ##
 ## * Did not generate input sequence [2] for variable c.
 ## It should reach c for any input
@@ -50,7 +52,7 @@ lp = fun lp_clone -> (
         i_0 = blurred_lp s;
         i_1 = i_0 n_pred;
         # not i_1
-        r_4 = i_1 xor tt;
+        r_4 = i_1 xor tt; # Type error occurs here!
       );
     );
   );
