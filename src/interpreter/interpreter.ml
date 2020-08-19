@@ -121,7 +121,12 @@ let cond_wire (conditional_site_x : var) (Expr(body)) =
   body @ [tail_clause]
 ;;
 
-let stdin_input_source (_:var) = Value_int(read_int());;
+let stdin_input_source (Var (x, _)) =
+  print_string @@ Printf.sprintf "Input at %s: " (show_ident x);
+  let input = read_int () in
+  flush stdout;
+  Value_int input
+;;
 
 let matches env x p : bool =
   let val_opt = lookup env x in
