@@ -660,14 +660,16 @@ let test_ddpa
   let input_callback =
     match !input_ref with
     | Some inputs ->
-      (let buffer = ref inputs in
-        fun () ->
-          match !buffer with
-          | [] -> failwith "Out of input"
-          | head :: tail ->
-            buffer := tail;
-            head
-      )
+      begin
+        let buffer = ref inputs in
+          (fun () ->
+            match !buffer with
+            | [] -> failwith "Out of input"
+            | head :: tail ->
+              buffer := tail;
+              head
+          )
+      end
     | None -> Toploop.default_callbacks.cb_input
   in
   let callbacks =
@@ -691,7 +693,7 @@ let test_ddpa
   if result.illformednesses = [] then begin
     expect_left :=
       observation !expect_left observe_well_formed
-  end else begin 
+  end else begin
     expect_left :=
       observation !expect_left (observe_ill_formed result.illformednesses)
   end;

@@ -224,13 +224,25 @@ let odefa_to_natodefa_error
     On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps
   in
   let odefa_to_on_aliases (aliases : Ast.ident list) : On_ast.ident list =
-    List.filter_map
+    (* Convert odefa idents to natodefa forms, then remove adjacent dupes *)
+    aliases
+    |> List.filter_map
       (fun alias ->
         match odefa_to_on_expr alias with
         | (On_ast.Var ident) -> Some ident
         | _ -> None
       )
-      aliases
+    |> List.fold_left
+      (fun deduped_list alias ->
+        match List.Exceptionless.hd deduped_list with
+        | Some next ->
+          let is_next = On_ast.equal_ident next alias in
+          if is_next then deduped_list else alias :: deduped_list
+        | None ->
+          alias :: deduped_list
+      )
+      []
+    |> List.rev
   in
   let odefa_to_on_value (aliases : Ast.ident list) : On_ast.expr =
     let last_var =

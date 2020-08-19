@@ -1,0 +1,8 @@
+# EXPECT-WELL-FORMED
+# EXPECT-TYPE-ERROR-COUNT 1
+# EXPECT-TYPE-ERROR ~result [0] : "binop" "y" "0" "" "0" "y <> 0" "x / y"
+
+let x = input in
+let y = 0 in
+let z = x / y in
+z
