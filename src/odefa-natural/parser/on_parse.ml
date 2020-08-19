@@ -25,7 +25,7 @@ let parse_program (input : IO.input) =
 let parse_expression_string (expr_str : string) =
   let buf = Lexing.from_string expr_str in
   let read_expr () =
-    Some (handle_parse_error buf (fun () -> On_parser.prog On_lexer.token buf))
+    handle_parse_error buf (fun () -> On_parser.delim_expr On_lexer.token buf)
   in
   LazyList.to_list @@ LazyList.from_while read_expr
   

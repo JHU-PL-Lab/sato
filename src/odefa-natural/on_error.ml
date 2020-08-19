@@ -162,6 +162,7 @@ module type Error_list = sig
   val is_empty : t -> bool;;
   val count : t -> int;;
   val to_string : t -> string;;
+  val mem_singleton : t -> t -> bool;;
 end;;
 
 module Error_list : Error_list = struct
@@ -179,6 +180,12 @@ module Error_list : Error_list = struct
   let to_string error_list =
     let string_list = List.map show error_list in
     String.join "\n---------------\n" string_list
+  ;;
+
+  let mem_singleton (errors : t) (error: t) =
+    match error with
+    | [err] -> List.mem err errors
+    | _ -> failwith "mem_singleton can only test single error!"
   ;;
 end
 ;;
@@ -316,7 +323,7 @@ let _parse_expr expr_str =
     try
       On_parse.parse_expression_string expr_str
     with On_parse.Parse_error _ ->
-      raise @@ Parse_failure (Printf.sprintf "Cannot parse clause %s" expr_str)
+      raise @@ Parse_failure (Printf.sprintf "Cannot parse expr %s" expr_str)
   in
   match expr_lst with
   | [expr] -> expr

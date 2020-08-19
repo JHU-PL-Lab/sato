@@ -68,12 +68,21 @@ exception On_Parse_error of string;;
 %left DOT                     /* Record projection */
 
 %start <On_ast.expr> prog
+%start <On_ast.expr option> delim_expr
+
 
 %%
 
 prog:
   | expr EOF
       { $1 }
+  ;
+
+delim_expr:
+  | EOF
+      { None }
+  | expr EOF
+      { Some ($1) }
   ;
 
 expr:

@@ -361,10 +361,18 @@ module Natodefa_type_errors : Answer = struct
     end
   ;;
 
-  let answer_from_string (_ : string) : t =
+  let answer_from_string arg_str =
+    let (input_str, error_str) =
+      arg_str
+      |> String.split ~by:":"
+      |> (fun (i_str, e_str) -> (String.trim i_str, String.trim e_str))
+    in
+    let inputs = parse_comma_separated_ints input_str in
+    let error = On_error.parse_error error_str in
+    let err_list = On_error.Error_list.wrap [error] in
     {
-      err_input_seq = [];
-      err_errors = On_error.Error_list.empty;
+      err_input_seq = inputs;
+      err_errors = err_list;
     }
   ;;
 
@@ -399,5 +407,16 @@ module Natodefa_type_errors : Answer = struct
 
   let generation_successful _ = true;;
 
-  let test_mem _ _ = false;;
+  let test_mem (error_list: t list) (error: t) =
+    let input_seq = error.err_input_seq in
+    let error_lst = error.err_errors in
+    let error_assoc_list =
+      List.map
+        (fun err -> (err.err_input_seq, err.err_errors))
+        error_list
+    in
+    let error_lst' = List.assoc input_seq error_assoc_list in
+    On_error.Error_list.mem_singleton error_lst' error_lst
+  ;;
+
 end;;
