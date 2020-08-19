@@ -24,7 +24,7 @@ let parse_program
     begin
       let natodefa_ast = File.with_file_in filename On_parse.parse_program in
       let (odefa_ast, on_odefa_maps) =
-        On_to_odefa.translate ~is_instrumented:true natodefa_ast
+        On_to_odefa.translate natodefa_ast
       in
       Ast_wellformedness.check_wellformed_expr odefa_ast;
       (odefa_ast, on_odefa_maps)

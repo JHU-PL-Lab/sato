@@ -920,7 +920,7 @@ let debug_transform_odefa
 
 let translate
     ?translation_context:(translation_context=None)
-    ?is_instrumented:(is_instrumented=false)
+    ?is_instrumented:(is_instrumented=true)
     (e : On_ast.expr)
   : (Ast.expr * On_to_odefa_maps.t) =
   let (e_m_with_info : (Ast.expr * On_to_odefa_maps.t) m) =

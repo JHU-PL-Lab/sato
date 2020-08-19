@@ -882,12 +882,12 @@ let test_sato
     (expect_left : test_expectation list ref)
     (stack_module_choice : expectation_stack_decision)
     (generation_steps : int)
-    (is_natodefa : bool)
     (odefa_on_map : On_to_odefa_maps.t)
     (expr : expr)
   : unit =
   let observation = _observation filename in
   (* Set modules depending on filetype *)
+  let is_natodefa = On_to_odefa_maps.is_natodefa odefa_on_map in
   let error_generator =
     if is_natodefa then
       (module Generator.Make(Natodefa_type_errors) : Generator.Generator)
@@ -1073,21 +1073,14 @@ let make_test filename expectations =
     (* Using a mutable list of not-yet-handled expectations. *)
     let expectations_left = ref expectations in
     (* Translate code if it's natodefa *)
-    let is_on = String.ends_with filename "natodefa" in
-    let (_, i_expr, i_map) =
-      if is_on then begin
-        let on_expr = File.with_file_in filename On_parse.parse_program in
-        let (e, _) = On_to_odefa.translate on_expr in
-        let (instrumented_e, instrument_map) =
-          Odefa_instrumentation.instrument_odefa e
-        in
-        (e, instrumented_e, instrument_map)
+    let is_natodefa = String.ends_with filename "natodefa" in
+    let (i_expr, i_map) =
+      if is_natodefa then begin
+        On_to_odefa.translate
+          @@ File.with_file_in filename On_parse.parse_program
       end else begin
-        let e = File.with_file_in filename Parser.parse_program in
-        let (instrumented_e, instrument_map) =
-          Odefa_instrumentation.instrument_odefa e
-        in
-        (e, instrumented_e, instrument_map)
+        Odefa_instrumentation.instrument_odefa
+          @@ File.with_file_in filename Parser.parse_program
       end
     in
     (* Decide what kind of analysis to perform. *)
@@ -1105,7 +1098,7 @@ let make_test filename expectations =
     (* Perform tests *)
     test_ddpa filename expectations_left !module_choice i_expr;
     test_ddse filename expectations_left !module_choice gen_steps i_expr;
-    test_sato filename expectations_left !module_choice gen_steps is_on i_map i_expr;
+    test_sato filename expectations_left !module_choice gen_steps i_map i_expr;
     (* Now assert that every expectation has been addressed. *)
     match !expectations_left with
     | [] -> ()
