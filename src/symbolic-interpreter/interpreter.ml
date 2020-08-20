@@ -576,14 +576,21 @@ struct
         let%bind aliased_symbol = recurse (x' :: lookup_stack') acl1 relstack in
         (* Add the alias constraint *)
         let lookup_symbol = Symbol (x, relstack) in
-        let%bind () = record_constraint @@
-          Constraint.Constraint_alias (lookup_symbol, aliased_symbol)
-        in
         (* Return the alias. *)
-        lazy_logger `trace (fun () ->
-          Printf.sprintf "Alias rule discovered %s = %s"
-            (show_symbol lookup_symbol) (show_symbol aliased_symbol));
-        return lookup_symbol
+        if List.is_empty lookup_stack' then begin
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Alias rule discovered %s = %s"
+              (show_symbol lookup_symbol) (show_symbol aliased_symbol));
+          let%bind () = record_constraint @@
+            Constraint.Constraint_alias (lookup_symbol, aliased_symbol)
+          in
+          return lookup_symbol
+        end else begin
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Alias rule discovered %s, returning %s"
+              (show_symbol lookup_symbol) (show_symbol aliased_symbol));
+            return aliased_symbol
+        end
       end;
 
       (* ### Binop rule ### *)
@@ -757,6 +764,7 @@ struct
         (* This must be a variable we AREN'T looking for. *)
         let%orzero Unannotated_clause (Abs_clause (Abs_var x'', _)) = acl1 in
         [%guard not @@ equal_ident x'' lookup_var ];
+        lazy_logger `trace (fun () -> Printf.sprintf "Running Skip rule on %s" (show_ident x''));
         (* Even if we're not looking for it, it has to be defined! *)
         let%bind _ = recurse [x''] acl0 relstack in
         let%bind ret_symbol = recurse lookup_stack acl1 relstack in
