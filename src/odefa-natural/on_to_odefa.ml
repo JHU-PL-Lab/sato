@@ -935,12 +935,10 @@ let translate
       else
         return c_list
     in
-    let append_res_var c_list : Ast.clause list m =
-      let Ast.Clause(last_var, _) = List.last c_list in
-      let%bind fresh_str = freshness_string in
-      let res_var = Ast.Var (Ident(fresh_str ^ "result"), None) in
-      let res_clause = Ast.Clause(res_var, Var_body(last_var)) in
-      return (c_list @ [res_clause])
+    let add_first_result c_list : Ast.clause list m =
+      return c_list
+      >>= Odefa_instrumentation.add_first_var
+      >>= Odefa_instrumentation.add_result_var
     in
     (* Translation sequence *)
     lazy_logger `debug (fun () ->
@@ -951,7 +949,7 @@ let translate
       >>= debug_transform_on "alphatization" alphatize
       >>= debug_transform_odefa "flattening" flatten
       >>= debug_transform_odefa "instrumentation" instrument
-      >>= debug_transform_odefa "adding ~result" append_res_var
+      >>= debug_transform_odefa "adding ~result" add_first_result
     in
     let%bind odefa_on_maps = odefa_natodefa_maps in
     lazy_logger `debug (fun () ->
