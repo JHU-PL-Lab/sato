@@ -1,0 +1,13 @@
+# EXPECT-WELL-FORMED
+# EXPECT-TYPE-ERROR-COUNT 2
+# EXPECT-REQUIRED-INPUT-SEQUENCE-GENERATION-STEPS 25000
+# EXPECT-TYPE-ERROR ~result [0] : "match" "" "true" "n + true" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [1] : "match" "" "false" "n * false" "int" "bool"
+
+let rec sum0 n =
+    if n < 1 then n + true else n + ( sum1 ( n - 1 ) )
+with sum1 n =
+    if n < 1 then n * false else n + ( sum0 ( n - 1 ) )
+in
+let i = input in
+if i == 0 then sum0 0 else sum0 1
