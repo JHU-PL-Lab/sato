@@ -61,14 +61,52 @@ and expr =
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
   | Assert of expr
-[@@deriving eq, ord, show]
+[@@deriving eq, ord]
 ;;
 
 module Expr = struct
   type t = expr;;
   let equal = equal_expr;;
   let compare = compare_expr;;
-  let show = show_expr;;
 end;;
 
-module Expr_map = Map.Make(Expr);;
+module Pattern = struct
+  type t = pattern;;
+  let equal = equal_pattern;;
+  let compare = compare_pattern;;
+end;;
+
+type type_sig =
+  | TopType
+  | IntType
+  | BoolType
+  | FunType
+  | RecType of Ident_set.t
+  | ListType
+  | VariantType of variant_label
+[@@ deriving eq, ord, show]
+;;
+
+(** Takes [expr] as an argument.  Returns the relative precedence of the
+    expression.  Higher ints correspond to higher precedences. *)
+let expr_precedence expr =
+  match expr with
+  | Function _ | Let _ | LetFun _ | LetRecFun _ | Match _ -> 0
+  | If _ -> 1
+  | Or _ -> 2
+  | And _ -> 3
+  | Not _ -> 4
+  | Equal _ | Neq _ | LessThan _ | Leq _ | GreaterThan _ | Geq _ -> 5
+  | ListCons _ -> 6
+  | Plus _ | Minus _ -> 7
+  | Times _ | Divide _ | Modulus _ -> 8
+  | Assert _ | VariantExpr _ -> 9
+  | Appl _ -> 10
+  | RecordProj _ -> 11
+  | Int _ | Bool _ | Input | Var _ | List _ | Record _ -> 12
+;;
+
+(** Takes expressions [e1] and [e2] as arguments.  Returns 0 if the two
+    expressions have equal precedence, a negative int if [e1] has lower
+    precedence than [e2], and a positive int if [e1] has higher precedence. *)
+let expr_precedence_cmp e1 e2 = (expr_precedence e1) - (expr_precedence e2);;

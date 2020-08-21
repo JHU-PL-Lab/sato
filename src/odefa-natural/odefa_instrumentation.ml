@@ -4,9 +4,7 @@ open Jhupllib;;
 open Odefa_ast;;
 open Ast;;
 
-open On_to_odefa_types;;
-
-open Translator_utils.TranslationMonad;;
+open On_to_odefa_monad.TranslationMonad;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "Type_instrumentation";;
 
@@ -53,9 +51,7 @@ let rec change_abort_vars
   | _ -> clause
 ;;
 
-let rec instrument_clauses
-    (c_list : clause list)
-  : (clause list) m =
+let rec instrument_clauses (c_list : clause list) : (clause list) m =
   match c_list with
   | clause :: clauses' ->
     begin
@@ -147,6 +143,9 @@ let rec instrument_clauses
               let%bind b = fresh_var "b_b" in
               let%bind () = add_instrument_var z in
               let%bind () = add_instrument_var b in
+              (* We need to have this line because we are adding a new value
+                 source *)
+              let%bind () = add_odefa_natodefa_mapping z (On_ast.Int 0) in
               (* Clauses *)
               let z_cls = Clause(z, Value_body (Value_int 0)) in
               let b_bod =
@@ -264,22 +263,53 @@ let rec instrument_clauses
   | [] -> return []
 ;;
 
-let instrument_odefa (odefa_ast : expr) : (expr * Odefa_natodefa_mappings.t) =
-  let (monad_val : (expr * Odefa_natodefa_mappings.t) m) =
-    (* Transform odefa program *)
-    let Expr(odefa_clist) = odefa_ast in
-    let%bind trans_clist = instrument_clauses odefa_clist in
-    (* Add "~result" to the end of the program *)
-    let Clause(last_var, _) = List.last trans_clist in
+(* This function is necessary in the case where the first variable defines a
+   function value definition.  If a function is the first variable and we look
+   it up from within said function (e.g. from an abort clause), the lookup
+   will zero out because the variable is always outside the scope of the
+   function. *)
+let add_first_var (c_list : clause list) : (clause list) m =
+  let Clause (_, first_body) = List.first c_list in
+  match first_body with
+  | Value_body (Value_function _) ->
     let%bind fresh_str = freshness_string in
-    let result_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
-    let result_clause = Ast.Clause(result_var, Ast.Var_body(last_var)) in
-    (* let%bind inst_map = instrument_map in *)
-    (* let%bind inst_map_2 = var_clause_mapping in *)
-    (* lazy_logger `debug (fun () -> Printf.sprintf "Map size: %d" (Ident_map.cardinal inst_map_2)); *)
+    let unit_rec = Value_record (Record_value Ident_map.empty) in
+    let first_var = Var (Ident (fresh_str ^ "first"), None) in
+    let first_cls = Clause(first_var, Value_body unit_rec) in
+    return @@ first_cls :: c_list
+  | _ ->
+    return c_list
+;;
+
+let add_result_var (c_list : clause list) : (clause list) m =
+  let Clause (last_var, _) = List.last c_list in
+  let%bind fresh_string = freshness_string in
+  let result_var = Var (Ident (fresh_string ^ "result"), None) in
+  let result_cls = Clause (result_var, Var_body (last_var)) in
+  return @@ c_list @ [result_cls]
+;;
+
+let instrument_odefa (odefa_ast : expr) : (expr * On_to_odefa_maps.t) =
+  let (monad_val : (expr * On_to_odefa_maps.t) m) =
+    (* Transform odefa program *)
+    lazy_logger `debug (fun () ->
+      Printf.sprintf "Initial program:\n%s" (Ast_pp.show_expr odefa_ast));
+    let Expr(odefa_clist) = odefa_ast in
+    let%bind transformed_clist =
+      return odefa_clist
+      >>= instrument_clauses
+      >>= add_first_var
+      >>= add_result_var
+    in
+    let t_expr = Expr transformed_clist in
+    lazy_logger `debug (fun () ->
+      Printf.sprintf "Result of instrumentation:\n%s"
+        (Ast_pp.show_expr t_expr)
+    );
+    (* Add "~result" to the end of the program *)
     let%bind on_odefa_maps = odefa_natodefa_maps in
-    return (Expr(trans_clist @ [result_clause]), on_odefa_maps)
+    return (t_expr, on_odefa_maps)
   in
-  let context = Translator_utils.new_translation_context () in
+  let context = On_to_odefa_monad.new_translation_context () in
   run context monad_val
 ;;

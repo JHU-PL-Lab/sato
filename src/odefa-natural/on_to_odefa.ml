@@ -2,30 +2,26 @@ open Batteries;;
 open Jhupllib;;
 
 open Odefa_ast;;
-(* open Odefa_symbolic_interpreter;; *)
 
 open Ast_tools;;
 
-open On_to_odefa_types;;
-open Preliminary_conversion;;
-(* open Simplification;; *)
-open Translator_utils;;
+open On_to_odefa_preliminary;;
+open On_to_odefa_monad;;
 
-(** In this module we will translate from odefa-natural to odefa in the
+(** In this module we will translate from natodefa to odefa in the
     following order:
 
-    * Alphatize program
-    * Annotate recursive call sites
-    * Desugar let rec
-    * Desugar lists
-    * Desugar variants
-    * Alphatize program again (to allow above to introduce dupes)
-    * Flatten odefa-natural expressions to odefa expressions
+    * Desugar let rec, lists, variants, and list/variant patterns
+    * Alphatize program again (do this after to allow above to introduce dupes)
+    * Flatten natodefa expressions to odefa expressions
+    * Instrument odefa with type/error constriants
 *)
 
 open TranslationMonad;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "On_to_odefa";;
+
+(* **** Variable alphatization **** *)
 
 (** Determines all variables contained within a pattern. *)
 let rec pat_vars (pat : On_ast.pattern) : On_ast.Ident_set.t =
@@ -37,12 +33,12 @@ let rec pat_vars (pat : On_ast.pattern) : On_ast.Ident_set.t =
     record
     |> Ident_map.enum
     |> Enum.fold
-        (fun idents (_, x_opt) ->
-          match x_opt with
-          | Some x -> Ident_set.add x idents
-          | None -> idents
-        )
-         Ident_set.empty
+      (fun idents (_, x_opt) ->
+        match x_opt with
+        | Some x -> Ident_set.add x idents
+        | None -> idents
+      )
+      Ident_set.empty
   | VariantPat (_, x) ->  Ident_set.singleton x
   | VarPat x ->  Ident_set.singleton x
   | EmptyLstPat ->  Ident_set.empty
@@ -53,7 +49,7 @@ let rec pat_vars (pat : On_ast.pattern) : On_ast.Ident_set.t =
 ;;
 
 (** Performs variable substitution on a pattern. *)
-let rec pat_rename_vars
+let pat_rename_vars
     (name_map : On_ast.Ident.t On_ast.Ident_map.t)
     (pattern : On_ast.pattern)
   : On_ast.pattern =
@@ -87,202 +83,121 @@ let rec pat_rename_vars
     LstDestructPat (h', t')
 ;;
 
-(** Transform an expression to eliminate "let rec" expressions by encoding with
-   self-passing. *)
-let rec_transform (e : On_ast.expr) : On_ast.expr m =
-  let%bind () = update_natodefa_expr e in
-  begin
-  let transformer recurse e =
-    match e with
-    | On_ast.LetRecFun(fun_sig_list, rec_expr) ->
-      let%bind transformed_rec_expr = recurse rec_expr in
-      let original_names =
-        List.map (fun single_sig ->
-            let (On_ast.Funsig (id, _, _)) = single_sig
-            in id) fun_sig_list
-      in
-      let%bind new_names =
-        sequence @@ List.map
-          (fun (On_ast.Ident old_name) ->
-             let%bind new_name = fresh_name old_name in
-             return @@ On_ast.Ident new_name
-          )
-          original_names
-      in
-      let name_pairs = List.combine original_names new_names in
-      let%bind appls_for_funs =
-        list_fold_left_m
-          (fun appl_dict -> fun base_fun ->
-             let (original_fun_name, new_fun_name) = base_fun in
-             let sub_appl =
-               List.fold_left
-                 (fun acc fun_name -> On_ast.Appl(acc, Var(fun_name)))
-                 (Var(new_fun_name)) new_names in
-             return @@
-             On_ast.Ident_map.add
-               original_fun_name sub_appl appl_dict)
-          On_ast.Ident_map.empty name_pairs
-      in
-      let let_maker_fun = (fun fun_name -> fun acc ->
-          let cur_appl_expr = On_ast.Ident_map.find fun_name appls_for_funs in
-          On_ast.Let(fun_name, cur_appl_expr, acc))
-      in
-      let transformed_outer_expr =
-        List.fold_right let_maker_fun original_names transformed_rec_expr
-      in
-      let sig_name_pairs = List.combine fun_sig_list new_names in
-      let%bind ret_expr =
-        list_fold_right_m (fun (fun_sig, fun_new_name) -> fun acc ->
-            let (On_ast.Funsig (_, param_list, cur_f_expr)) = fun_sig in
-            let%bind transformed_cur_f_expr = recurse cur_f_expr in
-            let new_param_list = new_names @ param_list in
-            let new_fun_expr =
-              List.fold_right
-                let_maker_fun original_names transformed_cur_f_expr
-            in
-            return @@
-            On_ast.Let(fun_new_name,
-                       Function (new_param_list, new_fun_expr),
-                       acc)
-          ) sig_name_pairs transformed_outer_expr
-      in
-      return ret_expr
-    | _ ->
-      return e
-  in
-  Translator_utils.m_transform_expr transformer e
-  end
-;;
-
 (** Performs alpha substitution on a given expression. *)
 let rec rename_variable
     (old_name : On_ast.ident)
     (new_name : On_ast.ident)
     (e : On_ast.expr)
   : On_ast.expr =
+  let open On_ast in
   (* NOTE: the generic homomorphism routine m_env_transform_expr does not allow
      us to change the environment of the homomorphism as we descend or to block
      descending into a given subtree, so we can't use it here. *)
   let recurse = rename_variable old_name new_name in
   match e with
-  | On_ast.Var(id) ->
-    if id = old_name then
-      On_ast.Var(new_name)
-    else
-      On_ast.Var(id)
-  | On_ast.Input -> On_ast.Input
-  | On_ast.Function (id_list, e') ->
-    if (List.exists (On_ast.Ident.equal old_name) id_list) then
+  | Int _ | Bool _ | Input -> e
+  | Var (id) ->
+    if id = old_name then Var new_name else Var id
+  | Function (id_list, e') ->
+    if (List.exists (Ident.equal old_name) id_list) then
       e
     else
-      let new_e' = recurse e' in
-      On_ast.Function(id_list, new_e')
-  | On_ast.Appl(e1, e2) ->
-    On_ast.Appl(recurse e1, recurse e2)
-  | On_ast.Let (id, e1, e2) ->
+      Function (id_list, recurse e')
+  | Let (id, e1, e2) ->
     let new_e1 = recurse e1 in
     if id = old_name then
-      On_ast.Let(id, new_e1, e2)
+      Let(id, new_e1, e2)
     else
       let new_e2 = recurse e2 in
-      On_ast.Let(id, new_e1, new_e2)
-  | On_ast.LetRecFun (f_sigs, e') ->
+      Let(id, new_e1, new_e2)
+  | LetFun (f_sig, e') ->
+    let (Funsig(id, id_list, fun_e)) = f_sig in
+    (* If old_name is same as the function name, then don't change anything *)
+    if id = old_name then begin
+      e
+    end else begin
+      (* If old_name is same as one of the names of the params, then
+          we only want to change the code outside of the function. *)
+      if List.exists (Ident.equal old_name) id_list then begin
+        let new_e' = recurse e' in
+        LetFun (f_sig, new_e')
+      end else begin
+        (* change both the inside and the outside expressions *)
+        let new_inner_e = recurse fun_e in
+        let new_outer_e = recurse e' in
+        let new_funsig = Funsig(id, id_list, new_inner_e) in
+        LetFun(new_funsig, new_outer_e)
+      end
+    end
+  | LetRecFun (f_sigs, e') ->
     let function_names =
       f_sigs
       |> List.enum
-      |> Enum.map (fun (On_ast.Funsig(name,_,_)) -> name)
-      |> On_ast.Ident_set.of_enum
+      |> Enum.map (fun (Funsig (name, _, _)) -> name)
+      |> Ident_set.of_enum
     in
     let f_sigs' =
-      if On_ast.Ident_set.mem old_name function_names then
+      if Ident_set.mem old_name function_names then
         f_sigs
       else
-        f_sigs
-        |> List.map
-          (fun (On_ast.Funsig(name,params,body)) ->
-             if List.exists (On_ast.Ident.equal old_name) params then
-               On_ast.Funsig(name,params,body)
+        List.map
+          (fun (Funsig (name, params, body)) ->
+             if List.exists (Ident.equal old_name) params then
+               Funsig (name, params, body)
              else
-               On_ast.Funsig(name,params,recurse body)
+               Funsig (name, params, recurse body)
           )
+          f_sigs
     in
     let e'' =
-      if On_ast.Ident_set.mem old_name function_names then
+      if Ident_set.mem old_name function_names then
         e'
       else
         recurse e'
     in
-    On_ast.LetRecFun(f_sigs', e'')
-  | On_ast.LetFun (f_sig, e') ->
-    let (On_ast.Funsig(id, id_list, fun_e)) = f_sig in
-    (* If the old_name is same as the function name, then we don't want
-       to change anything. *)
-    if id = old_name then
-      e
-    else
-      (
-        (* If the old_name is same as one of the names of the params, then
-           we only want to change the code outside of the function.
-        *)
-        if List.exists (On_ast.Ident.equal old_name) id_list then
-          (
-            let new_e' = recurse e' in
-            On_ast.LetFun (f_sig, new_e')
-          )
-        else (* change both the inside and the outside expressions *)
-          (
-            let new_inner_e = recurse fun_e in
-            let new_outer_e = recurse e' in
-            let new_funsig = On_ast.Funsig(id, id_list, new_inner_e) in
-            On_ast.LetFun(new_funsig, new_outer_e)
-          )
-      )
-  | On_ast.Plus (e1, e2) -> On_ast.Plus(recurse e1, recurse e2)
-  | On_ast.Minus (e1, e2) -> On_ast.Minus(recurse e1, recurse e2)
-  | On_ast.Times (e1, e2) -> On_ast.Times(recurse e1, recurse e2)
-  | On_ast.Divide (e1, e2) -> On_ast.Divide(recurse e1, recurse e2)
-  | On_ast.Modulus (e1, e2) -> On_ast.Modulus(recurse e1, recurse e2)
-  | On_ast.Equal (e1, e2) -> On_ast.Equal(recurse e1, recurse e2)
-  | On_ast.Neq (e1, e2) -> On_ast.Neq(recurse e1, recurse e2)
-  | On_ast.LessThan (e1, e2) -> On_ast.LessThan(recurse e1, recurse e2)
-  | On_ast.Leq (e1, e2) -> On_ast.Leq(recurse e1, recurse e2)
-  | On_ast.GreaterThan (e1, e2) -> On_ast.GreaterThan(recurse e1, recurse e2)
-  | On_ast.Geq (e1, e2) -> On_ast.Geq(recurse e1, recurse e2)
-  | On_ast.And (e1, e2) -> On_ast.And(recurse e1, recurse e2)
-  | On_ast.Or (e1, e2) -> On_ast.Or(recurse e1, recurse e2)
-  | On_ast.Not e1 -> On_ast.Not(recurse e1)
-  | On_ast.If (e1, e2, e3) -> On_ast.If(recurse e1, recurse e2, recurse e3)
-  | On_ast.Int _
-  | On_ast.Bool _ -> e
-  | On_ast.Record m -> On_ast.Record (On_ast.Ident_map.map recurse m)
-  | On_ast.RecordProj (e1, lbl) -> On_ast.RecordProj(recurse e1, lbl)
-  | On_ast.Match (e0, cases) ->
+    LetRecFun(f_sigs', e'')
+  | Match (e0, cases) ->
     let e0' = recurse e0 in
     let cases' =
-      cases
-      |> List.map
+      List.map
         (fun (pattern, body) ->
-           if On_ast.Ident_set.mem old_name (pat_vars pattern) then
+           if Ident_set.mem old_name (pat_vars pattern) then
              (pattern, body)
            else
              (pattern, recurse body)
         )
+        cases
     in
-    On_ast.Match(e0', cases')
-  | On_ast.VariantExpr (lbl, e1) -> On_ast.VariantExpr(lbl, recurse e1)
-  | On_ast.List es -> On_ast.List(List.map recurse es)
-  | On_ast.ListCons (e1, e2) -> On_ast.ListCons(recurse e1, recurse e2)
-  | On_ast.Assert e -> On_ast.Assert(recurse e)
+    Match(e0', cases')
+  | Appl (e1, e2) -> Appl (recurse e1, recurse e2)
+  | Plus (e1, e2) -> Plus(recurse e1, recurse e2)
+  | Minus (e1, e2) -> Minus(recurse e1, recurse e2)
+  | Times (e1, e2) -> Times(recurse e1, recurse e2)
+  | Divide (e1, e2) -> Divide(recurse e1, recurse e2)
+  | Modulus (e1, e2) -> Modulus(recurse e1, recurse e2)
+  | Equal (e1, e2) -> Equal(recurse e1, recurse e2)
+  | Neq (e1, e2) -> Neq(recurse e1, recurse e2)
+  | LessThan (e1, e2) -> LessThan(recurse e1, recurse e2)
+  | Leq (e1, e2) -> Leq(recurse e1, recurse e2)
+  | GreaterThan (e1, e2) -> GreaterThan(recurse e1, recurse e2)
+  | Geq (e1, e2) -> Geq(recurse e1, recurse e2)
+  | And (e1, e2) -> And(recurse e1, recurse e2)
+  | Or (e1, e2) -> Or(recurse e1, recurse e2)
+  | Not e1 -> Not(recurse e1)
+  | If (e1, e2, e3) -> If(recurse e1, recurse e2, recurse e3)
+  | Record m -> Record (Ident_map.map recurse m)
+  | RecordProj (e1, lbl) -> RecordProj(recurse e1, lbl)
+  | VariantExpr (lbl, e1) -> VariantExpr (lbl, recurse e1)
+  | List es -> List (List.map recurse es)
+  | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
+  | Assert e -> Assert (recurse e)
 ;;
 
 (** This function alphatizes an entire expression.  If a variable is defined
     more than once in the given expression, all but one of the declarations will
-    be alpha-renamed to a fresh name.
-*)
+    be alpha-renamed to a fresh name. *)
 let alphatize (e : On_ast.expr) : On_ast.expr m =
-  let open TranslationMonad in
   let open On_ast in
-  let%bind () = update_natodefa_expr e in
   (* Given a list of identifiers, a list of expressions, and a list of
      previously declared identifiers, this helper routine renames all previously
      declared identifiers which appear in the list within all of the
@@ -293,299 +208,281 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
   let rec ensure_exprs_unique_names
       (names : Ident.t list)
       (exprs : expr list)
-      (previously_declared : Ident_set.t)
+      (prev_declared : Ident_set.t)
     : (Ident.t list * expr list * Ident_set.t * Ident.t Ident_map.t) m =
     match names with
     | [] ->
-      return ([], exprs, previously_declared, Ident_map.empty)
-    | name::more_names ->
-      let%bind (more_names', exprs', previously_declared', renaming') =
-        ensure_exprs_unique_names more_names exprs previously_declared
+      return ([], exprs, prev_declared, Ident_map.empty)
+    | name :: more_names ->
+      let%bind (more_names', exprs', prev_declared', renaming') =
+        ensure_exprs_unique_names more_names exprs prev_declared
       in
-      if Ident_set.mem name previously_declared' then begin
-        let Ident(s) = name in
+      if Ident_set.mem name prev_declared' then begin
+        let Ident s = name in
         let%bind new_s = fresh_name s in
-        let new_name = Ident(new_s) in
+        let new_name = Ident new_s in
+        let%bind () = add_natodefa_var_mapping new_name name in
         let exprs'' = List.map (rename_variable name new_name) exprs' in
-        let previously_declared'' =
-          Ident_set.add new_name previously_declared'
-        in
+        let prev_declared'' = Ident_set.add new_name prev_declared' in
         let renaming'' = Ident_map.add name new_name renaming' in
-        return
-          (new_name::more_names', exprs'', previously_declared'', renaming'')
-      end else
-        let previously_declared'' = Ident_set.add name previously_declared' in
-        return (name::more_names', exprs', previously_declared'', renaming')
+        return (new_name :: more_names', exprs'', prev_declared'', renaming'')
+      end else begin
+        let prev_declared'' = Ident_set.add name prev_declared' in
+        return (name :: more_names', exprs', prev_declared'', renaming')
+      end
   in
   let ensure_expr_unique_names names expr seen =
-    let%bind (names',exprs',seen',renaming') =
+    let%bind (names', exprs', seen', renaming') =
       ensure_exprs_unique_names names [expr] seen
     in
-    return (names',List.hd exprs',seen',renaming')
+    return (names', List.hd exprs', seen', renaming')
   in
   let rec walk (expr : expr) (seen_declared : Ident_set.t)
     : (expr * Ident_set.t) m =
     let zero () =
       raise @@ Jhupllib_utils.Invariant_failure "list changed size"
     in
-    match expr with
-    (* In leaf cases, no new variables are defined and so we have no work to
-       do. *)
-    | Var _
-    | Input
-    | Int _
-    | Bool _ ->
-      return (expr, seen_declared)
-    | Function (params, body) ->
-      let%bind body', seen_declared' = walk body seen_declared in
-      (* FIXME?: assuming that parameters in functions are not duplicated;
-                 probably should verify that somewhere *)
-      let%bind (params', body'', seen_declared'', _) =
-        ensure_expr_unique_names params body' seen_declared'
-      in
-      return (Function(params', body''), seen_declared'')
-    | Appl (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return @@ (Appl (e1', e2'), seen_declared'')
-    | Let (x, e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      let%bind (xs,es,seen_declared''',_) =
-        ensure_exprs_unique_names [x] [e1';e2'] seen_declared''
-      in
-      let%orzero ([x'],[e1'';e2'']) = (xs,es) in
-      return (Let(x', e1'', e2''), seen_declared''')
-    | LetRecFun (funsigs, expr) ->
-      let%bind funsigs'rev, seen_declared' =
-        list_fold_left_m
-          (fun (acc, seen) (Funsig(name,params,body)) ->
-             let%bind body', seen' = walk body seen in
-             return ((Funsig(name,params,body'))::acc, seen')
-          )
-          ([], seen_declared)
-          funsigs
-      in
-      let funsigs' = List.rev funsigs'rev in
-      (* FIXME?: assuming that parameters in functions are not duplicated;
-                 probably should verify that somewhere *)
-      (* FIXME?: assuming that function names in recursive groups are not
-                 duplicated; probably should verify that somewhere *)
-      (* First, make sure that all of the function *names* are unique. *)
-      let function_names, function_bodies =
-        List.split @@ List.map (fun (Funsig(name,_,body)) -> name,body) funsigs'
-      in
-      let%bind function_names', out_exprs, seen_declared'', _ =
-        ensure_exprs_unique_names
-          function_names
-          (expr :: function_bodies)
-          seen_declared'
-      in
-      let%orzero (expr' :: function_bodies') = out_exprs in
-      let funsigs'' =
-        List.combine function_names' function_bodies'
-        |> List.combine funsigs'
-        |> List.map
-          (fun ((Funsig(_,params,_)),(name,body)) -> Funsig(name,params,body))
-      in
-      (* Now, for each function, make sure that the *parameters* are unique. *)
-      let%bind funsigs'''_rev, seen_declared''' =
-        funsigs''
-        |> list_fold_left_m
-          (fun (out_funsigs, seen) (Funsig(name,params,body)) ->
-             let%bind (params', body', seen', _) =
-               ensure_expr_unique_names params body seen
-             in
-             return ((Funsig(name, params', body'))::out_funsigs, seen')
-          )
-          ([], seen_declared'')
-      in
-      return (LetRecFun(List.rev funsigs'''_rev, expr'), seen_declared''')
-    | LetFun (funsig, expr) ->
-      (* FIXME?: assuming that parameters in functions are not duplicated;
-                 probably should verify that somewhere *)
-      (* Unpack signature *)
-      let Funsig(name, params, body) = funsig in
-      (* Recurse on the second expression to ensure that it is internally
-         alphatized. *)
-      let%bind (expr', seen_declared') = walk expr seen_declared in
-      (* Perform renamings on any names which we have already seen from the
-         outside. *)
-      let%bind names', expr'', seen_declared'', _ =
-        ensure_expr_unique_names [name] expr' seen_declared'
-      in
-      let%orzero [name'] = names' in
-      (* Recurse on the body expression to ensure that it is internally
-         alphatized. *)
-      let%bind (body', seen_declared''') = walk body seen_declared'' in
-      (* Perform renamings on any names which we have already seen from the
-         outside. *)
-      let%bind params', body'', seen_declared'''', _ =
-        ensure_expr_unique_names params body' seen_declared'''
-      in
-      return (LetFun(Funsig(name', params', body''), expr''), seen_declared'''')
-    | Plus (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Plus(e1', e2'), seen_declared'')
-    | Minus (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Minus(e1', e2'), seen_declared'')
-    | Times (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Times(e1', e2'), seen_declared'')
-    | Divide (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Divide(e1', e2'), seen_declared'')
-    | Modulus (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Modulus(e1', e2'), seen_declared'')
-    | Equal (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Equal(e1', e2'), seen_declared'')
-    | Neq (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Neq(e1', e2'), seen_declared'')
-    | LessThan (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (LessThan(e1', e2'), seen_declared'')
-    | Leq (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Leq(e1', e2'), seen_declared'')
-    | GreaterThan (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (GreaterThan(e1', e2'), seen_declared'')
-    | Geq (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Geq(e1', e2'), seen_declared'')
-    | And (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (And(e1', e2'), seen_declared'')
-    | Or (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (Or(e1', e2'), seen_declared'')
-    | Not e1 ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      return (Not e1', seen_declared')
-    | If (e1, e2, e3) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      let%bind e3', seen_declared''' = walk e3 seen_declared'' in
-      return (If(e1', e2', e3'), seen_declared''')
-    | Record mapping ->
-      let%bind mapping', seen_declared' =
-        mapping
-        |> Ident_map.enum
-        |> List.of_enum
-        |> list_fold_left_m
-          (fun (acc,seen) (lbl,expr) ->
-             let%bind expr', seen' = walk expr seen in
-             return ((lbl,expr')::acc, seen')
-          )
-          ([], seen_declared)
-        |> lift1
-          (fun (acc,seen) -> (Ident_map.of_enum @@ List.enum acc, seen))
-      in
-      return (Record mapping', seen_declared')
-    | RecordProj (e1, lbl) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      return (RecordProj(e1', lbl), seen_declared')
-    | Match (e0, cases) ->
-      let%bind e0', seen_declared' = walk e0 seen_declared in
-      let%bind cases_rev, seen_declared'' =
-        cases
-        |> list_fold_left_m
-          (fun (acc, seen) (pat, body) ->
-             (* FIXME?: assuming that patterns contain unique variables.  Should
-                        probably verify that somewhere. *)
-             let vars = pat_vars pat in
-             let%bind renaming =
-               vars
-               |> Ident_set.enum
-               |> Enum.map
-                 (fun ((Ident s) as i) ->
-                    let%bind s' = fresh_name s in
-                    return (i, Ident s')
-                 )
-               |> List.of_enum
-               |> sequence
-               |> lift1 List.enum
-               |> lift1 Ident_map.of_enum
-             in
-             let pat' = pat_rename_vars renaming pat in
-             let body' =
-               Ident_map.enum renaming
-               |> Enum.fold
-                 (fun body_expr (from_ident,to_ident) ->
-                    rename_variable from_ident to_ident body_expr
-                 )
-                 body
-             in
-             let seen' =
-               Ident_set.union seen @@
-               (renaming |> Ident_map.values |> Ident_set.of_enum)
-             in
-             return ((pat', body')::acc, seen')
-          )
-          ([], seen_declared')
-      in
-      let cases' = List.rev cases_rev in
-      return (Match(e0', cases'), seen_declared'')
-    | VariantExpr (lbl, e1) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      return (VariantExpr(lbl, e1'), seen_declared')
-    | List es ->
-      let%bind (es'rev, seen_declared') =
-        es
-        |> list_fold_left_m
-          (fun (ret, seen) e ->
-             let%bind e', seen' = walk e seen in
-             return (e'::ret, seen')
-          )
-          ([], seen_declared)
-      in
-      return (List(List.rev es'rev), seen_declared')
-    | ListCons (e1, e2) ->
-      let%bind e1', seen_declared' = walk e1 seen_declared in
-      let%bind e2', seen_declared'' = walk e2 seen_declared' in
-      return (ListCons(e1', e2'), seen_declared'')
-    | Assert e ->
-      let%bind e', seen_declared' = walk e seen_declared in
-      return (Assert e', seen_declared')
+    let%bind (expr', seen_declared') =
+      match expr with
+      (* In leaf cases, no new variables are defined and so we have no work to
+        do. *)
+      | Var _ | Input | Int _ | Bool _ ->
+        return (expr, seen_declared)
+      | Function (params, body) ->
+        (* Recurse on the body to ensure that it is internally alphatized. *)
+        let%bind body', seen_declared' = walk body seen_declared in
+        (* FIXME?: assuming that parameters in functions are not duplicated;
+                  probably should verify that somewhere *)
+        let%bind (params', body'', seen_declared'', _) =
+          ensure_expr_unique_names params body' seen_declared'
+        in
+        return (Function(params', body''), seen_declared'')
+      | Appl (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return @@ (Appl (e1', e2'), seen_declared'')
+      | Let (x, e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        let%bind (xs, es, seen_declared''', _) =
+          ensure_exprs_unique_names [x] [e1'; e2'] seen_declared''
+        in
+        let%orzero ([x'], [e1''; e2'']) = (xs, es) in
+        return (Let(x', e1'', e2''), seen_declared''')
+      | LetRecFun (funsigs, expr) ->
+        let%bind funsigs'rev, seen_declared' =
+          list_fold_left_m
+            (fun (acc, seen) (Funsig (name, params, body)) ->
+              let%bind body', seen' = walk body seen in
+              return ((Funsig (name, params, body')) :: acc, seen')
+            )
+            ([], seen_declared)
+            funsigs
+        in
+        let funsigs' = List.rev funsigs'rev in
+        (* FIXME?: assuming that parameters in functions are not duplicated;
+                  probably should verify that somewhere *)
+        (* FIXME?: assuming that function names in recursive groups are not
+                  duplicated; probably should verify that somewhere *)
+        (* First, make sure that all of the function *names* are unique. *)
+        let function_names, function_bodies =
+          funsigs'
+          |> List.map (fun (Funsig (name, _, body)) -> name, body) 
+          |> List.split 
+        in
+        let%bind function_names', out_exprs, seen_declared'', _ =
+          ensure_exprs_unique_names
+            function_names
+            (expr :: function_bodies)
+            seen_declared'
+        in
+        let%orzero (expr' :: function_bodies') = out_exprs in
+        let funsigs'' =
+          List.combine function_names' function_bodies'
+          |> List.combine funsigs'
+          |> List.map
+            (fun ((Funsig (_, params, _)), (name, body)) ->
+              Funsig (name, params, body))
+        in
+        (* Now, for each function, make sure that the *parameters* are unique. *)
+        let%bind funsigs'''_rev, seen_declared''' =
+          funsigs''
+          |> list_fold_left_m
+            (fun (out_funsigs, seen) (Funsig (name, params, body)) ->
+              let%bind (params', body', seen', _) =
+                ensure_expr_unique_names params body seen
+              in
+              return ((Funsig(name, params', body')) :: out_funsigs, seen')
+            )
+            ([], seen_declared'')
+        in
+        return (LetRecFun(List.rev funsigs'''_rev, expr'), seen_declared''')
+      | LetFun (funsig, expr) ->
+        (* FIXME?: assuming that parameters in functions are not duplicated;
+                  probably should verify that somewhere *)
+        (* Unpack signature *)
+        let Funsig(name, params, body) = funsig in
+        (* Recurse on the second expression to ensure that it is internally
+          alphatized. *)
+        let%bind (expr', seen_declared') = walk expr seen_declared in
+        (* Perform renamings on any names which we have already seen from the
+          outside. *)
+        let%bind names', expr'', seen_declared'', _ =
+          ensure_expr_unique_names [name] expr' seen_declared'
+        in
+        let%orzero [name'] = names' in
+        (* Recurse on the body expression to ensure that it is internally
+          alphatized. *)
+        let%bind (body', seen_declared''') = walk body seen_declared'' in
+        (* Perform renamings on any names which we have already seen from the
+          outside. *)
+        let%bind params', body'', seen_declared'''', _ =
+          ensure_expr_unique_names params body' seen_declared'''
+        in
+        return (LetFun(Funsig(name', params', body''), expr''), seen_declared'''')
+      | Plus (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Plus(e1', e2'), seen_declared'')
+      | Minus (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Minus(e1', e2'), seen_declared'')
+      | Times (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Times(e1', e2'), seen_declared'')
+      | Divide (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Divide(e1', e2'), seen_declared'')
+      | Modulus (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Modulus(e1', e2'), seen_declared'')
+      | Equal (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Equal(e1', e2'), seen_declared'')
+      | Neq (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Neq(e1', e2'), seen_declared'')
+      | LessThan (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (LessThan(e1', e2'), seen_declared'')
+      | Leq (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Leq(e1', e2'), seen_declared'')
+      | GreaterThan (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (GreaterThan(e1', e2'), seen_declared'')
+      | Geq (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Geq(e1', e2'), seen_declared'')
+      | And (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (And(e1', e2'), seen_declared'')
+      | Or (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (Or(e1', e2'), seen_declared'')
+      | Not e1 ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        return (Not e1', seen_declared')
+      | If (e1, e2, e3) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        let%bind e3', seen_declared''' = walk e3 seen_declared'' in
+        return (If(e1', e2', e3'), seen_declared''')
+      | Record mapping ->
+        let%bind mapping', seen_declared' =
+          mapping
+          |> Ident_map.enum
+          |> List.of_enum
+          |> list_fold_left_m
+            (fun (acc,seen) (lbl,expr) ->
+              let%bind expr', seen' = walk expr seen in
+              return ((lbl,expr')::acc, seen')
+            )
+            ([], seen_declared)
+          |> lift1
+            (fun (acc,seen) -> (Ident_map.of_enum @@ List.enum acc, seen))
+        in
+        return (Record mapping', seen_declared')
+      | RecordProj (e1, lbl) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        return (RecordProj(e1', lbl), seen_declared')
+      | Match (e0, cases) ->
+        let%bind e0', seen_declared' = walk e0 seen_declared in
+        let%bind cases_rev, seen_declared'' =
+          list_fold_left_m
+            (fun (acc, seen) (pat, body) ->
+              let%bind body', seen' = walk body seen in
+              let var_list = Ident_set.to_list @@ pat_vars pat in
+              let%bind (_, body'', seen'', renaming) =
+                ensure_expr_unique_names var_list body' seen'
+              in
+              let pat' = pat_rename_vars renaming pat in
+              return ((pat', body'') :: acc, seen'')
+            )
+            ([], seen_declared')
+            cases
+        in
+        let cases' = List.rev cases_rev in
+        return (Match (e0', cases'), seen_declared'')
+      | VariantExpr (lbl, e1) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        return (VariantExpr(lbl, e1'), seen_declared')
+      | List es ->
+        let%bind (es'rev, seen_declared') =
+          es
+          |> list_fold_left_m
+            (fun (ret, seen) e ->
+              let%bind e', seen' = walk e seen in
+              return (e'::ret, seen')
+            )
+            ([], seen_declared)
+        in
+        return (List (List.rev es'rev), seen_declared')
+      | ListCons (e1, e2) ->
+        let%bind e1', seen_declared' = walk e1 seen_declared in
+        let%bind e2', seen_declared'' = walk e2 seen_declared' in
+        return (ListCons (e1', e2'), seen_declared'')
+      | Assert e ->
+        let%bind e', seen_declared' = walk e seen_declared in
+        return (Assert e', seen_declared')
+    in
+    return (expr', seen_declared')
   in
   lift1 fst @@ walk e Ident_set.empty
 ;;
 
-(* **** Expression flattening + helper functions **** *)
+(* **** Expression flattening **** *)
 
 (** Returns the body of a function or conditional with its return variable *)
-let nonempty_body ((body : Ast.clause list), (var : Ast.var))
+let nonempty_body
+    (expr : On_ast.expr)
+    ((body, var) : (Ast.clause list * Ast.var))
   : (Ast.clause list * Ast.var) m =
   match body with
   | [] ->
     let%bind x = fresh_var "var" in
-    let%bind () = add_odefa_natodefa_mapping x in
+    let%bind () = add_odefa_natodefa_mapping x expr in
     return @@ ([Ast.Clause(x, Var_body var)], x)
   | _ ->
     return (body, var)
 ;;
 
 (** Create a new abort clause with multiple conditional clause variables *)
-let add_abort_expr (cond_vars : Ast.var list) =
+let add_abort_expr (expr : On_ast.expr) (cond_vars : Ast.var list) : Ast.expr m =
   let%bind abort_var = fresh_var "ab" in
-  let%bind () = add_odefa_natodefa_mapping abort_var in
+  let%bind () = add_odefa_natodefa_mapping abort_var expr in
   let abort_clause = Ast.Clause(abort_var, Abort_body cond_vars) in
   return @@ Ast.Expr([abort_clause]);
 ;;
@@ -596,6 +493,7 @@ let on_to_odefa_ident (On_ast.Ident (id)) = Ast.Ident (id);;
     clauses associated with a record or variable pattern; these will be
     appended to the front of the pattern's expression. *)
 let flatten_pattern
+    (expr : On_ast.expr)
     (pat_var : Ast.var)
     (pattern : On_ast.pattern)
   : (Ast.pattern * Ast.clause list) m =
@@ -622,7 +520,7 @@ let flatten_pattern
               let v' = on_to_odefa_ident v in
               let lbl' = on_to_odefa_ident lbl in
               let ast_var = Ast.Var (v', None) in
-              let%bind () = add_odefa_natodefa_mapping ast_var in
+              let%bind () = add_odefa_natodefa_mapping ast_var expr in
               let ast_body = Ast.Projection_body(pat_var, lbl') in
               return @@ acc @ [(Ast.Clause (ast_var, ast_body))]
             | None -> return acc
@@ -633,7 +531,7 @@ let flatten_pattern
   | On_ast.VarPat var_pat ->
     let (On_ast.Ident (var_id)) = var_pat in
     let ast_var = Ast.Var (Ident var_id, None) in
-    let%bind () = add_odefa_natodefa_mapping ast_var in
+    let%bind () = add_odefa_natodefa_mapping ast_var expr in
     let ast_body = Ast.Var_body pat_var in
     let clause = Ast.Clause (ast_var, ast_body) in
     return (Ast.Any_pattern, [clause])
@@ -648,19 +546,20 @@ let flatten_pattern
 (** Flatten a function *)
 let flatten_fun
     ?binding_name:(binding_name=(None:On_ast.Ident.t option))
+    (expr : On_ast.expr)
     (param_names : On_ast.Ident.t list)
     (body : Ast.expr)
   : (Ast.expr * Ast.var) m =
   list_fold_right_m
-    (fun (param : On_ast.Ident.t) ((expr : Ast.expr), (_ : Ast.Var.t)) ->
+    (fun (param : On_ast.Ident.t) ((e : Ast.expr), (_ : Ast.Var.t)) ->
       let id = on_to_odefa_ident param in
       let%bind (new_var : Ast.var) =
         match binding_name with
         | None -> fresh_var "flatten_fun"
         | Some (Ident(s)) -> fresh_var s
       in
-      let%bind () = add_odefa_natodefa_mapping new_var in
-      let fun_val = Ast.Value_function (Function_value(Var(id, None), expr)) in
+      let%bind () = add_odefa_natodefa_mapping new_var expr in
+      let fun_val = Ast.Value_function (Function_value(Var(id, None), e)) in
       let fun_body = Ast.Value_body (fun_val) in
       let new_clause = Ast.Clause(new_var, fun_body) in
       let expr' : Ast.expr = Ast.Expr([new_clause]) in
@@ -672,6 +571,7 @@ let flatten_fun
 
 (** Flatten a binary operation *)
 let rec flatten_binop
+    (expr : On_ast.expr)
     (e1 : On_ast.expr)
     (e2 : On_ast.expr)
     (binop : Ast.binary_operator)
@@ -679,7 +579,7 @@ let rec flatten_binop
   let%bind (e1_clist, e1_var) = flatten_expr e1 in
   let%bind (e2_clist, e2_var) = flatten_expr e2 in
   let%bind binop_var = fresh_var "binop" in
-  let%bind () = add_odefa_natodefa_mapping binop_var in
+  let%bind () = add_odefa_natodefa_mapping binop_var expr in
   let binop_body = Ast.Binary_operation_body (e1_var, binop, e2_var) in
   let new_clause = Ast.Clause (binop_var, binop_body) in
   return (e1_clist @ e2_clist @ [new_clause], binop_var)
@@ -687,6 +587,7 @@ let rec flatten_binop
 (** Flatten either the equal or not equal binary operation.
     This involves instrumenting both operations in nested conditionals. *)
 and flatten_eq_binop
+    (expr : On_ast.expr)
     (e1 : On_ast.expr)
     (e2 : On_ast.expr)
     (binop_int : Ast.binary_operator)
@@ -695,7 +596,7 @@ and flatten_eq_binop
     (* Helper function *)
     let add_var var_name =
       let%bind var = fresh_var var_name in
-      let%bind () = add_odefa_natodefa_mapping var in
+      let%bind () = add_odefa_natodefa_mapping var expr in
       let%bind () = add_instrument_var var in
       return var
     in
@@ -733,7 +634,7 @@ and flatten_eq_binop
     (* Inner conditional *)
     let%bind binop_int = add_var "binop" in
     let%bind binop_bool = add_var "binop" in
-    let%bind f_path = add_abort_expr [binop_bool; binop_int] in
+    let%bind f_path = add_abort_expr expr [binop_bool; binop_int] in
     let%bind t_path' = return @@ Ast.Expr [t_path_clause'] in
     let inner_cond =
       Ast.Clause(binop_bool, Conditional_body(m_b_bool, t_path', f_path))
@@ -753,105 +654,98 @@ and flatten_eq_binop
 
 (** Flatten an entire expression (i.e. convert natodefa into odefa code) *)
 and flatten_expr
-    (e : On_ast.expr)
+    (expr : On_ast.expr)
   : (Ast.clause list * Ast.var) m =
-  let%bind () = update_natodefa_expr e in
-  match e with
+  (* let%bind () = update_natodefa_expr exp in *)
+  match expr with
   | Var (id) ->
     let%bind alias_var = fresh_var "var" in
     let Ident(i_string) = id in
     let id_var = Ast.Var(Ast.Ident(i_string), None) in
-    let%bind () = add_odefa_natodefa_mapping alias_var in
-    let%bind () = add_odefa_natodefa_mapping id_var in
+    let%bind () = add_odefa_natodefa_mapping alias_var expr in
+    let%bind () = add_odefa_natodefa_mapping id_var expr in
     return ([Ast.Clause(alias_var, Ast.Var_body(id_var))], alias_var)
   | Input ->
     let%bind input_var = fresh_var "input" in
-    let%bind () = add_odefa_natodefa_mapping input_var in
+    let%bind () = add_odefa_natodefa_mapping input_var expr in
     return ([Ast.Clause(input_var, Ast.Input_body)], input_var)
   | Function (id_list, e) ->
-    let%bind (fun_c_list, _) = nonempty_body @@@ flatten_expr e in
+    let%bind (fun_c_list, _) = nonempty_body expr @@@ flatten_expr e in
     let body_expr = Ast.Expr(fun_c_list) in
-    let%bind (Expr(fun_clause), return_var) = flatten_fun id_list body_expr in
+    let%bind (Expr(fun_clause), return_var) =
+      flatten_fun expr id_list body_expr
+    in
     return (fun_clause, return_var)
   | Appl (e1, e2) ->
     let%bind (e1_clist, e1_var) = flatten_expr e1 in
     let%bind (e2_clist, e2_var) = flatten_expr e2 in
     let%bind appl_var = fresh_var "appl" in
-    let%bind () = add_odefa_natodefa_mapping appl_var in
-    let new_clause =
-      Ast.Clause (
-        appl_var,
-        Ast.Appl_body(e1_var, e2_var)
-      )
-    in
+    let%bind () = add_odefa_natodefa_mapping appl_var expr in
+    let new_clause = Ast.Clause (appl_var, Ast.Appl_body(e1_var, e2_var)) in
     return (e1_clist @ e2_clist @ [new_clause], appl_var)
   | Let (var_ident, e1, e2) ->
-    begin
     let%bind (e1_clist, e1_var) = flatten_expr e1 in
     let%bind (e2_clist, e2_var) = flatten_expr e2 in
     let Ident(var_name) = var_ident in
     let lt_var = Ast.Var (Ast.Ident(var_name), None) in
-    let%bind () = add_odefa_natodefa_mapping lt_var in
+    let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Ast.Var_body(e1_var)) in
     return (e1_clist @ [assignment_clause] @ e2_clist, e2_var)
-    end
   | LetFun (sign, e) ->
-    begin
     (* TODO: check for bugs!!! *)
     (* Translating the function signature... *)
     let Funsig(fun_name, id_list, fun_e) = sign in
-    let%bind (body_clist, _) = nonempty_body @@@ flatten_expr fun_e in
+    let%bind (body_clist, _) = nonempty_body expr @@@ flatten_expr fun_e in
     let%bind (Expr(fun_clauses), return_var) =
-      flatten_fun ~binding_name:(Some fun_name) id_list (Expr(body_clist))
+      flatten_fun ~binding_name:(Some fun_name) expr id_list (Expr(body_clist))
     in
     (* Flattening the "e2"... *)
     let%bind (e_clist, e_var) = flatten_expr e in
     (* Assigning the function to the given function name... *)
     let On_ast.Ident(var_name) = fun_name in
     let lt_var = Ast.Var(Ast.Ident(var_name), None) in
-    let%bind () = add_odefa_natodefa_mapping lt_var in
+    let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Ast.Var_body(return_var)) in
     return (fun_clauses @ [assignment_clause] @ e_clist, e_var)
-    end
   | LetRecFun (_, _) ->
     raise @@
       Utils.Invariant_failure "LetRecFun should not have been passed to flatten_expr"
   | Plus (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_plus
+    flatten_binop expr e1 e2 Ast.Binary_operator_plus
   | Minus (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_minus
+    flatten_binop expr e1 e2 Ast.Binary_operator_minus
   | Times (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_times
+    flatten_binop expr e1 e2 Ast.Binary_operator_times
   | Divide (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_divide
+    flatten_binop expr e1 e2 Ast.Binary_operator_divide
   | Modulus (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_modulus
+    flatten_binop expr e1 e2 Ast.Binary_operator_modulus
   | Equal (e1, e2) ->
-    flatten_eq_binop e1 e2
+    flatten_eq_binop expr e1 e2
       Ast.Binary_operator_equal_to
       Ast.Binary_operator_xnor
   | Neq (e1, e2) ->
-    flatten_eq_binop e1 e2
+    flatten_eq_binop expr e1 e2
       Ast.Binary_operator_not_equal_to
       Ast.Binary_operator_xor
   | LessThan (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_less_than
+    flatten_binop expr e1 e2 Ast.Binary_operator_less_than
   | Leq (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_less_than_or_equal_to
+    flatten_binop expr e1 e2 Ast.Binary_operator_less_than_or_equal_to
   | GreaterThan (e1, e2) -> (* Reverse e1 and e2 *)
-    flatten_binop e2 e1 Ast.Binary_operator_less_than
+    flatten_binop expr e2 e1 Ast.Binary_operator_less_than
   | Geq (e1, e2) -> (* Reverse e1 and e2 *)
-    flatten_binop e2 e1 Ast.Binary_operator_less_than_or_equal_to
+    flatten_binop expr e2 e1 Ast.Binary_operator_less_than_or_equal_to
   | And (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_and
+    flatten_binop expr e1 e2 Ast.Binary_operator_and
   | Or (e1, e2) ->
-    flatten_binop e1 e2 Ast.Binary_operator_or
+    flatten_binop expr e1 e2 Ast.Binary_operator_or
   | Not (e) ->
     let%bind (e_clist, e_var) = flatten_expr e in
     let%bind true_var = fresh_var "true" in
     let%bind binop_var = fresh_var "binop" in
-    let%bind () = add_odefa_natodefa_mapping true_var in
-    let%bind () = add_odefa_natodefa_mapping binop_var in
+    let%bind () = add_odefa_natodefa_mapping true_var (Bool true) in
+    let%bind () = add_odefa_natodefa_mapping binop_var expr in
     let binop = Ast.Binary_operator_xor in
     let true_body = Ast.Value_body(Value_bool true) in
     let binop_body = Ast.Binary_operation_body(e_var, binop, true_var) in
@@ -864,21 +758,21 @@ and flatten_expr
     (* NOTE: this is translation from an if statement. Thus e1 will be always
        matched with true. *)
     let%bind (e1_clst, e1_var) = flatten_expr e1 in
-    let%bind (e2_clst, _) = nonempty_body @@@ flatten_expr e2 in
-    let%bind (e3_clst, _) = nonempty_body @@@ flatten_expr e3 in
+    let%bind (e2_clst, _) = nonempty_body expr @@@ flatten_expr e2 in
+    let%bind (e3_clst, _) = nonempty_body expr @@@ flatten_expr e3 in
     let%bind if_var = fresh_var "if" in
-    let%bind () = add_odefa_natodefa_mapping if_var in
+    let%bind () = add_odefa_natodefa_mapping if_var expr in
     let if_body = Ast.Conditional_body(e1_var, Expr(e2_clst), Expr(e3_clst)) in
     let if_clause = Ast.Clause(if_var, if_body) in
     return (e1_clst @ [if_clause], if_var)
   | Int (n) ->
     let%bind int_var = fresh_var "int" in
-    let%bind () = add_odefa_natodefa_mapping int_var in
+    let%bind () = add_odefa_natodefa_mapping int_var expr in
     let new_clause = Ast.Clause(int_var, Ast.Value_body(Ast.Value_int(n))) in
     return ([new_clause], int_var)
   | Bool (b) ->
     let%bind bool_var = fresh_var "bool" in
-    let%bind () = add_odefa_natodefa_mapping bool_var in
+    let%bind () = add_odefa_natodefa_mapping bool_var expr in
     let new_clause = Ast.Clause(bool_var, Ast.Value_body(Ast.Value_bool(b))) in
     return ([new_clause], bool_var)
   | Record (recexpr_map) ->
@@ -902,7 +796,7 @@ and flatten_expr
       |> list_fold_left_m flatten_and_map empty_acc
     in
     let%bind rec_var = fresh_var "record" in
-    let%bind () = add_odefa_natodefa_mapping rec_var in
+    let%bind () = add_odefa_natodefa_mapping rec_var expr in
     let new_body = Ast.Value_body (Ast.Value_record (Ast.Record_value map)) in
     let new_clause = Ast.Clause (rec_var, new_body) in
     return (clist @ [new_clause], rec_var)
@@ -911,12 +805,12 @@ and flatten_expr
     let On_ast.Label(l_string) = lab in
     let l_ident = Ast.Ident(l_string) in
     let%bind proj_var = fresh_var "proj" in
-    let%bind () = add_odefa_natodefa_mapping proj_var in
+    let%bind () = add_odefa_natodefa_mapping proj_var expr in
     let new_clause =
       Ast.Clause(proj_var, Ast.Projection_body(e_var, l_ident))
     in
     return (e_clist @ [new_clause], proj_var)
-  | Match (subject, pat_expr_list) ->
+  | Match (subject, pat_e_list) ->
     begin
       (* We need to convert the subject first *)
       let%bind (subject_clause_list, subj_var) = flatten_expr subject in
@@ -933,12 +827,12 @@ and flatten_expr
             let (curr_pat, curr_pat_expr) = curr_match in
             let%bind bool_var = fresh_var "m_bool" in
             let%bind cond_var = fresh_var "m_cond" in
-            let%bind () = add_odefa_natodefa_mapping bool_var in
-            let%bind () = add_odefa_natodefa_mapping cond_var in
+            let%bind () = add_odefa_natodefa_mapping bool_var expr in
+            let%bind () = add_odefa_natodefa_mapping cond_var expr in
             let%bind () = add_instrument_var bool_var in
             let%bind () = add_instrument_var cond_var in
             let%bind (flat_pat, new_clauses) =
-              flatten_pattern subj_var curr_pat
+              flatten_pattern expr subj_var curr_pat
             in
             let%bind (c_list, _) = flatten_expr curr_pat_expr in
             let c_list' = new_clauses @ c_list in
@@ -956,9 +850,9 @@ and flatten_expr
             return (Ast.Expr([match_clause; cond_clause]))
           end
         | [] ->
-          add_abort_expr match_vars
+          add_abort_expr expr match_vars
       in
-      let%bind match_expr = convert_matches pat_expr_list [] in
+      let%bind match_expr = convert_matches pat_e_list [] in
       let Ast.Expr match_clauses = match_expr in
       let match_last_clause = List.last match_clauses in
       let Ast.Clause (match_last_clause_var, _) = match_last_clause in
@@ -973,16 +867,16 @@ and flatten_expr
       "flatten_expr: List expressions should have been handled!"
   | Assert e ->
     let%bind (flattened_exprs, last_var) = flatten_expr e in
+    (* Helper function *)
+    let add_var var_name =
+      let%bind var = fresh_var var_name in
+      let%bind () = add_odefa_natodefa_mapping var expr in
+      return var
+    in
     (* Variables *)
-    let%bind assert_pred = fresh_var "assert_pred" in
-    let%bind assert_result = fresh_var "assert_res" in
-    let%bind assert_result_inner = fresh_var "assert_res_true" in
-    let%bind () = add_odefa_natodefa_mapping assert_pred in
-    let%bind () = add_odefa_natodefa_mapping assert_result in
-    let%bind () = add_odefa_natodefa_mapping assert_result_inner in
-    let%bind () = add_instrument_var assert_pred in
-    let%bind () = add_instrument_var assert_result in
-    let%bind () = add_instrument_var assert_result_inner in
+    let%bind assert_pred = add_var "assert_pred" in
+    let%bind assert_result = add_var "assert_res" in
+    let%bind assert_result_inner = add_var "assert_res_true" in
     (* Clauses *)
     let alias_clause = Ast.Clause (assert_pred, Var_body last_var) in
     (* We use an empty record as the result value, since no valid operation can
@@ -993,7 +887,7 @@ and flatten_expr
     let t_path =
       Ast.Expr [Clause (assert_result_inner, Value_body res_value)]
     in
-    let%bind f_path = add_abort_expr [assert_result] in
+    let%bind f_path = add_abort_expr expr [assert_result] in
     let cond_clause =
       Ast.Clause (assert_result, Conditional_body(assert_pred, t_path, f_path))
     in
@@ -1001,51 +895,73 @@ and flatten_expr
     return (all_clauses, assert_result)
 ;;
 
-let debug_transform
-    (name : string)
-    (transform : On_ast.expr -> On_ast.expr m)
-    (e : On_ast.expr)
+let debug_transform_on
+    (trans_name : string)
+    (transform : 'a -> On_ast.expr m)
+    (e : 'a)
   : On_ast.expr m =
-  lazy_logger `trace @@ (fun () ->
-      Printf.sprintf "%s on:\n%s" name (On_ast.show_expr e));
-  let%bind answer = transform e in
-  lazy_logger `trace @@ (fun () ->
-      Printf.sprintf "%s on:\n%s\nproduces\n%s"
-        name (On_ast.show_expr e) (On_ast.show_expr answer));
-  return answer
+  let%bind e' = transform e in
+  lazy_logger `debug (fun () ->
+    Printf.sprintf "Result of %s:\n%s" trans_name (On_ast_pp.show_expr e'));
+  return e'
+;;
+
+let debug_transform_odefa
+    (trans_name : string)
+    (transform : 'a -> Ast.clause list m)
+    (e : 'a)
+  : Ast.clause list m =
+    let%bind c_list = transform e in
+    let e' = Ast.Expr c_list in
+    lazy_logger `debug (fun () ->
+      Printf.sprintf "Result of %s:\n%s" trans_name (Ast_pp.show_expr e'));
+    return c_list
 ;;
 
 let translate
     ?translation_context:(translation_context=None)
-    ?is_instrumented:(is_instrumented=false)
+    ?is_instrumented:(is_instrumented=true)
     (e : On_ast.expr)
-  : (Ast.expr * Odefa_natodefa_mappings.t) =
-  let (e_m_with_info : (Ast.expr * Odefa_natodefa_mappings.t) m) =
-    let%bind transformed_e =
-      return e
-      >>= debug_transform "pre-alphatize" alphatize
-      >>= debug_transform "encode recursion" rec_transform
-      >>= debug_transform "encode lists" list_transform
-      >>= debug_transform "encode variants" encode_variant
-      >>= debug_transform "post-alphatize" alphatize
+  : (Ast.expr * On_to_odefa_maps.t) =
+  let (e_m_with_info : (Ast.expr * On_to_odefa_maps.t) m) =
+    (* Odefa transformations *)
+    let flatten e : Ast.clause list m =
+      let%bind (c_list, _) = flatten_expr e in
+      return c_list
     in
-    let%bind (c_list, _) = flatten_expr transformed_e in
-    let%bind c_list = (* NEW! *)
+    let instrument c_list : Ast.clause list m =
       if is_instrumented then
-        Type_instrumentation.instrument_clauses c_list else return c_list
+        Odefa_instrumentation.instrument_clauses c_list
+      else
+        return c_list
     in
-    let Clause(last_var, _) = List.last c_list in
-    let%bind fresh_str = freshness_string in
-    let res_var = Ast.Var(Ast.Ident(fresh_str ^ "result"), None) in
-    let res_clause = Ast.Clause(res_var, Ast.Var_body(last_var)) in
-    (* let%bind odefa_on_info = get_odefa_natodefa_info in *)
-    (* let%bind inst_map = instrument_map in *)
+    let add_first_result c_list : Ast.clause list m =
+      return c_list
+      >>= Odefa_instrumentation.add_first_var
+      >>= Odefa_instrumentation.add_result_var
+    in
+    (* Translation sequence *)
+    lazy_logger `debug (fun () ->
+      Printf.sprintf "Initial program:\n%s" (On_ast_pp.show_expr e));
+    let%bind translation_result =
+      return e
+      >>= debug_transform_on "desugaring" preliminary_encode_expr
+      >>= debug_transform_on "alphatization" alphatize
+      >>= debug_transform_odefa "flattening" flatten
+      >>= debug_transform_odefa "instrumentation" instrument
+      >>= debug_transform_odefa "adding ~result" add_first_result
+    in
     let%bind odefa_on_maps = odefa_natodefa_maps in
-    return (Ast.Expr(c_list @ [res_clause]), odefa_on_maps)
+    lazy_logger `debug (fun () ->
+      Printf.sprintf "Odefa to natodefa maps:\n%s"
+        (On_to_odefa_maps.show odefa_on_maps)
+    );
+    return (Ast.Expr translation_result, odefa_on_maps)
   in
+  (* Set up context and run *)
   let context =
     match translation_context with
-    | None -> new_translation_context ()
+    | None -> new_translation_context ~is_natodefa:true ()
     | Some ctx -> ctx
   in
   run context e_m_with_info

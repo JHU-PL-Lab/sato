@@ -55,18 +55,23 @@ exception On_Parse_error of string;;
 /*
  * Precedences and associativities.  Lower precedences come first.
  */
-%right prec_let                         /* Let ... In ... */
-%right prec_fun                         /* function declaration */
-%right prec_if                          /* If ... Then ... Else */
-%right DOUBLE_COLON                     /* :: */
-%right OR                               /* Or */
-%right AND                              /* And */
-%left EQUAL_EQUAL LESS LESS_EQUAL       /* = < <= > >= */
-%left PLUS MINUS ASTERISK SLASH PERCENT /* + - * / % */
-%right prec_variant                     /* 'A expr */
-%left DOT                               /* record access */
+%nonassoc prec_let prec_fun   /* Let-ins and functions */
+%nonassoc prec_if             /* Conditionals */
+%left OR                      /* Or */
+%left AND                     /* And */
+%right NOT                    /* Not */
+/* == <> < <= > >= */
+%left EQUAL_EQUAL NOT_EQUAL LESS LESS_EQUAL GREATER GREATER_EQUAL
+%right DOUBLE_COLON           /* :: */
+%left PLUS MINUS              /* + - */
+%left ASTERISK SLASH PERCENT  /* * / % */
+%right ASSERT prec_variant    /* Asserts and variants */
+%left prec_appl               /* Function application */
+%left DOT                     /* Record projection */
 
 %start <On_ast.expr> prog
+%start <On_ast.expr option> delim_expr
+
 
 %%
 
@@ -75,9 +80,20 @@ prog:
       { $1 }
   ;
 
+delim_expr:
+  | EOF
+      { None }
+  | expr EOF
+      { Some ($1) }
+  ;
+
+/* **** Expressions **** */
+
 expr:
-  | unary_expr
+  | simple_expr
       { $1 }
+  | simple_and_proj_expr expr %prec prec_appl
+      { Appl($1, $2) }
   | expr PLUS expr
       { Plus($1, $3) }
   | expr MINUS expr
@@ -100,6 +116,8 @@ expr:
       { And($1, $3) }
   | expr OR expr
       { Or($1, $3) }
+  | NOT expr
+    { Not($2) }
   | expr EQUAL_EQUAL expr
       { Equal($1, $3) }
   | expr NOT_EQUAL expr
@@ -116,46 +134,35 @@ expr:
       { LetFun($2, $4)}
   | expr DOT label
       { RecordProj($1, $3) }
-  | INPUT
-      { Input }
   | expr DOUBLE_COLON expr
       { ListCons($1, $3) }
-  | MATCH expr WITH PIPE match_expr_list END
+  | MATCH expr WITH PIPE? match_expr_list END
       { Match($2, $5) }
-  | MATCH expr WITH match_expr_list END
-      { Match($2, $4) }
+  | ASSERT expr
+      { Assert($2) }
+  | variant_label expr %prec prec_variant
+      { VariantExpr($1, $2) }
 ;
 
+/* let foo x = ... */
 fun_sig:
   | ident_decl param_list EQUALS expr
-    { Funsig ($1, $2, $4) }
+      { Funsig ($1, $2, $4) }
 
-/* Let Rec statements in Odefa-natural are separated by "with".
-   ex) let rec foo x y = ...
-       with bar a b = ...
-       in
-*/
+/* let rec foo x y = ... with bar a b = ... in ... */
 fun_sig_list:
   | fun_sig { [$1] }
   | fun_sig WITH fun_sig_list { $1 :: $3 }
 
-unary_expr:
-  | ASSERT simple_expr { Assert($2) }
-  | NOT simple_expr { Not($2) }
-  | BACKTICK variant_label simple_expr { VariantExpr($2, $3) }
-  | appl_expr { $1 }
-
-appl_expr:
-  | appl_expr simple_expr
-    { Appl($1, $2) }
-  | simple_expr { $1 }
-;
-
+/* In a simple_expr, only primitives, vars, records, and lists do not need
+   surrounding parentheses. */
 simple_expr:
   | INT_LITERAL
       { Int $1 }
   | BOOL
       { Bool $1 }
+  | INPUT
+      { Input }
   | ident_usage
       { $1 }
   | OPEN_BRACE record_body CLOSE_BRACE
@@ -170,25 +177,14 @@ simple_expr:
       { $2 }
 ;
 
-/* Records Expressions in Odefa-natural are delimited by commas and
-   their values are set using "=".
-   ex) {x = 1, y = 2, z = 3} */
-record_body:
-  | label EQUALS expr
-      { let (Label k) = $1 in
-        let key = Ident k in
-        Ident_map.singleton key $3 }
-  | label EQUALS expr COMMA record_body
-      { let (Label k) = $1 in
-        let key = Ident k in
-        let old_map = $5 in
-        let dup_check = Ident_map.mem key old_map in
-        if dup_check then raise (On_Parse_error "Duplicate label names in record!")
-        else
-        let new_map = Ident_map.add key $3 old_map in
-        new_map
-      }
+/* Hardcode the two expressions with precedence above function application,
+   to avoid shift-reduce errors. */
+simple_and_proj_expr:
+  | simple_expr { $1 }
+  | expr DOT label { RecordProj($1, $3) }
 ;
+
+/* **** Idents + labels **** */
 
 param_list:
   | ident_decl param_list { $1 :: $2 }
@@ -207,17 +203,38 @@ ident_decl:
   | IDENTIFIER { Ident $1 }
 ;
 
-/* Lists are enclosed in square brackets and delimited by commas
-   ex) [1, 2, true]
-   Unlike ocaml, natodefa lists may be heterogenous
-*/
+/* **** Records, lists, and variants **** */
+
+/* {x = 1, y = 2, z = 3} */
+record_body:
+  | label EQUALS expr
+      { let (Label k) = $1 in
+        let key = Ident k in
+        Ident_map.singleton key $3 }
+  | label EQUALS expr COMMA record_body
+      { let (Label k) = $1 in
+        let key = Ident k in
+        let old_map = $5 in
+        let dup_check = Ident_map.mem key old_map in
+        if dup_check then
+          raise (On_Parse_error "Duplicate label names in record!")
+        else
+          let new_map = Ident_map.add key $3 old_map in
+          new_map
+      }
+;
+
+/* [1, 2, true] (Unlike ocaml, natodefa lists can be heterogenous) */
 list_body:
   | expr COMMA list_body { $1 :: $3 }
   | expr { [$1] }
 ;
 
+/* `Variant 2 */
 variant_label:
-  | IDENTIFIER { Variant_label $1 }
+  | BACKTICK IDENTIFIER { Variant_label $2 }
+
+/* **** Pattern matching **** */
 
 match_expr_list:
   | match_expr PIPE match_expr_list
@@ -236,10 +253,11 @@ pattern:
   | BOOL_KEYWORD { BoolPat }
   | FUNCTION { FunPat }
   | IDENTIFIER { VarPat(Ident($1)) }
-  | BACKTICK variant_label ident_decl { VariantPat($2, $3) } %prec prec_variant
+  | variant_label ident_decl { VariantPat($1, $2) }
+  | variant_label OPEN_PAREN ident_decl CLOSE_PAREN { VariantPat($1, $3) }
   | OPEN_BRACE rec_pattern_body CLOSE_BRACE { RecPat $2 }
   | OPEN_BRACE CLOSE_BRACE { RecPat (Ident_map.empty) }
-  | RECORD { RecPat (Ident_map.empty) } /* TODO: Remove? */
+  | RECORD { RecPat (Ident_map.empty) }
   | OPEN_BRACKET CLOSE_BRACKET { EmptyLstPat }
   | ident_decl DOUBLE_COLON ident_decl { LstDestructPat($1, $3) }
   | OPEN_PAREN pattern CLOSE_PAREN { $2 }
@@ -255,9 +273,10 @@ rec_pattern_body:
         let key = Ident k in
         let old_map = $5 in
         let dup_check = Ident_map.mem key old_map in
-        if dup_check then raise (On_Parse_error "Duplicate label names in record!")
+        if dup_check then
+          raise (On_Parse_error "Duplicate label names in record!")
         else
-        let new_map = Ident_map.add key (Some $3) old_map in
-        new_map
+          let new_map = Ident_map.add key (Some $3) old_map in
+          new_map
       }
 ;

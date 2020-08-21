@@ -1,0 +1,9 @@
+# EXPECT-WELL-FORMED
+# EXPECT-TYPE-ERROR-COUNT 2
+# EXPECT-TYPE-ERROR ~result [] : "match" "a" "true" "a == b" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [] : "match" "b" "2000" "a == b" "bool" "int"
+
+let a = true in
+let b = 2000 in
+let c = a == b in
+c

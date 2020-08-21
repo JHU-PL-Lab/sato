@@ -1,0 +1,9 @@
+# EXPECT-WELL-FORMED
+# EXPECT-TYPE-ERROR-COUNT 2
+# EXPECT-TYPE-ERROR ~result [] : "match" "x" "false" "x + y" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [] : "match" "y" "false" "x + y" "int" "bool"
+
+let x = false in
+let y = false in
+let z = x + y in
+z

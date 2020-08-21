@@ -1,6 +1,8 @@
 # EXPECT-WELL-FORMED
 # EXPECT-INPUT-SEQUENCES-REACH a1 [ 3 ] !
 # EXPECT-INPUT-SEQUENCES-REACH a2 [ 4 ] !
+# EXPECT-NO-TYPE-ERRORS
+
 x = input;
 four = 4;
 b = x < four;

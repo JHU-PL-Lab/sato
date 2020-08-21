@@ -1,25 +1,18 @@
 open Batteries;;
 
 open Odefa_ast;;
-open On_to_odefa_types;;
-(* open Odefa_symbolic_interpreter.Interpreter_types;; *)
-
-(* open On_to_odefa_types;; *)
-
-(* open On_to_odefa_types;; *)
 
 type translation_context =
   { tc_fresh_suffix_separator : string;
     tc_contextual_recursion : bool;
-    mutable tc_current_natodefa_expr : On_ast.expr option;
     mutable tc_fresh_name_counter : int;
-    mutable tc_instrumented_var_map : Ast.var Ast.Var_map.t;
-    mutable tc_odefa_natodefa_mappings : Odefa_natodefa_mappings.t;
+    mutable tc_odefa_natodefa_mappings : On_to_odefa_maps.t;
   }
-[@@deriving eq, ord (*, show *)]
+(* [@@deriving eq, ord] *)
 ;;
 
 let new_translation_context
+    ?is_natodefa:(is_natodefa=(false))
     ?suffix:(suffix=("~"))
     ?contextual_recursion:(contextual_recursion=(true))
     ()
@@ -27,32 +20,67 @@ let new_translation_context
   { tc_fresh_name_counter = 0;
     tc_fresh_suffix_separator = suffix;
     tc_contextual_recursion = contextual_recursion;
-    tc_current_natodefa_expr = None;
-    tc_instrumented_var_map = Ast.Var_map.empty;
-    tc_odefa_natodefa_mappings = Odefa_natodefa_mappings.empty;
+    tc_odefa_natodefa_mappings = On_to_odefa_maps.empty is_natodefa;
   }
 ;;
 
 module TranslationMonad : sig
   include Monad.Monad;;
+
+  (** Run the monad to completion *)
   val run : translation_context -> 'a m -> 'a
+
+  (** Create a fresh (ie. alphatized) name *)
   val fresh_name : string -> string m
+
+  (** Create a fresh var *)
   val fresh_var : string -> Ast.var m
-  val update_natodefa_expr : On_ast.expr -> unit m
+
+  (** Map an odefa var to its clause *)
   val add_var_clause_pair : Ast.var -> Ast.clause -> unit m
+
+  (** Add an odefa var to note that it was added during instrumentation (and
+      that it does not have an associated pre-instrumentation clause) *)
   val add_instrument_var : Ast.var -> unit m
+
+  (** Map an odefa clause to its associated pre-instrumentation clause *)
   val add_instrument_var_pair : Ast.var -> Ast.var -> unit m
+
+  (** Returns true if the odefa var was added during instrumentation, 
+      false otherwise.  Used to avoid unnecessary instrumentation. *)
   val is_instrument_var : Ast.var -> bool m
-  val add_odefa_natodefa_mapping : Ast.var -> unit m
+
+  (** Map an odefa var to a natodefa expression *)
+  val add_odefa_natodefa_mapping : Ast.var -> On_ast.expr -> unit m
+
+  (** Map a natodefa expression to another natodefa expression *)
   val add_natodefa_expr_mapping : On_ast.expr -> On_ast.expr -> unit m
-  val instrument_map : Ast.var Ast.Var_map.t m
-  val var_clause_mapping : Ast.clause Ast.Ident_map.t m
-  val odefa_natodefa_maps : Odefa_natodefa_mappings.t m
+
+  (** Map a natodefa ident to another ident. *)
+  val add_natodefa_var_mapping : On_ast.ident -> On_ast.ident -> unit m
+
+  (** Map a set of natodefa idents to a natodefa type. *)
+  val add_natodefa_type_mapping : On_ast.Ident_set.t -> On_ast.type_sig -> unit m
+
+  (** Retrieve the odefa-to-natodefa maps from the monad *)
+  val odefa_natodefa_maps : On_to_odefa_maps.t m
+
+  (** Retrieve the freshness string from the monad *)
   val freshness_string : string m
+
+  (** Retrieve the contextual recursion boolean value *)
   val acontextual_recursion : bool m
+
+  (** Convert a list of monadic values into a singular monadic value *)
   val sequence : 'a m list -> 'a list m
+
+  (** Left fold in the monad *)
   val list_fold_left_m : ('acc -> 'el -> 'acc m) -> 'acc -> 'el list -> 'acc m
+
+  (** Right fold in the monad *)
   val list_fold_right_m : ('el -> 'acc -> 'acc m) -> 'el list -> 'acc -> 'acc m
+
+  (** @@ in the monad *)
   val (@@@) : ('a -> 'b m) -> 'a m -> 'b m
 end = struct
   include Monad.Make(
@@ -84,14 +112,14 @@ end = struct
     let (Ast.Var (i_key, _)) = v_key in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_odefa_var_clause_mapping odefa_on_maps i_key cls_val
+      <- On_to_odefa_maps.add_odefa_var_clause_mapping odefa_on_maps i_key cls_val
   ;;
 
   let add_instrument_var v ctx =
     let (Ast.Var (i, _)) = v in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_odefa_instrument_var odefa_on_maps i None
+      <- On_to_odefa_maps.add_odefa_instrument_var odefa_on_maps i None
   ;;
 
   let add_instrument_var_pair v_key v_val ctx =
@@ -99,43 +127,38 @@ end = struct
     let (Ast.Var (i_val, _)) = v_val in
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_odefa_instrument_var odefa_on_maps i_key (Some i_val);
+      <- On_to_odefa_maps.add_odefa_instrument_var odefa_on_maps i_key (Some i_val);
   ;;
 
   let is_instrument_var v ctx =
     let (Ast.Var (i, _)) =  v in
-    let inst_vars = ctx.tc_odefa_natodefa_mappings.odefa_instrument_vars_map in
-    Ast.Ident_map.mem i inst_vars
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    On_to_odefa_maps.is_var_instrumenting odefa_on_maps i
   ;;
 
-  let add_odefa_natodefa_mapping v_key ctx =
+  let add_odefa_natodefa_mapping v_key e_val ctx =
     let (Ast.Var (i_key, _)) = v_key in
-    let expr_val_opt = ctx.tc_current_natodefa_expr in
-    match expr_val_opt with
-    | Some expr_val ->
-      let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
       ctx.tc_odefa_natodefa_mappings
-        <- Odefa_natodefa_mappings.add_odefa_var_on_expr_mapping odefa_on_maps i_key expr_val
-    | None ->
-      failwith (Printf.sprintf "Tried to add mapping of %s to a natodefa expr, but no expr was available!" (Ast.show_ident i_key))
+        <- On_to_odefa_maps.add_odefa_var_on_expr_mapping odefa_on_maps i_key e_val
   ;;
 
   let add_natodefa_expr_mapping k_expr v_expr ctx =
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
     ctx.tc_odefa_natodefa_mappings
-      <- Odefa_natodefa_mappings.add_on_expr_to_expr_mapping odefa_on_maps k_expr v_expr
+      <- On_to_odefa_maps.add_on_expr_to_expr_mapping odefa_on_maps k_expr v_expr
   ;;
 
-  let update_natodefa_expr expr ctx =
-    ctx.tc_current_natodefa_expr <- Some expr;
+  let add_natodefa_var_mapping k_var v_var ctx =
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- On_to_odefa_maps.add_on_var_to_var_mapping odefa_on_maps k_var v_var
   ;;
 
-  let instrument_map ctx =
-    ctx.tc_instrumented_var_map
-  ;;
-
-  let var_clause_mapping ctx =
-    ctx.tc_odefa_natodefa_mappings.odefa_pre_instrument_clause_mapping
+  let add_natodefa_type_mapping k_idents v_type ctx =
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- On_to_odefa_maps.add_on_idents_to_type_mapping odefa_on_maps k_idents v_type
   ;;
 
   let odefa_natodefa_maps ctx =
@@ -191,205 +214,6 @@ let ident_map_map_m
   |> sequence
   |> lift1 List.enum
   |> lift1 On_ast.Ident_map.of_enum
-;;
-
-(* *** Generalized transformations for expressions with reader and writer
-   support. *** *)
-
-type ('env,'out) env_out_expr_transformer =
-  ('env -> On_ast.expr -> (On_ast.expr * 'out)) ->
-  'env ->
-  On_ast.expr ->
-  On_ast.expr * 'out
-;;
-
-let rec env_out_transform_expr
-    (transformer : ('env,'out) env_out_expr_transformer)
-    (combiner : 'out -> 'out -> 'out)
-    (default : 'out)
-    (env : 'env)
-    (e : On_ast.expr)
-  : On_ast.expr * 'out =
-  let recurse : 'env -> On_ast.expr -> On_ast.expr * 'out =
-    env_out_transform_expr transformer combiner default
-  in
-  let transform_funsig (On_ast.Funsig(name,args,body)) =
-    let (body',out') = recurse env body in
-    let (body'',out'') = transformer recurse env body' in
-    (On_ast.Funsig(name,args,body''), combiner out' out'')
-  in
-  let (e' : On_ast.expr), (out' : 'out) =
-    match e with
-    | On_ast.Var x ->
-      (On_ast.Var x, default)
-    | On_ast.Input ->
-      (On_ast.Input, default)
-    | On_ast.Function (x, e1) ->
-      let (e1', out1) = recurse env e1 in
-      (On_ast.Function(x, e1'), out1)
-    | On_ast.Appl (e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Appl(e1', e2'), combiner out1 out2)
-    | On_ast.Let (x, e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Let(x, e1', e2'), combiner out1 out2)
-    | On_ast.LetRecFun (funsigs, e1) ->
-      let (e1', out1) = recurse env e1 in
-      let (funsigs', outs) = List.split @@ List.map transform_funsig funsigs in
-      let out = List.fold_left combiner out1 outs in
-      (On_ast.LetRecFun(funsigs', e1'), out)
-    | On_ast.LetFun (funsig, e1) ->
-      let (e1', out1) = recurse env e1 in
-      let (funsig', out2) = transform_funsig funsig in
-      (On_ast.LetFun(funsig', e1'), combiner out1 out2)
-    | On_ast.Plus (e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Plus(e1', e2'), combiner out1 out2)
-    | On_ast.Minus (e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Minus(e1', e2'), combiner out1 out2)
-    | On_ast.Times (e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Times(e1', e2'), combiner out1 out2)
-    | On_ast.Divide (e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Divide(e1', e2'), combiner out1 out2)
-    | On_ast.Modulus (e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Modulus(e1', e2'), combiner out1 out2)
-    | On_ast.Equal(e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Equal(e1', e2'), combiner out1 out2)
-    | On_ast.Neq(e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Neq(e1', e2'), combiner out1 out2)
-    | On_ast.LessThan(e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.LessThan(e1', e2'), combiner out1 out2)
-    | On_ast.Leq(e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Leq(e1', e2'), combiner out1 out2)
-    | On_ast.GreaterThan(e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Leq(e1', e2'), combiner out1 out2)
-    | On_ast.Geq(e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Geq(e1', e2'), combiner out1 out2)
-    | On_ast.And(e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.And(e1', e2'), combiner out1 out2)
-    | On_ast.Or(e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.Or(e1', e2'), combiner out1 out2)
-    | On_ast.Not e1 ->
-      let (e1', out1) = recurse env e1 in
-      (On_ast.Not(e1'), out1)
-    | On_ast.If (e1, e2, e3) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      let (e3', out3) = recurse env e3 in
-      (On_ast.If(e1', e2', e3'), combiner (combiner out1 out2) out3)
-    | On_ast.Int n -> (On_ast.Int n, default)
-    | On_ast.Bool b -> (On_ast.Bool b, default)
-    | On_ast.Record r ->
-      let kvpairs, outs =
-        On_ast.Ident_map.enum r
-        |> Enum.map
-          (fun (k,v) ->
-             let (v',out) = recurse env v in
-             ((k,v'), out)
-          )
-        |> Enum.uncombine
-      in
-      let r' = On_ast.Ident_map.of_enum kvpairs in
-      let out = Enum.fold combiner default outs in
-      (On_ast.Record r', out)
-    | On_ast.RecordProj (e1, l) ->
-      let (e1', out1) = recurse env e1 in
-      (On_ast.RecordProj(e1', l), out1)
-    | On_ast.Match (e0, branches) ->
-      let (e0', out0) = recurse env e0 in
-      let (branches', outs) =
-        List.split @@
-        List.map
-          (fun (pat,expr) ->
-             let (expr',out) = recurse env expr in
-             ((pat, expr'), out)
-          )
-          branches
-      in
-      let out = List.fold_left combiner out0 outs in
-      (On_ast.Match(e0', branches'), out)
-    | On_ast.VariantExpr (l, e1) ->
-      let (e1', out1) = recurse env e1 in
-      (On_ast.VariantExpr(l, e1'), out1)
-    | On_ast.List es ->
-      let (es', outs) = List.split @@ List.map (recurse env) es in
-      let out = List.fold_left combiner default outs in
-      (On_ast.List es', out)
-    | On_ast.ListCons (e1, e2) ->
-      let (e1', out1) = recurse env e1 in
-      let (e2', out2) = recurse env e2 in
-      (On_ast.ListCons(e1', e2'), combiner out1 out2)
-    | On_ast.Assert e ->
-      let (e', out) = recurse env e in
-      (On_ast.Assert e', out)
-  in
-  let (e'', out'') = transformer recurse env e' in
-  (e'', combiner out' out'')
-;;
-
-type 'env env_expr_transformer =
-  ('env -> On_ast.expr -> On_ast.expr) -> 'env -> On_ast.expr -> On_ast.expr
-;;
-
-let env_transform_expr
-    (transformer : 'env env_expr_transformer)
-    (env : 'env)
-    (e : On_ast.expr)
-  : On_ast.expr =
-  let transformer'
-      (recurse : 'env -> On_ast.expr -> (On_ast.expr * unit))
-      env
-      (e : On_ast.expr)
-    : (On_ast.expr * unit) =
-    let recurse' env e =
-      let (e'', ()) = recurse env e in e''
-    in
-    (transformer recurse' env e, ())
-  in
-  let (e', ()) = env_out_transform_expr transformer' (fun _ _ -> ()) () env e in
-  e'
-;;
-
-type expr_transformer =
-  (On_ast.expr -> On_ast.expr) -> On_ast.expr -> On_ast.expr
-;;
-
-let transform_expr (transformer : expr_transformer) (e : On_ast.expr)
-  : On_ast.expr =
-  let transformer'
-      (recurse : unit -> On_ast.expr -> On_ast.expr) () (e : On_ast.expr)
-    : On_ast.expr =
-    let recurse' e = recurse () e in
-    transformer recurse' e
-  in
-  env_transform_expr transformer' () e
 ;;
 
 (* *** Generalized monadic transformations for expressions with reader and

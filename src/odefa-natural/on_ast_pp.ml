@@ -3,6 +3,8 @@ open Jhupllib;;
 
 open On_ast;;
 
+(* TODO: Keep replacing " " with "@ " in format strings *)
+
 let pp_label formatter (Label l) =
   Format.pp_print_string formatter l
 ;;
@@ -50,44 +52,90 @@ let pp_variant_label formatter (Variant_label label) =
 ;;
 
 let rec pp_funsig formatter (Funsig (x, ident_list, e)) =
-  Format.fprintf formatter "fun %a %a -> @[%a@]"
+  Format.fprintf formatter "%a@ %a =@ @[%a@]"
     pp_ident x pp_ident_list ident_list pp_expr e
-
-and pp_variant_content formatter (variant_label, ident) =
-  Format.fprintf formatter "%a (%a)"
-    pp_variant_label variant_label
-    pp_ident ident
 
 and pp_pattern formatter pattern =
   match pattern with
   | AnyPat -> Format.pp_print_string formatter "any"
   | IntPat -> Format.pp_print_string formatter "int"
   | BoolPat -> Format.pp_print_string formatter "bool"
+  | FunPat -> Format.pp_print_string formatter "fun"
   | RecPat record ->
     Format.fprintf formatter "%a" (pp_ident_map pp_ident_option) record
   | VariantPat (lbl, var) ->
-    Format.fprintf formatter "%a" pp_variant_content (lbl, var)
+    Format.fprintf formatter "%a %a" pp_variant_label lbl pp_ident var
   | VarPat ident -> Format.fprintf formatter "%a" pp_ident ident
-  | FunPat -> Format.pp_print_string formatter "fun"
   | EmptyLstPat -> Format.pp_print_string formatter "[]"
   | LstDestructPat (hd_var, tl_var) ->
     Format.fprintf formatter "%a :: %a"
       pp_ident hd_var pp_ident tl_var
 
+(* Note: For two operators of equal precedence, still wrap parens if the
+   operators are right-associative, but not if they're left-associative. *)
+
+and pp_binop formatter expr =
+  let pp_symb formatter expr =
+    match expr with
+    | Appl _ -> Format.pp_print_string formatter "" (* FIXME: Outputs two spaces! *)
+    | Plus _ -> Format.pp_print_string formatter "+"
+    | Minus _ -> Format.pp_print_string formatter "-"
+    | Times _ -> Format.pp_print_string formatter "*"
+    | Divide _ -> Format.pp_print_string formatter "/"
+    | Modulus _ -> Format.pp_print_string formatter "%"
+    | Equal _ -> Format.pp_print_string formatter "=="
+    | Neq _ -> Format.pp_print_string formatter "<>"
+    | LessThan _ -> Format.pp_print_string formatter "<"
+    | Leq _ -> Format.pp_print_string formatter "<="
+    | GreaterThan _ -> Format.pp_print_string formatter ">"
+    | Geq _ -> Format.pp_print_string formatter ">="
+    | And _ -> Format.pp_print_string formatter "and"
+    | Or _ -> Format.pp_print_string formatter "or"
+    | ListCons _ -> Format.pp_print_string formatter "::"
+    | _ -> raise @@ Utils.Invariant_failure "Not a binary operator!"
+  in
+  match expr with
+  | Plus (e1, e2) | Minus (e1, e2) | Times (e1, e2) | Divide (e1, e2)
+  | Modulus (e1, e2) | Equal (e1, e2) | Neq (e1, e2)
+  | LessThan (e1, e2) | Leq (e1, e2) | GreaterThan (e1, e2) | Geq (e1, e2)
+  | And (e1, e2) | Or (e1, e2) | ListCons (e1, e2) | Appl (e1, e2) ->
+    let l_cmp = expr_precedence_cmp e1 expr in
+    let r_cmp = expr_precedence_cmp e2 expr in
+    if l_cmp < 0 && r_cmp <= 0 then 
+      Format.fprintf formatter "(%a) %a (%a)" pp_expr e1 pp_symb expr pp_expr e2
+    else if l_cmp >= 0 && r_cmp <= 0 then
+      Format.fprintf formatter "%a %a (%a)" pp_expr e1 pp_symb expr pp_expr e2
+    else if l_cmp < 0 && r_cmp > 0 then
+      Format.fprintf formatter "(%a) %a %a" pp_expr e1 pp_symb expr pp_expr e2
+    else if l_cmp >= 0 && r_cmp > 0 then
+      Format.fprintf formatter "%a %a %a" pp_expr e1 pp_symb expr pp_expr e2
+    else
+      raise @@ Utils.Invariant_failure "Invalid precedence comparison!"
+  | _ -> raise @@ Utils.Invariant_failure "Not a binary operator!"
+
 and pp_expr formatter expr =
   match expr with
+  (* Values *)
   | Int n -> Format.pp_print_int formatter n
   | Bool b -> Format.pp_print_bool formatter b
   | Var x -> pp_ident formatter x
   | Function (x_list, e) ->
-    Format.fprintf formatter "fun %a -> @ @[<2>%a@]"
+    Format.fprintf formatter "fun %a ->@ @[<2>%a@]"
       pp_ident_list x_list pp_expr e
   | Input -> Format.pp_print_string formatter "input"
-  | Appl (e1, e2) ->
-    Format.fprintf formatter "%a %a"
-      pp_expr e1 pp_expr e2
+  | Record record ->
+    pp_ident_map pp_expr formatter record
+  | List e_list ->
+    Pp_utils.pp_concat_sep_delim
+      "[" "]" ","
+      (fun formatter e -> pp_expr formatter e)
+      formatter
+      (List.enum e_list)
+  (* Operations *)
+  | Appl _ ->
+    pp_binop formatter expr
   | Let (ident, e1, e2) -> 
-    Format.fprintf formatter "let %a = %a in @[%a@]"
+    Format.fprintf formatter "let@ %a =@ %a@ in@ @[%a@]"
       pp_ident ident pp_expr e1 pp_expr e2
   | LetRecFun (funsig_lst, e) ->
     let pp_funsig_list formatter funsig_lst =
@@ -97,75 +145,71 @@ and pp_expr formatter expr =
         formatter
         (List.enum funsig_lst)
     in
-    Format.fprintf formatter "let %a in @[%a@]"
+    Format.fprintf formatter "let rec@ %a@ in@ @[%a@]"
       pp_funsig_list funsig_lst pp_expr e
   | LetFun (funsig, e) ->
-    Format.fprintf formatter "let %a in @[%a@]"
+    Format.fprintf formatter "let@ %a@ in@ @[%a@]"
       pp_funsig funsig pp_expr e
-  | Plus (e1, e2) ->
-    Format.fprintf formatter "(%a + %a)" pp_expr e1 pp_expr e2
-  | Minus (e1, e2) ->
-    Format.fprintf formatter "(%a - %a)" pp_expr e1 pp_expr e2
-  | Times (e1, e2) ->
-    Format.fprintf formatter "(%a * %a)" pp_expr e1 pp_expr e2
-  | Divide (e1, e2) ->
-    Format.fprintf formatter "(%a / %a)" pp_expr e1 pp_expr e2
-  | Modulus (e1, e2) ->
-    Format.fprintf formatter "(%a %% %a)" pp_expr e1 pp_expr e2
-  | Equal (e1, e2) ->
-    Format.fprintf formatter "(%a == %a)" pp_expr e1 pp_expr e2
-  | Neq (e1, e2) ->
-    Format.fprintf formatter "(%a <> %a)" pp_expr e1 pp_expr e2
-  | LessThan (e1, e2) ->
-    Format.fprintf formatter "(%a < %a)" pp_expr e1 pp_expr e2
-  | Leq (e1, e2) ->
-    Format.fprintf formatter "(%a <= %a)" pp_expr e1 pp_expr e2
-  | GreaterThan (e1, e2) ->
-    Format.fprintf formatter "(%a > %a)" pp_expr e1 pp_expr e2
-  | Geq (e1, e2) ->
-    Format.fprintf formatter "(%a >= %a)" pp_expr e1 pp_expr e2
-  | And (e1, e2) ->
-    Format.fprintf formatter "(%a and %a)" pp_expr e1 pp_expr e2
-  | Or (e1, e2) ->
-    Format.fprintf formatter "(%a or %a)" pp_expr e1 pp_expr e2
-  | Not e ->
-    Format.fprintf formatter "(not %a)" pp_expr e
   | If (pred, e1, e2) ->
-    Format.fprintf formatter "if %a then @[<2>%a@] else @[<2>%a@]"
+    Format.fprintf formatter "if@ %a@ then@ @[<2>%a@]@ else @[<2>%a@]"
       pp_expr pred pp_expr e1 pp_expr e2
-  | Record record ->
-    pp_ident_map pp_expr formatter record
-  | RecordProj (record_expr, lbl) ->
-    Format.fprintf formatter "%a.%a"
-      pp_expr record_expr pp_label lbl
   | Match (e, pattern_expr_list) ->
     let pp_pattern_expr formatter (pattern, expr) =
-      Format.fprintf formatter "@[<1>| %a -> @[%a@]@]"
+      Format.fprintf formatter "@[| %a ->@ @[<2>%a@]@]"
         pp_pattern pattern pp_expr expr
     in
     let pp_pattern_expr_lst formatter pat_expr_list =
       Pp_utils.pp_concat_sep
-        "\n"
+        ""
         pp_pattern_expr
         formatter
         (List.enum pat_expr_list)
     in
-    Format.fprintf formatter "match %a with @[%a@]@\nend"
+    Format.fprintf formatter "match@ %a@ with@ @[%a@]@ end"
       pp_expr e pp_pattern_expr_lst pattern_expr_list
+  (* Binary operations *)
+  | Plus _ | Minus _ | Times _ | Divide _ | Modulus _
+  | Equal _ | Neq _ | LessThan _ | Leq _ | GreaterThan _ | Geq _
+  | And _ | Or _ | ListCons _ ->
+    pp_binop formatter expr
+  (* Unary operations *)
+  | Not e ->
+    if expr_precedence_cmp expr e < 0 then
+      Format.fprintf formatter "not %a" pp_expr e
+    else
+      Format.fprintf formatter "not (%a)" pp_expr e
+  | RecordProj (e, lbl) ->
+    if expr_precedence_cmp e expr > 0 then
+      Format.fprintf formatter "%a.%a" pp_expr e pp_label lbl
+    else
+      Format.fprintf formatter "(%a).%a" pp_expr e pp_label lbl
   | VariantExpr (variant_lbl, e) ->
-    Format.fprintf formatter "`%a (%a)"
-      pp_variant_label variant_lbl pp_expr e
-  | List e_list ->
-    Pp_utils.pp_concat_sep_delim
-      "[" "]" ","
-      (fun formatter e -> pp_expr formatter e)
-      formatter
-      (List.enum e_list)
-  | ListCons (e1, e2) ->
-    Format.fprintf formatter "%a :: %a"
-      pp_expr e1 pp_expr e2
+    if expr_precedence_cmp expr e < 0 then
+      Format.fprintf formatter "%a %a"
+        pp_variant_label variant_lbl pp_expr e
+    else
+      Format.fprintf formatter "%a (%a)"
+        pp_variant_label variant_lbl pp_expr e
   | Assert e ->
-    Format.fprintf formatter "assert %a" pp_expr e
+    if expr_precedence_cmp expr e < 0 then
+      Format.fprintf formatter "assert %a" pp_expr e
+    else
+      Format.fprintf formatter "assert (%a)" pp_expr e
 ;;
 
+let show_ident = Pp_utils.pp_to_string pp_ident;;
 let show_expr = Pp_utils.pp_to_string pp_expr;;
+let show_pattern = Pp_utils.pp_to_string pp_pattern;;
+
+let pp_on_type formatter (on_type : On_ast.type_sig) =
+  match on_type with
+  | TopType -> Format.pp_print_string formatter "Any"
+  | IntType -> Format.pp_print_string formatter "Integer"
+  | BoolType -> Format.pp_print_string formatter "Boolean"
+  | FunType -> Format.pp_print_string formatter "Function"
+  | ListType -> Format.pp_print_string formatter "List"
+  | RecType lbls -> Format.fprintf formatter "Record %a" pp_ident_set lbls
+  | VariantType lbl -> Format.fprintf formatter "Variant %a" pp_variant_label lbl
+;;
+
+let show_on_type = Pp_utils.pp_to_string pp_on_type;;

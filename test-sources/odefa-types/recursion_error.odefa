@@ -4,16 +4,16 @@
 # EXPECT-TYPE-ERROR-COUNT 1
 # EXPECT-TYPE-ERROR ~result [] : "match" "tru" "true" "b = a <= tru" "int" "bool"
 
-tru = true;
-one = 1;
-three = 3;
-
 f = fun s -> (
     f0 = fun a -> (
+        tru = true;
+        # zero = 0;
         b = a <= tru; # Type error
+        # b = a <= zero;
         r = b ? (
                 r1 = a
             ) : (
+                one = 1;
                 ss = s s;
                 v = a - one;
                 r2 = ss v;
@@ -21,5 +21,7 @@ f = fun s -> (
         n1 = r;
     );
 );
+
+three = 3;
 ff = f f;
 z = ff three;
