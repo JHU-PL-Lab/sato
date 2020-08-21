@@ -42,9 +42,9 @@ make test
 make benchmark
 ```
 
-TODO
+TODOs
 ---
-- [ ] Refactor codebase
+- [ ] Refactor codebase and fix bugs
   - [ ] Write shared module type sig for odefa and natodefa errors
 - [ ] Formalize revised rules
   - [ ] Add projection, match, and abort rules
@@ -55,6 +55,11 @@ TODO
   - [ ] More list tests (fold, sort, etc.)
 - [ ] Write theory that maps errors in original code to aborts in instrumented code
   - [ ] Ignore errors in dead odefa code by throwing out aborts/errors encountered after the first one
+- [ ] Write benchmarks
+- [ ] Write library of commonly used predicates/contracts (copy from Clojure predicates?)
+
+More TODOs
+----
 - [ ] Heuristic to identify higher-level errors (as opposed to strictly lower-level ones)
   - [ ] Incorrect data structures (e.g. using lists wrong)
   - [ ] Applying an incorrect variable to a function
