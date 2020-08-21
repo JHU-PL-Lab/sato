@@ -271,7 +271,7 @@ module Error_tree : Error_tree = struct
   ;;
 
   let to_string error_tree =
-    let error_list = _flatten_tree error_tree in
+    let error_list = flatten_tree error_tree in
     let string_list = List.map show error_list in
     String.join "\n---------------\n" string_list
   ;;
@@ -320,37 +320,6 @@ module Error_tree : Error_tree = struct
     walk error_tree
   ;;
 end;;
-
-(*
-let val_source_to_clause_body val_src =
-  let open Interpreter_types in
-  match val_src with
-  | Constraint.Value v ->
-    begin
-      match v with
-      | Constraint.Int n -> Value_body (Value_int n)
-      | Constraint.Bool b -> Value_body (Value_bool b)
-      | Constraint.Function f -> Value_body (Value_function f)
-      | Constraint.Record r ->
-        let r' =
-          r
-          |> Ident_map.enum
-          |> Enum.map (fun (lbl, (Symbol (s, _))) -> (lbl, Var (s, None)))
-          |> Ident_map.of_enum
-        in
-        Value_body (Value_record (Record_value r'))
-    end
-  | Constraint.Binop (x1, op, x2) ->
-    let x1' = (fun (Symbol (s1, _)) -> Var (s1, None)) x1 in
-    let x2' = (fun (Symbol (s2, _)) -> Var (s2, None)) x2 in
-    Binary_operation_body (x1', op, x2')
-  | Constraint.Input -> Input_body
-  | Constraint.Match (x, p) ->
-    let x' = (fun (Symbol (s, _)) -> Var (s, None)) x in
-    Match_body (x', p)
-  | Constraint.Abort -> Abort_body []
-;;
-*)
 
 (* **** String-to-error parsing **** *)
 
