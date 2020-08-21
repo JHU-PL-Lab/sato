@@ -224,7 +224,6 @@ let odefa_to_natodefa_error
     On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps
   in
   let odefa_to_on_aliases (aliases : Ast.ident list) : On_ast.ident list =
-    (* Convert odefa idents to natodefa forms, then remove adjacent dupes *)
     aliases
     |> List.filter_map
       (fun alias ->
@@ -232,6 +231,9 @@ let odefa_to_natodefa_error
         | (On_ast.Var ident) -> Some ident
         | _ -> None
       )
+    (* During translation, some odefa vars are assigned to the same natodefa
+       vars (namely in var expressions).  The following procedure removes any
+       adjacent duplicates from the alias chain. *)
     |> List.fold_left
       (fun deduped_list alias ->
         match List.Exceptionless.hd deduped_list with

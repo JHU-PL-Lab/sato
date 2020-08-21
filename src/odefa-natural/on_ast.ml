@@ -86,3 +86,35 @@ type type_sig =
   | VariantType of variant_label
 [@@ deriving eq, ord, show]
 ;;
+
+(** Takes [expr] as an argument.  Returns the relative precedence of the
+    expression.  Higher ints correspond to higher precedences. *)
+let expr_precedence expr =
+  match expr with
+  | Function _ | Let _ | LetFun _ | LetRecFun _ | Match _ -> 0
+  | If _ -> 1
+  | Or _ -> 2
+  | And _ -> 3
+  | Not _ -> 4
+  | Equal _ | Neq _ | LessThan _ | Leq _ | GreaterThan _ | Geq _ -> 5
+  | ListCons _ -> 6
+  | Plus _ | Minus _ -> 7
+  | Times _ | Divide _ | Modulus _ -> 8
+  | RecordProj _ -> 9
+  | Assert _ | VariantExpr _ -> 10
+  | Appl _ -> 11
+  | Int _ | Bool _ | Input | Var _ | List _ | Record _ -> 12
+;;
+
+(** Takes expressions [e1] and [e2] as arguments.  Returns 0 if the two
+    expressions have equal precedence, a negative int if [e1] has lower
+    precedence than [e2], and a positive int if [e1] has higher precedence. *)
+let expr_precedence_cmp e1 e2 = (expr_precedence e1) - (expr_precedence e2);;
+
+(** Takes [expr] as an argument.  Returns true if it is a "simple" expression
+    (i.e. any value excluding functions), and false otherwise. *)
+let is_simple_expr expr =
+  match expr with
+  | Int _ | Bool _ | Input | Var _ | Record _ | List _ -> true
+  | _ -> false
+;;
