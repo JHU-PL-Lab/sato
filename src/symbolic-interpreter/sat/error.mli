@@ -24,7 +24,7 @@ type error_binop = {
   (** The alias chain leading up to the right value. *)
   err_binop_right_aliases : ident list;
 }
-[@@ deriving eq, show]
+[@@ deriving eq]
 ;;
 
 type error_match = {
@@ -43,7 +43,7 @@ type error_match = {
   (** The actual type of the symbol being matched. *)
   err_match_actual_type : type_sig;
 }
-[@@ deriving eq, show]
+[@@ deriving eq]
 ;;
 
 type error_value = {
@@ -56,7 +56,7 @@ type error_value = {
   (** The clause representing the operation being constrained. *)
   err_value_clause : clause;
 }
-[@@ deriving eq, show]
+[@@ deriving eq]
 ;;
 
 
@@ -64,10 +64,12 @@ type error =
   | Error_binop of error_binop
   | Error_match of error_match
   | Error_value of error_value
-[@@ deriving eq, show]
+[@@ deriving eq]
 ;;
 
 val parse_error : string -> error;;
+
+val show : error -> string;;
 
 module type Error_tree = sig
   type t;;

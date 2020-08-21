@@ -762,7 +762,7 @@ let rec _find_errors solver instrument_clause symbol =
       | Binary_operator_less_than_or_equal_to
       | Binary_operator_equal_to
       | Binary_operator_not_equal_to ->
-        let binop_error = {
+        let binop_error = Error_binop {
           err_binop_clause = instrument_clause;
           err_binop_operation = op;
           err_binop_left_val =
@@ -788,8 +788,8 @@ let rec _find_errors solver instrument_clause symbol =
         }
         in
         lazy_logger `trace (fun () ->
-          Printf.sprintf "Binop error:\n%s" (show_error_binop binop_error));
-        Error_tree.singleton (Error_binop binop_error)
+          Printf.sprintf "Binop error:\n%s" (show binop_error));
+        Error_tree.singleton binop_error
     end
   | (None, Some m) ->
     begin
@@ -824,7 +824,7 @@ let rec _find_errors solver instrument_clause symbol =
               (show_symbol match_symb))
         in
         if not (Ast.Type_signature.subtype actual_type expected_type) then begin
-          let match_error = {
+          let match_error = Error_match{
             err_match_aliases = List.map (fun (Symbol(x, _)) -> x) alias_chain;
             err_match_clause = instrument_clause;
             err_match_value = match_val_source;
@@ -833,8 +833,8 @@ let rec _find_errors solver instrument_clause symbol =
           }
           in
           lazy_logger `trace (fun () ->
-            Printf.sprintf "Match error:\n%s" (show_error_match match_error));
-          Error_tree.singleton (Error_match match_error)
+            Printf.sprintf "Match error:\n%s" (show match_error));
+          Error_tree.singleton match_error
         end else begin
           Error_tree.empty
         end
@@ -856,15 +856,15 @@ let rec _find_errors solver instrument_clause symbol =
               (fun (Symbol (i1, _)) -> i1)
               (_construct_alias_chain solver symbol);
           in
-          let value_error = {
+          let value_error = Error_value {
             err_value_aliases = alias_chain;
             err_value_val = Value_body (Value_bool b);
             err_value_clause = instrument_clause;
           }
           in
           lazy_logger `trace (fun () ->
-            Printf.sprintf "Value error:\n%s" (show_error_value value_error));
-          Error_tree.singleton (Error_value value_error)
+            Printf.sprintf "Value error:\n%s" (show value_error));
+          Error_tree.singleton value_error
       | _ ->
         raise @@ Utils.Invariant_failure
           (Printf.sprintf "Error tree on %s has non-boolean values"
