@@ -59,12 +59,14 @@ exception On_Parse_error of string;;
 %nonassoc prec_if             /* Conditionals */
 %left OR                      /* Or */
 %left AND                     /* And */
-%left NOT
+%right NOT                    /* Not */
 /* == <> < <= > >= */
 %left EQUAL_EQUAL NOT_EQUAL LESS LESS_EQUAL GREATER GREATER_EQUAL
 %right DOUBLE_COLON           /* :: */
 %left PLUS MINUS              /* + - */
 %left ASTERISK SLASH PERCENT  /* * / % */
+%right ASSERT prec_variant    /* Asserts and variants */
+%left prec_appl               /* Function application */
 %left DOT                     /* Record projection */
 
 %start <On_ast.expr> prog
@@ -85,9 +87,13 @@ delim_expr:
       { Some ($1) }
   ;
 
+/* **** Expressions **** */
+
 expr:
-  | appl_expr
-    { $1 }
+  | simple_expr
+      { $1 }
+  | simple_and_proj_expr expr %prec prec_appl
+      { Appl($1, $2) }
   | expr PLUS expr
       { Plus($1, $3) }
   | expr MINUS expr
@@ -130,32 +136,23 @@ expr:
       { RecordProj($1, $3) }
   | expr DOUBLE_COLON expr
       { ListCons($1, $3) }
-  | MATCH expr WITH PIPE match_expr_list END
+  | MATCH expr WITH PIPE? match_expr_list END
       { Match($2, $5) }
-  | MATCH expr WITH match_expr_list END
-      { Match($2, $4) }
-  | ASSERT simple_expr
-    { Assert($2) }
-  | variant_label simple_expr
-    { VariantExpr($1, $2) }
+  | ASSERT expr
+      { Assert($2) }
+  | variant_label expr %prec prec_variant
+      { VariantExpr($1, $2) }
 ;
 
 /* let foo x = ... */
 fun_sig:
   | ident_decl param_list EQUALS expr
-    { Funsig ($1, $2, $4) }
+      { Funsig ($1, $2, $4) }
 
 /* let rec foo x y = ... with bar a b = ... in ... */
 fun_sig_list:
   | fun_sig { [$1] }
   | fun_sig WITH fun_sig_list { $1 :: $3 }
-
-/* (fun f -> f x) (fun y -> y) 10 */ 
-appl_expr:
-  | appl_expr simple_expr
-    { Appl($1, $2) }
-  | simple_expr { $1 }
-;
 
 /* In a simple_expr, only primitives, vars, records, and lists do not need
    surrounding parentheses. */
@@ -180,6 +177,34 @@ simple_expr:
       { $2 }
 ;
 
+/* Hardcode the two expressions with precedence above function application,
+   to avoid shift-reduce errors. */
+simple_and_proj_expr:
+  | simple_expr { $1 }
+  | expr DOT label { RecordProj($1, $3) }
+;
+
+/* **** Idents + labels **** */
+
+param_list:
+  | ident_decl param_list { $1 :: $2 }
+  | ident_decl { [$1] }
+;
+
+label:
+  | IDENTIFIER { Label $1 }
+;
+
+ident_usage:
+  | ident_decl { Var $1 }
+;
+
+ident_decl:
+  | IDENTIFIER { Ident $1 }
+;
+
+/* **** Records, lists, and variants **** */
+
 /* {x = 1, y = 2, z = 3} */
 record_body:
   | label EQUALS expr
@@ -199,35 +224,17 @@ record_body:
       }
 ;
 
-/* Idents + labels */
-
-param_list:
-  | ident_decl param_list { $1 :: $2 }
-  | ident_decl { [$1] }
-;
-
-label:
-  | IDENTIFIER { Label $1 }
-;
-
-ident_usage:
-  | ident_decl { Var $1 }
-;
-
-ident_decl:
-  | IDENTIFIER { Ident $1 }
-;
-
 /* [1, 2, true] (Unlike ocaml, natodefa lists can be heterogenous) */
 list_body:
   | expr COMMA list_body { $1 :: $3 }
   | expr { [$1] }
 ;
 
+/* `Variant 2 */
 variant_label:
   | BACKTICK IDENTIFIER { Variant_label $2 }
 
-/* Match expressions */
+/* **** Pattern matching **** */
 
 match_expr_list:
   | match_expr PIPE match_expr_list

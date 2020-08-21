@@ -71,9 +71,13 @@ and pp_pattern formatter pattern =
     Format.fprintf formatter "%a :: %a"
       pp_ident hd_var pp_ident tl_var
 
+(* Note: For two operators of equal precedence, still wrap parens if the
+   operators are right-associative, but not if they're left-associative. *)
+
 and pp_binop formatter expr =
   let pp_symb formatter expr =
     match expr with
+    | Appl _ -> Format.pp_print_string formatter "" (* FIXME: Outputs two spaces! *)
     | Plus _ -> Format.pp_print_string formatter "+"
     | Minus _ -> Format.pp_print_string formatter "-"
     | Times _ -> Format.pp_print_string formatter "*"
@@ -94,7 +98,7 @@ and pp_binop formatter expr =
   | Plus (e1, e2) | Minus (e1, e2) | Times (e1, e2) | Divide (e1, e2)
   | Modulus (e1, e2) | Equal (e1, e2) | Neq (e1, e2)
   | LessThan (e1, e2) | Leq (e1, e2) | GreaterThan (e1, e2) | Geq (e1, e2)
-  | And (e1, e2) | Or (e1, e2) | ListCons (e1, e2) ->
+  | And (e1, e2) | Or (e1, e2) | ListCons (e1, e2) | Appl (e1, e2) ->
     let l_cmp = expr_precedence_cmp e1 expr in
     let r_cmp = expr_precedence_cmp e2 expr in
     if l_cmp < 0 && r_cmp <= 0 then 
@@ -128,19 +132,8 @@ and pp_expr formatter expr =
       formatter
       (List.enum e_list)
   (* Operations *)
-  | Appl (e1, e2) ->
-    let l_simple = is_simple_expr e1 in
-    let r_simple = is_simple_expr e2 in
-    if l_simple && r_simple then
-      Format.fprintf formatter "%a %a" pp_expr e1 pp_expr e2
-    else if (not l_simple) && r_simple then
-      Format.fprintf formatter "(%a) %a" pp_expr e1 pp_expr e2
-    else if l_simple && (not r_simple) then
-      Format.fprintf formatter "%a (%a)" pp_expr e1 pp_expr e2
-    else if (not l_simple) && (not r_simple) then
-      Format.fprintf formatter "(%a) (%a)" pp_expr e1 pp_expr e2
-    else
-      raise @@ Utils.Invariant_failure "Invalid precedence comparison!"
+  | Appl _ ->
+    pp_binop formatter expr
   | Let (ident, e1, e2) -> 
     Format.fprintf formatter "let@ %a =@ %a@ in@ @[%a@]"
       pp_ident ident pp_expr e1 pp_expr e2
@@ -181,27 +174,27 @@ and pp_expr formatter expr =
     pp_binop formatter expr
   (* Unary operations *)
   | Not e ->
-    if is_simple_expr e then
+    if expr_precedence_cmp expr e < 0 then
       Format.fprintf formatter "not %a" pp_expr e
     else
       Format.fprintf formatter "not (%a)" pp_expr e
   | RecordProj (e, lbl) ->
-    if is_simple_expr e then
+    if expr_precedence_cmp e expr > 0 then
       Format.fprintf formatter "%a.%a" pp_expr e pp_label lbl
     else
       Format.fprintf formatter "(%a).%a" pp_expr e pp_label lbl
   | VariantExpr (variant_lbl, e) ->
-    if is_simple_expr e then
+    if expr_precedence_cmp expr e < 0 then
       Format.fprintf formatter "%a %a"
         pp_variant_label variant_lbl pp_expr e
     else
       Format.fprintf formatter "%a (%a)"
         pp_variant_label variant_lbl pp_expr e
   | Assert e ->
-    if is_simple_expr e then
+    if expr_precedence_cmp expr e < 0 then
       Format.fprintf formatter "assert %a" pp_expr e
     else
-      Format.fprintf formatter "assert %a" pp_expr e
+      Format.fprintf formatter "assert (%a)" pp_expr e
 ;;
 
 let show_ident = Pp_utils.pp_to_string pp_ident;;
