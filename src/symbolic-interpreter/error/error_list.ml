@@ -14,20 +14,35 @@ module type Error_list = sig
 
   type t;;
 
+  (** Merge two error trees as if they are part of an AND operation.
+      In an AND operation, all values must be true for the op to return true.
+      Therefore if one error has a false value, the error tree is false. *)
   val add_and : t -> t -> t;;
 
+  (** Merge two error trees as if they are part of an OR operation.
+      In an OR operation, only one value needs to be true for the op to be true
+      so only when all errors have a false value can the error tree be false. *)
   val add_or : t -> t -> t;;
 
+  (** Create a new list with no errors. *)
   val empty : t;;
 
+  (** Create a one-element list from a single error. *)
+  val singleton : Err.t -> t;;
+
+  (** Returns true if there are no errors in the list, false otherwise. *)
   val is_empty : t -> bool;;
 
+  (** Returns the number of errors in the list. *)
   val count : t -> int;;
 
+  (** Pretty-prints the string list. *)
   val pp : t Pp_utils.pretty_printer;;
 
+  (** Shows the error list as a string. *)
   val show : t -> string;;
 
+  (** Returns true if the error is a member of the error list, else false. *)
   val mem : Err.t -> t -> bool;;
 end;;
 
@@ -53,6 +68,8 @@ module Make(Error : Error_2) : Error_list = struct
   ;;
 
   let empty = [];;
+
+  let singleton error = [error];;
 
   let is_empty = List.is_empty;;
 
