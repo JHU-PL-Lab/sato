@@ -66,8 +66,6 @@ exception On_Parse_error of string;;
 %left PLUS MINUS              /* + - */
 %left ASTERISK SLASH PERCENT  /* * / % */
 %right ASSERT prec_variant    /* Asserts and variants */
-%left prec_appl               /* Function application */
-%left DOT                     /* Record projection */
 
 %start <On_ast.expr> prog
 %start <On_ast.expr option> delim_expr
@@ -90,58 +88,54 @@ delim_expr:
 /* **** Expressions **** */
 
 expr:
-  | simple_expr
+  | appl_expr /* Includes primary expressions */
       { $1 }
-  | simple_and_proj_expr expr %prec prec_appl
-      { Appl($1, $2) }
-  | expr PLUS expr
-      { Plus($1, $3) }
-  | expr MINUS expr
-      { Minus($1, $3) }
+  | ASSERT expr
+      { Assert($2) }
+  | variant_label expr %prec prec_variant
+      { VariantExpr($1, $2) }
   | expr ASTERISK expr
       { Times($1, $3) }
   | expr SLASH expr
       { Divide($1, $3) }
   | expr PERCENT expr
       { Modulus($1, $3) }
-  | expr LESS expr
-      { LessThan($1, $3) }
-  | expr LESS_EQUAL expr
-      { Leq($1, $3) }
-  | expr GREATER expr
-      { GreaterThan($1, $3) }
-  | expr GREATER_EQUAL expr
-      { Geq($1, $3) }
-  | expr AND expr
-      { And($1, $3) }
-  | expr OR expr
-      { Or($1, $3) }
-  | NOT expr
-    { Not($2) }
+  | expr PLUS expr
+      { Plus($1, $3) }
+  | expr MINUS expr
+      { Minus($1, $3) }
+  | expr DOUBLE_COLON expr
+      { ListCons($1, $3) }
   | expr EQUAL_EQUAL expr
       { Equal($1, $3) }
   | expr NOT_EQUAL expr
       { Neq($1, $3) }
+  | expr GREATER expr
+      { GreaterThan($1, $3) }
+  | expr GREATER_EQUAL expr
+      { Geq($1, $3) }
+  | expr LESS expr
+      { LessThan($1, $3) }
+  | expr LESS_EQUAL expr
+      { Leq($1, $3) }
+  | NOT expr
+    { Not($2) }
+  | expr AND expr
+      { And($1, $3) }
+  | expr OR expr
+      { Or($1, $3) }
+  | IF expr THEN expr ELSE expr %prec prec_if
+      { If($2, $4, $6) }
   | FUNCTION param_list ARROW expr %prec prec_fun
       { Function($2, $4) }
   | LET REC fun_sig_list IN expr %prec prec_fun
       { LetRecFun($3, $5) }
-  | IF expr THEN expr ELSE expr %prec prec_if
-      { If($2, $4, $6) }
   | LET ident_decl EQUALS expr IN expr %prec prec_let
       { Let($2, $4, $6) }
   | LET fun_sig IN expr %prec prec_fun
       { LetFun($2, $4)}
-  | expr DOT label
-      { RecordProj($1, $3) }
-  | expr DOUBLE_COLON expr
-      { ListCons($1, $3) }
   | MATCH expr WITH PIPE? match_expr_list END
       { Match($2, $5) }
-  | ASSERT expr
-      { Assert($2) }
-  | variant_label expr %prec prec_variant
-      { VariantExpr($1, $2) }
 ;
 
 /* let foo x = ... */
@@ -154,9 +148,15 @@ fun_sig_list:
   | fun_sig { [$1] }
   | fun_sig WITH fun_sig_list { $1 :: $3 }
 
-/* In a simple_expr, only primitives, vars, records, and lists do not need
+/* (fun x -> x) y */
+appl_expr:
+  | appl_expr primary_expr { Appl($1, $2) }
+  | primary_expr { $1 }
+;
+
+/* In a primary_expr, only primitives, vars, records, and lists do not need
    surrounding parentheses. */
-simple_expr:
+primary_expr:
   | INT_LITERAL
       { Int $1 }
   | BOOL
@@ -175,13 +175,8 @@ simple_expr:
       { List [] }
   | OPEN_PAREN expr CLOSE_PAREN
       { $2 }
-;
-
-/* Hardcode the two expressions with precedence above function application,
-   to avoid shift-reduce errors. */
-simple_and_proj_expr:
-  | simple_expr { $1 }
-  | expr DOT label { RecordProj($1, $3) }
+  | primary_expr DOT label
+      { RecordProj($1, $3) }
 ;
 
 /* **** Idents + labels **** */
