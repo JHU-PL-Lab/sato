@@ -4,7 +4,7 @@ open Ast;;
 module List = BatList;;
 
 (* Functions for record parsing/duplicate checking *)
-let sep = "~~~";;
+let sep = Ast_tools.label_sep;;
 let dup_label_count = ref 0;;
 
 let rec mark_dupes_record_value lbls_seen re_list =

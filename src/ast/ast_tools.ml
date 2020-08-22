@@ -240,13 +240,13 @@ let cond_scope_violations expression =
    in natodefa translation, instrumentation, etc.  Note the triple tildes
    used; otherwise labels like "~empty" will be incorrectly flagged as
    duplicates. *)
-let sep = "~~~";;
+let label_sep = "~~~";;
 
 let create_duplicate_label_list (label_list : ident list) =
   let str_list =
     List.map
       (fun (Ident l) ->
-        match String.Exceptionless.split ~by:sep l with
+        match String.Exceptionless.split ~by:label_sep l with
         | Some (l', _) -> l'
         | None -> l
       )
