@@ -4,7 +4,7 @@ module List = BatList;;
 
 (* Functions relating to parsing record entries *)
 
-let sep = "~";;
+let sep = "~~~";;
 let dup_label_count = ref 0;;
 
 let new_record lbl value =

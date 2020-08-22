@@ -2,6 +2,41 @@
 open Odefa_ast;;
 open Ast;;
 module List = BatList;;
+
+(* Functions for record parsing/duplicate checking *)
+let sep = "~~~";;
+let dup_label_count = ref 0;;
+
+let rec mark_dupes_record_value lbls_seen re_list =
+  match re_list with
+  | [] -> []
+  | (lbl, value) :: re_list_tl ->
+    if Ident_set.mem lbl lbls_seen then begin
+      let (Ident name) = lbl in
+      let lbl' = Ident (name ^ sep ^ (string_of_int !dup_label_count)) in
+      dup_label_count := !dup_label_count + 1;
+      (lbl', value) :: (mark_dupes_record_value lbls_seen re_list_tl)
+    end else begin
+      let lbls_seen' = Ident_set.add lbl lbls_seen in
+      (lbl, value) :: (mark_dupes_record_value lbls_seen' re_list_tl)
+    end
+;;
+
+let rec mark_dupes_record_labels lbls_seen r_list =
+  match r_list with
+  | [] -> []
+  | lbl :: r_list ->
+    if Ident_set.mem lbl lbls_seen then begin
+      let (Ident name) = lbl in
+      let lbl' = Ident (name ^ sep ^ (string_of_int !dup_label_count)) in
+      dup_label_count := !dup_label_count + 1;
+      lbl' :: (mark_dupes_record_labels lbls_seen r_list)
+    end else begin
+      let lbls_seen' = Ident_set.add lbl lbls_seen in
+      lbl :: (mark_dupes_record_labels lbls_seen' r_list)
+    end
+;;
+
 %}
 
 %token <string> IDENTIFIER
@@ -146,7 +181,14 @@ record_value:
   | OPEN_BRACE CLOSE_BRACE
       { Record_value(Ident_map.empty) }
   | OPEN_BRACE separated_nonempty_trailing_list(COMMA, record_element) CLOSE_BRACE
-      { Record_value(Ident_map.of_enum @@ List.enum $2) }
+      { let record_val =
+          $2
+          |> mark_dupes_record_value Ident_set.empty
+          |> List.enum
+          |> Ident_map.of_enum
+        in
+        Record_value (record_val)
+      }
   ;
 
 record_element:
@@ -196,7 +238,14 @@ record_pattern:
   | OPEN_BRACE CLOSE_BRACE
       { Rec_pattern(Ident_set.empty) }
   | OPEN_BRACE separated_nonempty_trailing_list(COMMA, record_pattern_element) CLOSE_BRACE
-      { Rec_pattern(Ident_set.of_enum @@ List.enum $2) }
+      { let record_pat =
+          $2
+          |> mark_dupes_record_labels Ident_set.empty
+          |> List.enum
+          |> Ident_set.of_enum
+        in
+        Rec_pattern (record_pat)
+      }
   ;
 
 record_pattern_element:

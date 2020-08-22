@@ -236,7 +236,11 @@ let cond_scope_violations expression =
 
 (* Record label duplication check *)
 
-let sep = "~";;
+(* This separator functions separately from the usual separator "~" used
+   in natodefa translation, instrumentation, etc.  Note the triple tildes
+   used; otherwise labels like "~empty" will be incorrectly flagged as
+   duplicates. *)
+let sep = "~~~";;
 
 let create_duplicate_label_list (label_list : ident list) =
   let str_list =

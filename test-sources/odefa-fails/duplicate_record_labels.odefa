@@ -1,0 +1,5 @@
+# EXPECT-ILL-FORMED
+
+a = 0;
+b = 1;
+r = { lbl = a, lbl = b };
