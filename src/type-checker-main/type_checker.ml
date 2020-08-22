@@ -19,28 +19,52 @@ let parse_program
     (args: Type_checker_parser.type_checker_args) 
   : (Ast.expr * On_to_odefa_maps.t) =
   let filename = args.tc_filename in
-  match Filename.extension filename with
-  | ".natodefa" ->
+  try
+    match Filename.extension filename with
+    | ".natodefa" ->
+      begin
+        let natodefa_ast = File.with_file_in filename On_parse.parse_program in
+        let (odefa_ast, on_odefa_maps) =
+          On_to_odefa.translate natodefa_ast
+        in
+        Ast_wellformedness.check_wellformed_expr odefa_ast;
+        (odefa_ast, on_odefa_maps)
+      end
+    | ".odefa" ->
+      begin
+        let pre_inst_ast = File.with_file_in filename Parser.parse_program in
+        let (odefa_ast, on_odefa_maps) =
+          Odefa_instrumentation.instrument_odefa pre_inst_ast
+        in
+        Ast_wellformedness.check_wellformed_expr odefa_ast;
+        (odefa_ast, on_odefa_maps)
+      end
+    | _ ->
+      raise @@ Invalid_argument
+        (Printf.sprintf "Filetype %s not supported" filename)
+  with
+  | Sys_error err ->
     begin
-      let natodefa_ast = File.with_file_in filename On_parse.parse_program in
-      let (odefa_ast, on_odefa_maps) =
-        On_to_odefa.translate natodefa_ast
-      in
-      Ast_wellformedness.check_wellformed_expr odefa_ast;
-      (odefa_ast, on_odefa_maps)
+      Stdlib.prerr_endline err;
+      Stdlib.exit 1
     end
-  | ".odefa" ->
+  | On_parse.Parse_error (_, line, col, token)->
     begin
-      let pre_inst_ast = File.with_file_in filename Parser.parse_program in
-      let (odefa_ast, on_odefa_maps) =
-        Odefa_instrumentation.instrument_odefa pre_inst_ast
-      in
-      Ast_wellformedness.check_wellformed_expr odefa_ast;
-      (odefa_ast, on_odefa_maps)
+      Stdlib.prerr_endline
+        @@ Printf.sprintf "Invalid token \"%s\" at line %d, column %d" token line col;
+      Stdlib.exit 1
     end
-  | _ ->
-    raise @@ Invalid_argument
-      (Printf.sprintf "Filetype %s not supported" filename)
+  | Ast_wellformedness.Illformedness_found ills ->
+    begin
+      print_endline "Program is ill-formed.";
+      List.iter
+        (fun ill ->
+            Stdlib.print_string "* ";
+            Stdlib.print_endline @@ Ast_wellformedness.show_illformedness ill;
+        )
+        ills;
+      Stdlib.exit 1
+    end
 ;;
 
 let print_results

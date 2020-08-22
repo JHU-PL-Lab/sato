@@ -1,7 +1,30 @@
 %{
 open On_ast;;
 module List = BatList;;
-exception On_Parse_error of string;;
+
+(* Functions relating to parsing record entries *)
+
+let sep = "~";;
+let dup_label_count = ref 0;;
+
+let new_record lbl value =
+  let (Label k) = lbl in
+  let key = Ident k in
+  Ident_map.singleton key value
+;;
+
+let add_record_entry lbl value old_record =
+  let (Label k) = lbl in
+  let key =
+    if Ident_map.mem (Ident k) old_record then
+      let key' = Ident (k ^ sep ^ (string_of_int !dup_label_count)) in
+      dup_label_count := !dup_label_count + 1;
+      key'
+    else
+      Ident k
+  in
+  Ident_map.add key value old_record
+;;
 %}
 
 %token <string> IDENTIFIER
@@ -203,20 +226,9 @@ ident_decl:
 /* {x = 1, y = 2, z = 3} */
 record_body:
   | label EQUALS expr
-      { let (Label k) = $1 in
-        let key = Ident k in
-        Ident_map.singleton key $3 }
+      { new_record $1 $3 }
   | label EQUALS expr COMMA record_body
-      { let (Label k) = $1 in
-        let key = Ident k in
-        let old_map = $5 in
-        let dup_check = Ident_map.mem key old_map in
-        if dup_check then
-          raise (On_Parse_error "Duplicate label names in record!")
-        else
-          let new_map = Ident_map.add key $3 old_map in
-          new_map
-      }
+      { add_record_entry $1 $3 $5 }
 ;
 
 /* [1, 2, true] (Unlike ocaml, natodefa lists can be heterogenous) */
@@ -260,18 +272,7 @@ pattern:
 
 rec_pattern_body:
   | label EQUALS ident_decl
-      { let (Label k) = $1 in
-        let key = Ident k in
-        Ident_map.singleton key (Some $3) }
+      { new_record $1 (Some $3) }
   | label EQUALS ident_decl COMMA rec_pattern_body
-      { let (Label k) = $1 in
-        let key = Ident k in
-        let old_map = $5 in
-        let dup_check = Ident_map.mem key old_map in
-        if dup_check then
-          raise (On_Parse_error "Duplicate label names in record!")
-        else
-          let new_map = Ident_map.add key (Some $3) old_map in
-          new_map
-      }
+      { add_record_entry $1 (Some $3) $5 }
 ;

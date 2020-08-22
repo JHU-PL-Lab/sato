@@ -234,6 +234,82 @@ let cond_scope_violations expression =
   |> List.map (fun (i1,i2) -> (Var (i1,None)), Var (i2,None))
 ;;
 
+(* Record label duplication check *)
+
+let sep = "~";;
+
+let create_duplicate_label_list (label_list : ident list) =
+  let str_list =
+    List.map
+      (fun (Ident l) ->
+        match String.Exceptionless.split ~by:sep l with
+        | Some (l', _) -> l'
+        | None -> l
+      )
+      label_list
+  in
+  let dup_list =
+    str_list
+    |> List.filter
+      (fun l -> (List.length @@ List.filter (String.equal l) str_list) > 1)
+    |> List.unique
+    |> List.map (fun l -> Ident l)
+  in
+  dup_list
+;;
+
+let rec non_unique_record_labels_expr (e : expr)
+  : (var * ident list) list =
+  let Expr(clauses) = e in
+  List.fold_left
+    (fun dup_lst clause ->
+      let new_dups = non_unique_record_labels_clause clause in
+      dup_lst @ new_dups)
+    []
+    clauses
+
+and non_unique_record_labels_clause (clause : clause)
+  : (var * ident list) list =
+  let Clause (var, body) = clause in
+  match body with
+  | Value_body value ->
+    begin
+      match value with
+      | Value_record (Record_value record) ->
+        let dup_list =
+          record
+          |> Ident_map.keys
+          |> List.of_enum
+          |> create_duplicate_label_list
+        in
+        if List.length dup_list > 0 then [(var, dup_list)] else []
+      | Value_function (Function_value (_, e)) ->
+        non_unique_record_labels_expr e
+      | _ -> []
+    end
+  | Conditional_body (_, e1, e2) ->
+    let dups_1 = non_unique_record_labels_expr e1 in
+    let dups_2 = non_unique_record_labels_expr e2 in
+    dups_1 @ dups_2
+  | Match_body (_, pat) ->
+    begin
+      match pat with
+      | Rec_pattern lbl_set ->
+        let dup_list =
+          lbl_set
+          |> Ident_set.elements
+          |> create_duplicate_label_list
+        in
+        if List.length dup_list > 0 then [(var, dup_list)] else []
+      | _ -> []
+    end
+  | _ -> []
+;;
+
+let record_label_duplications expression =
+  non_unique_record_labels_expr expression
+;;
+
 (** Returns the last defined variable in a list of clauses. *)
 let rv (cs : clause list) : Var.t =
   let Clause(x,_) = List.last cs in x

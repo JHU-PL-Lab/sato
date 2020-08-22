@@ -13,6 +13,7 @@ type illformedness =
   | Duplicate_variable_binding of var
   | Variable_not_in_scope of var * var
   | Invalid_variable_in_abort of var * var
+  | Duplicate_record_labels of var * ident list
   [@@deriving eq, ord, show]
 ;;
 
@@ -39,7 +40,9 @@ let check_wellformed_expr expression : unit =
       let illformednesses =
         expression_non_unique_bindings
         |> Var_set.enum
-        |> Enum.map (fun non_unique_binding -> Duplicate_variable_binding non_unique_binding)
+        |> Enum.map
+          (fun non_unique_binding ->
+            Duplicate_variable_binding non_unique_binding)
         |> List.of_enum
       in
       raise @@ Illformedness_found illformednesses
@@ -50,7 +53,9 @@ let check_wellformed_expr expression : unit =
       let illformednesses =
         expression_scope_violations
         |> List.enum
-        |> Enum.map (fun (program_point, dependency) -> Variable_not_in_scope (program_point, dependency))
+        |> Enum.map
+          (fun (program_point, dependency) ->
+            Variable_not_in_scope (program_point, dependency))
         |> List.of_enum
       in
       raise @@ Illformedness_found illformednesses
@@ -61,9 +66,24 @@ let check_wellformed_expr expression : unit =
       let illformedness =
         conditional_scope_violations
         |> List.enum
-        |> Enum.map (fun (abort_prog_point, bad_var) -> Invalid_variable_in_abort (abort_prog_point, bad_var))
+        |> Enum.map
+          (fun (abort_prog_point, bad_var) ->
+            Invalid_variable_in_abort (abort_prog_point, bad_var))
         |> List.of_enum
       in
       raise @@ Illformedness_found illformedness
-  end
+  end;
+  begin
+    let records_with_duplicate_labels = record_label_duplications expression in
+    if not (List.is_empty records_with_duplicate_labels) then
+      let illformedness =
+        records_with_duplicate_labels
+        |> List.enum
+        |> Enum.map
+          (fun (record_prog_point, duplicate_labels) ->
+            Duplicate_record_labels (record_prog_point, duplicate_labels))
+        |> List.of_enum
+      in
+      raise @@ Illformedness_found illformedness
+  end;
 ;;
