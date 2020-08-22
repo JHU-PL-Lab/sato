@@ -229,7 +229,6 @@ let rec evaluate
           | None ->
             raise @@ Evaluation_failure
               (Printf.sprintf "cannot condition on undefined value")
-
         in
         recurse @@ cond_wire x e_target @ t
       | Match_body (x', p) ->

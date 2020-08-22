@@ -6,10 +6,10 @@
 
 let rec map fn lst =
     match lst with
-    | hd :: tl -> (fn hd) :: (map fn tl)
+    | hd :: tl -> (fn hd) :: ((map fn) tl) # Test without parens!
     | [] -> []
     end
 in
 let inc n = n + 1 in
 let i = input in
-if i == 0 then map inc [1, true] else map inc [true, 1]
+if i == 0 then (map inc) [1, true] else (map inc) [true, 1]

@@ -9,7 +9,8 @@ open Ast;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "Generator_utils";;
 
-exception Halt_interpretation_as_input_sequence_is_complete;;
+exception Halt_execution_as_input_sequence_is_complete;;
+exception Halt_execution_as_abort_has_been_encountered;;
 
 (* TODO: Check for correctness *)
 (*
@@ -74,7 +75,7 @@ let input_sequence_from_result
     (e : expr)
     (x : Ident.t)
     (result : Interpreter.evaluation_result)
-  : (int list * symbol list) =
+  : (int list * symbol option) =
   match Solver.solve result.er_solver with
   | None ->
     raise @@ Jhupllib_utils.Invariant_failure
@@ -107,12 +108,21 @@ let input_sequence_from_result
     (* Callback function executed on each clause encountered *)
     let stop_at_stop_var (Clause(x, _)) =
       if equal_var x stop_var then
-        raise Halt_interpretation_as_input_sequence_is_complete;
+        raise Halt_execution_as_input_sequence_is_complete;
     in
-    let abort_list = ref [] in
-    let accum_abort (Clause(x, _)) : unit =
-      lazy_logger `trace (fun () -> Printf.sprintf "%s" (Ast_pp.show_var x));
-      abort_list := x :: !abort_list;
+    (* Function to record the first abort error encountered *)
+    let abort_opt_ref = ref None in
+    let record_abort_and_stop (Clause(ab, _)) =
+      (* For now, we only report the error associated with the first we find
+         on a program path, since (during forward evaluation) only code up to
+         that abort is "live;" all code afterwards is "dead" code that is
+         unreachable in the non-instrumented code.  In the future we can report
+         potential errors in "dead" code as well, but only after we prove
+         soundness. *)
+      lazy_logger `trace (fun () ->
+        Printf.sprintf "Abort at %s" (Ast_pp.show_var ab));
+      abort_opt_ref := Some ab;
+      raise @@ Halt_execution_as_abort_has_been_encountered
     in
     (* Run the interpreter with the above input source and clause callback *)
     let execute_interpreter () =
@@ -121,13 +131,14 @@ let input_sequence_from_result
           Odefa_interpreter.Interpreter.eval
             ~input_source:read_from_solver
             ~clause_callback:stop_at_stop_var
-            ~abort_policy:accum_abort
+            ~abort_policy:record_abort_and_stop
             e
         in
         raise @@ Jhupllib.Utils.Invariant_failure
           "evaluation completed without triggering halt exception!"
       with
-      | Halt_interpretation_as_input_sequence_is_complete -> ()
+      | Halt_execution_as_input_sequence_is_complete
+      | Halt_execution_as_abort_has_been_encountered -> ()
     in
     let () = execute_interpreter () in
     let input_sequence = List.rev !input_record in
@@ -142,22 +153,21 @@ let input_sequence_from_result
         )
         input_sequence
     in
-    let abort_symbol_list =
-      List.filter_map
-        (fun ab_var ->
+    let abort_var_to_symbol () =
+      match !abort_opt_ref with
+      | Some ab_var ->
+        begin
           let (ab_x, ab_stack) = destructure_var ab_var in
           let ab_relstack = relativize_stack stop_stack ab_stack in
-          let ab_symb = Symbol (ab_x, ab_relstack) in
-          (* Some abort clauses that are encountered do not count as errors,
-             e.g. they are "knock-on" errors that only exist because of a
-             previous error in the program path, which was removed from the
-             result record at the end of symbolic evaluation. *)
-          if Symbol_map.mem ab_symb result.er_errors then
-            Some ab_symb
+          let ab_symbol  = Symbol (ab_x, ab_relstack) in
+          if not @@ Symbol_map.mem ab_symbol result.er_errors then
+            raise @@ Jhupllib.Utils.Invariant_failure (
+              "Abort symbol " ^ (show_symbol ab_symbol) ^ " encountered during " ^
+              "forward execution, but is unknown or in dead code.")
           else
-            None
-        )
-        !abort_list
+            Some ab_symbol
+        end
+      | None -> None
     in
-    (input_seq_ints, List.rev abort_symbol_list)
+    (input_seq_ints, abort_var_to_symbol ())
 ;;

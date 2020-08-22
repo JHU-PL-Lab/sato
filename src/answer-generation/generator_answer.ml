@@ -54,14 +54,12 @@ module Input_sequence : Answer = struct
   type t = int list option;;
 
   let answer_from_result e x result =
-    let (input_seq, ab_symb_list) =
+    let (input_seq, ab_symbol_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
-    (* lazy_logger `trace (fun () -> "Abort symbols: " ^ (String.join ", " @@ List.map show_symbol ab_symb_list)); *)
-    if List.is_empty ab_symb_list then
-      Some input_seq
-    else
-      None
+    match ab_symbol_opt with
+    | None -> Some input_seq
+    | Some _ -> None
   ;;
 
   (* String "[ 1, 2, 3 ]" or "1, 2, 3" to input sequence *)
@@ -213,17 +211,13 @@ module Type_errors : Answer = struct
 
   let answer_from_result e x result =
     let error_tree_map = result.er_errors in
-    let (input_seq, abort_list) =
+    let (input_seq, abort_symb_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
-    (* For now, we only report the error associated with the first we encounter
-       on a program path, since (during forward evaluation) only code up to
-       that abort is "live;" all code afterwards is "dead" code that is
-       unreachable in the non-instrumented code.  In the future we can report
-       potential errors in "dead" code as well, but only after we prove
-       soundness. *)
     let abort_list_singleton =
-      if List.is_empty abort_list then [] else [List.first abort_list]
+      match abort_symb_opt with
+      | Some abort_symb -> [abort_symb]
+      | None -> []
     in
     let error_tree_list =
       List.fold_right
@@ -329,15 +323,14 @@ module Natodefa_type_errors : Answer = struct
 
   let answer_from_result e x result =
     let error_tree_map = result.er_errors in
-    let (input_seq, abort_list) =
+    let (input_seq, abort_symb_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
-    (* For now, we only report the error associated with the first we encounter
-       on a program path, since (during forward evaluation) only code up to
-       that abort is "live;" all code afterwards is "dead" code that is
-       unreachable in the non-instrumented code.  In the future we can report
-       potential errors in "dead" code as well, but only after we prove
-       soundness. *)
+    let abort_list =
+      match abort_symb_opt with
+      | Some abort_symb -> [abort_symb]
+      | None -> []
+    in
     if List.is_empty abort_list then begin
       {
         err_input_seq = input_seq;
