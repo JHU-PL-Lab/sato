@@ -198,7 +198,7 @@ let show = Pp_utils.pp_to_string pp;;
 
 exception Parse_failure of string;;
 
-module type Error_tree = sig
+module type Error_list = sig
   type t;;
   val empty : t;;
   val is_empty : t -> bool;;
@@ -214,7 +214,7 @@ module type Error_tree = sig
   val count : t -> int;;
 end;;
 
-module Error_tree : Error_tree = struct
+module Error_list : Error_list = struct
   type t = error list;;
 
   let singleton error = [error];;
@@ -224,59 +224,59 @@ module Error_tree : Error_tree = struct
      the the abort clause is in the true branch.) *)
 
   (* not (x1 and x2) <=> (not x1) or (not x2) *)
-  let add_and et1 et2 =
-    match (et1, et2) with
+  let add_and errs_1 errs_2 =
+    match (errs_1, errs_2) with
     | ([], []) -> []
-    | (_, []) ->  et1
-    | ([], _) -> et2
-    | (_, _) -> et1 @ et2
+    | (_, []) ->  errs_1
+    | ([], _) -> errs_2
+    | (_, _) -> errs_1 @ errs_2
   ;;
 
   (* not (x1 or x2) <=> (not x1) and (not x2) *)
-  let add_or et1 et2 =
-    match (et1, et2) with
-    | ([], []) -> []
-    | (_, []) -> []
+  let add_or errs_1 errs_2 =
+    match (errs_1, errs_2) with
+    | ([], [])
+    | (_, [])
     | ([], _) -> []
-    | (_, _) -> et1 @ et2
+    | (_, _) -> errs_1 @ errs_2
   ;;
 
-  let tree_from_error_list err_trees =
+  let tree_from_error_list err_lists =
     List.fold_left
       (fun err_list err -> err @ err_list)
       []
-      err_trees
+      err_lists
   ;;
 
-  let flatten_tree error_tree = error_tree;;
+  let flatten_tree err_list = err_list;;
 
-  let to_string error_tree =
-    let error_list = flatten_tree error_tree in
+  let to_string err_list =
+    let error_list = flatten_tree err_list in
     let string_list = List.map show error_list in
     String.join "\n---------------\n" string_list
   ;;
   
   let empty = [];;
 
-  let is_empty error_tree =
-    match error_tree with
+  let is_empty error_list =
+    match error_list with
     | [] -> true
     | _ -> false
   ;;
 
   let map = List.map;;
 
-  let mem error error_tree =
-    List.exists (equal_error error) error_tree
+  let mem error error_list =
+    List.exists (equal_error error) error_list
   ;;
 
-  let mem_singleton error_singleton error_tree =
+  let mem_singleton error_singleton error_list =
     match error_singleton with
-    | [error] -> mem error error_tree
+    | [error] -> mem error error_list
     | _ -> failwith "Not a singleton!"
   ;;
 
-  let count error_tree = List.length error_tree;;
+  let count error_list = List.length error_list;;
 end;;
 
 (* **** String-to-error parsing **** *)

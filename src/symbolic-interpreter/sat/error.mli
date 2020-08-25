@@ -71,7 +71,7 @@ val parse_error : string -> error;;
 
 val show : error -> string;;
 
-module type Error_tree = sig
+module type Error_list = sig
   type t;;
 
   (** Create a new, empty error tree (i.e. has no errors at all). *)
@@ -116,4 +116,4 @@ module type Error_tree = sig
   val count : t -> int;;
 end;;
 
-module Error_tree : Error_tree;;
+module Error_list : Error_list;;

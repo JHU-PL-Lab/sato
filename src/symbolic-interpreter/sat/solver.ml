@@ -746,11 +746,11 @@ let rec _find_errors solver instrument_clause symbol =
       | Binary_operator_and ->
         let et1 = _find_errors solver instrument_clause s1 in
         let et2 = _find_errors solver instrument_clause s2 in
-        Error_tree.add_and et1 et2
+        Error_list.add_and et1 et2
       | Binary_operator_or ->
         let et1 = _find_errors solver instrument_clause s1 in
         let et2 = _find_errors solver instrument_clause s2 in
-        Error_tree.add_or et1 et2
+        Error_list.add_or et1 et2
       | Binary_operator_xnor
       | Binary_operator_xor
       | Binary_operator_plus
@@ -789,7 +789,7 @@ let rec _find_errors solver instrument_clause symbol =
         in
         lazy_logger `trace (fun () ->
           Printf.sprintf "Binop error:\n%s" (show binop_error));
-        Error_tree.singleton binop_error
+        Error_list.singleton binop_error
     end
   | (None, Some m) ->
     begin
@@ -834,12 +834,12 @@ let rec _find_errors solver instrument_clause symbol =
           in
           lazy_logger `trace (fun () ->
             Printf.sprintf "Match error:\n%s" (show match_error));
-          Error_tree.singleton match_error
+          Error_list.singleton match_error
         end else begin
-          Error_tree.empty
+          Error_list.empty
         end
       | Constraint.Bool true ->
-        Error_tree.empty
+        Error_list.empty
       | _ ->
         raise @@ Utils.Invariant_failure
           (Printf.sprintf "%s is not a boolean value" (show_symbol symbol))
@@ -849,7 +849,7 @@ let rec _find_errors solver instrument_clause symbol =
       match value_opt with
       | Some (Bool b) ->
         if b then
-          Error_tree.empty
+          Error_list.empty
         else
           let alias_chain =
             List.map
@@ -864,7 +864,7 @@ let rec _find_errors solver instrument_clause symbol =
           in
           lazy_logger `trace (fun () ->
             Printf.sprintf "Value error:\n%s" (show value_error));
-          Error_tree.singleton value_error
+          Error_list.singleton value_error
       | _ ->
         raise @@ Utils.Invariant_failure
           (Printf.sprintf "Error tree on %s has non-boolean values"

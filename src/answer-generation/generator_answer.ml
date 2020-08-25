@@ -103,7 +103,7 @@ end;;
 module Type_errors : Answer = struct
 
   type error_seq = {
-    err_errors : Error_tree.t list;
+    err_errors : Error_list.t list;
     err_input_seq : int list;
   }
   ;;
@@ -202,7 +202,7 @@ module Type_errors : Answer = struct
     : t =
     let rm_inst_var_fn = remove_instrument_vars_error odefa_on_maps in
     let error_list = error.err_errors in
-    let error_list' = List.map (Error_tree.map rm_inst_var_fn) error_list in
+    let error_list' = List.map (Error_list.map rm_inst_var_fn) error_list in
     {
       error with
       err_errors = error_list';
@@ -210,7 +210,7 @@ module Type_errors : Answer = struct
   ;;
 
   let answer_from_result e x result =
-    let error_tree_map = result.er_errors in
+    let error_list_map = result.er_errors in
     let (input_seq, abort_symb_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
@@ -219,10 +219,10 @@ module Type_errors : Answer = struct
       | Some abort_symb -> [abort_symb]
       | None -> []
     in
-    let error_tree_list =
+    let error_lists =
       List.fold_right
         (fun abort_symb et_list ->
-          let et = Symbol_map.find abort_symb error_tree_map in
+          let et = Symbol_map.find abort_symb error_list_map in
           et :: et_list
         )
         abort_list_singleton
@@ -231,7 +231,7 @@ module Type_errors : Answer = struct
     let errs =
       {
         err_input_seq = input_seq;
-        err_errors = error_tree_list;
+        err_errors = error_lists;
       }
     in
     match !odefa_on_maps_option_ref with
@@ -248,7 +248,7 @@ module Type_errors : Answer = struct
     in
     let inputs = parse_comma_separated_ints input_str in
     let error = parse_error error_str in
-    let err_tree = Error_tree.singleton error in
+    let err_tree = Error_list.singleton error in
     {
       err_input_seq = inputs;
       err_errors = [err_tree];
@@ -268,7 +268,7 @@ module Type_errors : Answer = struct
       "Type errors for input sequence " ^
       (show_input_seq error_seq.err_input_seq) ^ ":\n" ^
       (String.join "\n-----------------\n"
-        @@ List.map Error_tree.to_string error_seq.err_errors)
+        @@ List.map Error_list.to_string error_seq.err_errors)
     end else begin
       ""
     end
@@ -276,7 +276,7 @@ module Type_errors : Answer = struct
 
   let count errors =
     List.fold_left
-      (fun count err_tree -> count + (Error_tree.count err_tree))
+      (fun count err_tree -> count + (Error_list.count err_tree))
       0
       errors.err_errors
   ;;
@@ -292,17 +292,17 @@ module Type_errors : Answer = struct
 
   let test_mem (error_list: t list) (error: t) =
     let input_seq = error.err_input_seq in
-    let error_trees = error.err_errors in
+    let error_lists = error.err_errors in
     let error_assoc_list =
       List.map
         (fun err -> (err.err_input_seq, err.err_errors))
         error_list
     in
-    let error_tree_list = List.assoc input_seq error_assoc_list in
-    match error_trees with
-    | [error_tree] ->
-      error_tree_list
-      |> List.filter (Error_tree.mem_singleton error_tree)
+    let error_list_list = List.assoc input_seq error_assoc_list in
+    match error_lists with
+    | [error_list] ->
+      error_list_list
+      |> List.filter (Error_list.mem_singleton error_list)
       |> List.is_empty
       |> Bool.not
     | _ ->
@@ -322,7 +322,7 @@ module Natodefa_type_errors : Answer = struct
   let odefa_on_maps_option_ref = ref None;;
 
   let answer_from_result e x result =
-    let error_tree_map = result.er_errors in
+    let error_list_map = result.er_errors in
     let (input_seq, abort_symb_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
@@ -338,8 +338,8 @@ module Natodefa_type_errors : Answer = struct
       }
     end else begin
       let abort = List.first abort_list in
-      let error_tree = Symbol_map.find abort error_tree_map in
-      let error_list = Error_tree.flatten_tree error_tree in
+      let error_list = Symbol_map.find abort error_list_map in
+      let error_list = Error_list.flatten_tree error_list in
       match !odefa_on_maps_option_ref with
       | Some odefa_on_maps ->
         let on_error_list =
