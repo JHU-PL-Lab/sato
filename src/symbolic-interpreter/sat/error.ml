@@ -233,7 +233,6 @@ module Make
     (Binop : Error_binop)
     (Clause : Error_clause)
     (Type : Error_type)
-  (* : Error = struct *)
   : (Error
       with type ident := Ident.t
       and type value := Value.t
@@ -255,7 +254,7 @@ module Make
     err_binop_operation : Binop.t;
     err_binop_clause : Clause.t;
   }
-  (* [@@ deriving eq] *)
+  [@@ deriving eq]
 
   type error_match = {
     err_match_aliases : Ident.t list;
@@ -264,22 +263,22 @@ module Make
     err_match_actual : Type.t;
     err_match_clause : Clause.t;
   }
-  (* [@@ deriving eq] *)
+  [@@ deriving eq]
 
   type error_value = {
     err_value_aliases : Ident.t list;
     err_value_val : Value.t;
     err_value_clause : Clause.t;
   }
-  (* [@@ deriving eq] *)
+  [@@ deriving eq]
 
   type t =
     | Error_binop of error_binop
     | Error_match of error_match
     | Error_value of error_value
-  (* [@@ deriving eq] *)
+  [@@ deriving eq]
 
-  let equal _ _ = true;;
+  let equal = equal;;
 
   let _parse_aliases alias_str =
     alias_str
