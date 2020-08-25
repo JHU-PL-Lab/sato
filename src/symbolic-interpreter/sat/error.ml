@@ -215,13 +215,9 @@ module type Error_tree = sig
 end;;
 
 module Error_tree : Error_tree = struct
-  type t =
-    | Node of t * t
-    | Error of error
-    | Empty
-  ;;
+  type t = error list;;
 
-  let singleton error = Error error;;
+  let singleton error = [error];;
 
   (* We need to effective negate the logical operations, according to
      DeMorgan's laws.  (Think negating the predicate of the conditional;
@@ -230,45 +226,29 @@ module Error_tree : Error_tree = struct
   (* not (x1 and x2) <=> (not x1) or (not x2) *)
   let add_and et1 et2 =
     match (et1, et2) with
-    | (Empty, Empty) -> Empty
-    | (_, Empty) ->  et1
-    | (Empty, _) -> et2
-    | (_, _) -> Node (et1, et2)
+    | ([], []) -> []
+    | (_, []) ->  et1
+    | ([], _) -> et2
+    | (_, _) -> et1 @ et2
   ;;
 
   (* not (x1 or x2) <=> (not x1) and (not x2) *)
   let add_or et1 et2 =
     match (et1, et2) with
-    | (Empty, Empty) -> Empty
-    | (_, Empty) -> Empty
-    | (Empty, _) -> Empty
-    | (_, _) -> Node (et1, et2)
+    | ([], []) -> []
+    | (_, []) -> []
+    | ([], _) -> []
+    | (_, _) -> et1 @ et2
   ;;
 
   let tree_from_error_list err_trees =
-    let rec add_to_tree err_trees =
-      match err_trees with
-      | [err_tree] -> err_tree
-      | err_tree :: err_trees' ->
-        begin
-          let rest_of_tree = add_to_tree err_trees' in
-          match err_tree with
-          | Empty -> rest_of_tree
-          | Node _ | Error _ -> Node (err_tree, rest_of_tree)
-        end
-      | [] ->
-        raise @@
-          Jhupllib.Utils.Invariant_failure "No error trees found in list"
-    in
-    add_to_tree err_trees
+    List.fold_left
+      (fun err_list err -> err @ err_list)
+      []
+      err_trees
   ;;
 
-  let rec flatten_tree error_tree =
-    match error_tree with
-    | Node (et1, et2) -> (flatten_tree et1) @ (flatten_tree et2)
-    | Error error -> [error]
-    | Empty -> []
-  ;;
+  let flatten_tree error_tree = error_tree;;
 
   let to_string error_tree =
     let error_list = flatten_tree error_tree in
@@ -276,49 +256,27 @@ module Error_tree : Error_tree = struct
     String.join "\n---------------\n" string_list
   ;;
   
-  let empty = Empty;;
+  let empty = [];;
 
   let is_empty error_tree =
     match error_tree with
-    | Empty -> true
-    | Node (_, _) | Error _ -> false
+    | [] -> true
+    | _ -> false
   ;;
 
-  let map fn error_tree =
-    let rec walk fn error_tree =
-      match error_tree with
-      | Node (et1, et2) -> Node (walk fn et1, walk fn et2)
-      | Error err -> Error (fn err)
-      | Empty -> Empty
-    in
-    walk fn error_tree
-  ;;
+  let map = List.map;;
 
   let mem error error_tree =
-    let rec walk error_tree error =
-      match error_tree with
-      | Empty -> false
-      | Node (et1, et2) -> (walk et1 error) || (walk et2 error)
-      | Error error' -> equal_error error error'
-    in
-    walk error_tree error
+    List.exists (equal_error error) error_tree
   ;;
 
   let mem_singleton error_singleton error_tree =
     match error_singleton with
-    | Error error -> mem error error_tree
-    | Node (_, _) | Empty -> failwith "Not a singleton!"
+    | [error] -> mem error error_tree
+    | _ -> failwith "Not a singleton!"
   ;;
 
-  let count error_tree =
-    let rec walk error_tree =
-      match error_tree with
-      | Empty -> 0
-      | Node (et1, et2) -> (walk et1) + (walk et2)
-      | Error _ -> 1
-    in
-    walk error_tree
-  ;;
+  let count error_tree = List.length error_tree;;
 end;;
 
 (* **** String-to-error parsing **** *)
