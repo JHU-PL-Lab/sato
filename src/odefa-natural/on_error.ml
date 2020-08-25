@@ -4,6 +4,7 @@ open Jhupllib;;
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
+(*
 open Error;;
 
 module type Error_ident = sig
@@ -373,6 +374,8 @@ module On_error
   let show = Pp_utils.pp_to_string pp;;
 
 end;;
+
+*)
 
 (* ********** *)
 

@@ -41,6 +41,11 @@ type symbol_and_pattern = (symbol * pattern)
 type binop = (symbol * binary_operator * symbol)
 ;;
 
+module Odefa_error = Error.Make
+    (Error.Ident)(Error.Value)(Error.Binop)(Error.Clause)(Error.Type);;
+
+let _ = Odefa_error.equal;;
+
 type t =
   { (** The set of all constraints in the solver. *)
     constraints : Constraint.Set.t;
@@ -856,6 +861,14 @@ let rec _find_errors solver instrument_clause symbol =
               (fun (Symbol (i1, _)) -> i1)
               (_construct_alias_chain solver symbol);
           in
+          (*
+          let _ = Odefa_error.Error_value {
+            err_value_aliases = alias_chain;
+            err_value_val = Value_body (Value_bool b);
+            err_value_clause = instrument_clause;
+          }
+          in
+          *)
           let value_error = Error_value {
             err_value_aliases = alias_chain;
             err_value_val = Value_body (Value_bool b);

@@ -8,7 +8,6 @@ open Ast_pp;;
 open Ddpa_abstract_ast;;
 open Ddpa_graph;;
 open Ddpa_utils;;
-open Error;;
 open Interpreter_types;;
 open Logger_utils;;
 
@@ -1062,10 +1061,10 @@ struct
           )
         |> Enum.map
           (fun (symb, err_list) ->
-            (symb, Error_list.tree_from_error_list err_list)
+            (symb, Error.Error_list.tree_from_error_list err_list)
           )
         |> Enum.filter
-          (fun (_, err_tree) -> not @@ Error_list.is_empty err_tree)
+          (fun (_, err_tree) -> not @@ Error.Error_list.is_empty err_tree)
         |> Symbol_map.of_enum
       in
       Some {
