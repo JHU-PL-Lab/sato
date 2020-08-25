@@ -4,6 +4,378 @@ open Jhupllib;;
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
+open Error;;
+
+module type Error_ident = sig
+  type t;;
+  val equal : t -> t -> bool;;
+  val pp : t Jhupllib.Pp_utils.pretty_printer;;
+  val show : t -> string;;
+end;;
+
+module type Error_value = sig
+  type t;;
+  val equal : t -> t -> bool;;
+  val pp : t Jhupllib.Pp_utils.pretty_printer;;
+  val show : t -> string;;
+end;;
+
+module type Error_binop = sig
+  type t;;
+  val equal : t -> t -> bool;;
+end;;
+
+module type Error_clause = sig
+  type t;;
+  val equal : t -> t -> bool;;
+  val pp : t Jhupllib.Pp_utils.pretty_printer;;
+  val show : t -> string;;
+end;;
+
+module type Error_type = sig
+  type t;;
+  val equal : t -> t -> bool;;
+  val subtype : t -> t -> bool;;
+  val pp : t Jhupllib.Pp_utils.pretty_printer;;
+  val show : t -> string;;
+end;;
+
+module Ident : Error_ident = struct
+  type t = On_ast.ident;;
+  let equal = On_ast.equal_ident;;
+  let pp = On_ast_pp.pp_ident;;
+  let show = On_ast_pp.show_ident;;
+end;;
+
+module Value : Error_value = struct
+  type t = On_ast.expr;;
+  let equal = On_ast.equal_expr;;
+  let pp = On_ast_pp.pp_expr;;
+  let show = On_ast_pp.show_expr;;
+end;;
+
+module Binop : Error_binop = struct
+  type t = On_ast.expr;;
+  let equal = On_ast.equal_expr;;
+end;;
+
+module Clause : Error_clause = struct
+  type t = On_ast.expr;;
+  let equal = On_ast.equal_expr;;
+  let pp = On_ast_pp.pp_expr;;
+  let show = On_ast_pp.show_expr;;
+end;;
+
+module Type : Error_type = struct
+  type t = On_ast.type_sig;;
+  let equal = On_ast.equal_type_sig;;
+  let subtype _ _ = false;;
+  let pp = On_ast_pp.pp_on_type;;
+  let show = On_ast_pp.show_on_type;;
+end;;
+
+module type Error = sig
+  module Error_ident : Error_ident;;
+  module Error_value : Error_value;;
+  module Error_binop : Error_binop;;
+  module Error_clause : Error_clause;;
+  module Error_type : Error_type;;
+
+  exception Parse_failure of string;;
+
+  type error_binop = {
+    err_binop_left_aliases : Error_ident.t list;
+    err_binop_right_aliases : Error_ident.t list;
+    err_binop_left_val : Error_value.t;
+    err_binop_right_val : Error_value.t;
+    err_binop_operation : Error_binop.t;
+    err_binop_clause : Error_clause.t;
+  }
+
+  type error_match = {
+    err_match_aliases : Error_ident.t list;
+    err_match_val : Error_value.t;
+    err_match_expected : Error_type.t;
+    err_match_actual : Error_type.t;
+    err_match_clause : Error_clause.t;
+  }
+
+  type error_value = {
+    err_value_aliases : Error_ident.t list;
+    err_value_val : Error_value.t;
+    err_value_clause : Error_clause.t;
+  }
+
+  type t =
+    | Error_binop of error_binop
+    | Error_match of error_match
+    | Error_value of error_value
+
+  val equal : t -> t -> bool;;
+  val parse : string -> t;;
+  val pp : t Pp_utils.pretty_printer;;
+  val show : t -> string;;
+end;;
+
+module On_error
+    (Ident : Error_ident with type t = On_ast.ident)
+    (Value : Error_value with type t = On_ast.expr)
+    (Binop : Error_binop with type t = On_ast.expr)
+    (Clause : Error_clause with type t = On_ast.expr)
+    (Type : Error_type with type t = On_ast.type_sig)
+  : Error = struct
+
+  module Error_ident = Ident;;
+  module Error_value = Value;;
+  module Error_binop = Binop;;
+  module Error_clause = Clause;;
+  module Error_type = Type;;
+
+  exception Parse_failure of string;;
+
+    type error_binop = {
+    err_binop_left_aliases : Error_ident.t list;
+    err_binop_right_aliases : Error_ident.t list;
+    err_binop_left_val : Error_value.t;
+    err_binop_right_val : Error_value.t;
+    err_binop_operation : Error_binop.t;
+    err_binop_clause : Error_clause.t;
+  }
+  [@@ deriving eq]
+
+  type error_match = {
+    err_match_aliases : Error_ident.t list;
+    err_match_val : Error_value.t;
+    err_match_expected : Error_type.t;
+    err_match_actual : Error_type.t;
+    err_match_clause : Error_clause.t;
+  }
+  [@@ deriving eq]
+
+  type error_value = {
+    err_value_aliases : Error_ident.t list;
+    err_value_val : Error_value.t;
+    err_value_clause : Error_clause.t;
+  }
+  [@@ deriving eq]
+
+  type t =
+    | Error_binop of error_binop
+    | Error_match of error_match
+    | Error_value of error_value
+  [@@ deriving eq]
+
+  let equal = equal;;
+
+  let _parse_aliases alias_str =
+    alias_str
+    |> Str.split (Str.regexp "[ ]+=[ ]+")
+    |> List.map (fun str -> On_ast.Ident str)
+  ;;
+
+  let _parse_expr expr_str =
+    let expr_lst =
+      try
+        On_parse.parse_expression_string expr_str
+      with On_parse.Parse_error _ ->
+        raise @@ Parse_failure (Printf.sprintf "Cannot parse expr %s" expr_str)
+    in
+    match expr_lst with
+    | [expr] -> expr
+    | [] -> raise @@ Parse_failure "Missing expression"
+    | _ -> raise @@ Parse_failure "More than one expression"
+  ;;
+
+  let _parse_type_sig type_str =
+    let open On_ast in
+    match type_str with
+    | "int" | "integer" | "Integer" -> IntType
+    | "bool" | "boolean" | "Boolean" -> BoolType
+    | "fun" | "function" | "Function" -> FunType
+    | "rec" | "record" | "Record" -> RecType (Ident_set.empty)
+    | "list" | "List" -> ListType
+    | _ ->
+      let is_rec_str =
+        Str.string_match (Str.regexp "{.*}") type_str 0
+      in
+      let is_variant_str =
+        Str.string_match (Str.regexp "`.*") type_str 0
+      in
+      if is_rec_str then begin
+        let lbl_set =
+          type_str
+          |> String.lchop
+          |> String.rchop
+          |> Str.split (Str.regexp ",")
+          |> List.map String.trim
+          |> List.map (fun lbl -> Ident lbl)
+          |> Ident_set.of_list
+        in
+        RecType lbl_set
+      end else if is_variant_str then begin
+        VariantType (Variant_label (String.lchop type_str))
+      end else begin
+        raise @@ Parse_failure (Printf.sprintf "Cannot parse type %s" type_str)
+      end
+  ;;
+
+  let parse error_str =
+    let args_list =
+      error_str
+      |> String.trim
+      |> String.lchop
+      |> String.rchop
+      |> Str.split (Str.regexp "\"[ ]*\"")
+    in
+    match args_list with
+    | [err_str; l_alias_str; l_val_str; r_alias_str; r_val_str; op_str; expr_str]
+      when String.equal err_str "binop" ->
+      Error_binop {
+        err_binop_left_aliases = _parse_aliases l_alias_str;
+        err_binop_right_aliases = _parse_aliases r_alias_str;
+        err_binop_left_val = _parse_expr l_val_str;
+        err_binop_right_val = _parse_expr r_val_str;
+        err_binop_operation = _parse_expr op_str;
+        err_binop_clause = _parse_expr expr_str;
+      }
+    | [err_str; alias_str; val_str; expr_str; expected_str; actual_str]
+      when String.equal err_str "match" ->
+      Error_match {
+        err_match_aliases = _parse_aliases alias_str;
+        err_match_val = _parse_expr val_str;
+        err_match_clause = _parse_expr expr_str;
+        err_match_expected = _parse_type_sig expected_str;
+        err_match_actual = _parse_type_sig actual_str;
+      }
+    | [err_str; alias_str; val_str; expr_str]
+      when String.equal err_str "value" ->
+      Error_value {
+        err_value_aliases = _parse_aliases alias_str;
+        err_value_val = _parse_expr val_str;
+        err_value_clause = _parse_expr expr_str;
+      }
+    | _ -> raise @@ Parse_failure "Missing or spurious arguments"
+  ;;
+
+  let pp_alias_list formatter aliases =
+    Pp_utils.pp_concat_sep
+      " ="
+      (fun formatter x -> On_ast_pp.pp_ident formatter x)
+      formatter
+      (List.enum aliases)
+  ;;
+
+  let pp_error_binop formatter err =
+    let open On_ast_pp in
+    let pp_left_value formatter (l_aliases, l_value) =
+      if (List.length l_aliases) > 0 then
+        Format.fprintf formatter
+          "@[* Left Value  : @[%a@ =@ %a@]@]@,"
+          pp_alias_list l_aliases
+          pp_expr l_value
+      else
+        Format.pp_print_string formatter ""
+    in
+    let pp_right_value formatter (r_aliases, r_value) =
+      if (List.length r_aliases) > 0 then
+        Format.fprintf formatter
+          "@[* Right Value : @[%a@ =@ %a@]@]@,"
+          pp_alias_list r_aliases
+          pp_expr r_value
+      else
+        Format.pp_print_string formatter ""
+    in
+    let pp_constraint formatter constraint_expr =
+      Format.fprintf formatter
+        "@[* Constraint  : @[%a@]@]@,"
+        pp_expr constraint_expr
+    in
+    let pp_expression formatter binop_expr =
+      Format.fprintf formatter
+        "@[* Expression  : @[%a@]@]"
+        pp_expr binop_expr
+    in
+    Format.fprintf formatter
+      "@[<v 0>%a%a%a%a@]"
+      pp_left_value (err.err_binop_left_aliases, err.err_binop_left_val)
+      pp_right_value (err.err_binop_right_aliases, err.err_binop_right_val)
+      pp_constraint err.err_binop_operation
+      pp_expression err.err_binop_clause
+  ;;
+
+  let pp_error_match formatter err =
+    let open On_ast_pp in
+    let pp_value formatter (aliases, value) =
+      if (List.length aliases) > 0 then
+        Format.fprintf formatter 
+          "@[* Value       : @[%a@ =@ %a@]@]@,"
+          pp_alias_list aliases
+          pp_expr value
+      else
+        Format.fprintf formatter
+          "@[* Value       : @[%a@]@]@,"
+          pp_expr value
+    in
+    let pp_expression formatter match_expr =
+      Format.fprintf formatter
+        "@[* Expression  : @[%a@]@]@,"
+        pp_expr match_expr
+    in
+    let pp_expected formatter expected_type =
+      Format.fprintf formatter
+        "@[* Expected    : @[%a@]@]@,"
+        pp_on_type expected_type
+    in
+    let pp_actual formatter actual_type =
+      Format.fprintf formatter
+        "@[* Actual      : @[%a@]@]"
+        pp_on_type actual_type
+    in
+    Format.fprintf formatter
+      "@[<v 0>%a%a%a%a@]"
+      pp_value (err.err_match_aliases, err.err_match_val)
+      pp_expression err.err_match_clause
+      pp_expected err.err_match_expected
+      pp_actual err.err_match_actual
+  ;;
+
+  let pp_error_value formatter err =
+    let open On_ast_pp in
+    let pp_value formatter (aliases, value) =
+      if (List.length aliases) > 0 then
+        Format.fprintf formatter 
+          "@[* Value       : @[%a@ =@ %a@]@]@,"
+          pp_alias_list aliases
+          pp_expr value
+      else
+        Format.fprintf formatter
+          "@[* Value       : @[%a@]@,"
+          pp_expr value
+    in
+    let pp_expression formatter value_expr =
+      Format.fprintf formatter
+        "@[* Expression  : @[%a@]@]"
+        pp_expr value_expr
+    in
+    Format.fprintf formatter
+      "@[<v 0>%a%a@]"
+      pp_value (err.err_value_aliases, err.err_value_val)
+      pp_expression err.err_value_clause
+  ;;
+
+  let pp formatter error =
+    match error with
+    | Error_binop err -> pp_error_binop formatter err
+    | Error_match err -> pp_error_match formatter err
+    | Error_value err -> pp_error_value formatter err
+  ;;
+
+  let show = Pp_utils.pp_to_string pp;;
+
+end;;
+
+(* ********** *)
+
 (* **** Errors in natodefa **** *)
 
 type error_binop = {

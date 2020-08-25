@@ -1,7 +1,90 @@
+open Jhupllib;;
+
 open Odefa_ast;;
 open Ast;;
 
-(* open Constraint;; *)
+module type Error_ident = sig
+  type t;;
+  val equal : t -> t -> bool;;
+  val pp : t Pp_utils.pretty_printer;;
+  val show : t -> string;;
+end;;
+
+module type Error_value = sig
+  type t;;
+  val equal : t -> t -> bool;;
+  val pp : t Pp_utils.pretty_printer;;
+  val show : t -> string;;
+end;;
+
+module type Error_binop = sig
+  type t;;
+  val equal : t -> t -> bool;;
+end;;
+
+module type Error_clause = sig
+  type t;;
+  val equal : t -> t -> bool;;
+  val pp : t Pp_utils.pretty_printer;;
+  val show : t -> string;;
+end;;
+
+module type Error_type = sig
+  type t;;
+  val equal : t -> t -> bool;;
+  val subtype : t -> t -> bool;;
+  val pp : t Pp_utils.pretty_printer;;
+  val show : t -> string;;
+end;;
+
+module type Error = sig
+  module Error_ident : Error_ident;;
+  module Error_value : Error_value;;
+  module Error_binop : Error_binop;;
+  module Error_clause : Error_clause;;
+  module Error_type : Error_type;;
+
+  exception Parse_failure of string;;
+
+  type error_binop = {
+    err_binop_left_aliases : Error_ident.t list;
+    err_binop_right_aliases : Error_ident.t list;
+    err_binop_left_val : Error_value.t;
+    err_binop_right_val : Error_value.t;
+    err_binop_operation : Error_binop.t;
+    err_binop_clause : Error_clause.t;
+  }
+
+  type error_match = {
+    err_match_aliases : Error_ident.t list;
+    err_match_val : Error_value.t;
+    err_match_expected : Error_type.t;
+    err_match_actual : Error_type.t;
+    err_match_clause : Error_clause.t;
+  }
+
+  type error_value = {
+    err_value_aliases : Error_ident.t list;
+    err_value_val : Error_value.t;
+    err_value_clause : Error_clause.t;
+  }
+
+  type t =
+    | Error_binop of error_binop
+    | Error_match of error_match
+    | Error_value of error_value
+  ;;
+
+  val equal : t -> t -> bool;;
+
+  val parse : string -> t;;
+
+  val pp : t Pp_utils.pretty_printer;;
+
+  val show : t -> string;;
+end;;
+
+(* ******************* *)
 
 exception Parse_failure of string;;
 
