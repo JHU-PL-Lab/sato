@@ -47,24 +47,37 @@ module type Error = sig
   exception Parse_failure of string;;
 
   type error_binop = {
+    (** The alias chain leading up to the left value. *)
     err_binop_left_aliases : Error_ident.t list;
+    (** The alias chain leading up to the right value. *)
     err_binop_right_aliases : Error_ident.t list;
+    (** The value of the left side of the binop. *)
     err_binop_left_val : Error_value.t;
+    (** The value of the right side of the binop. *)
     err_binop_right_val : Error_value.t;
+    (** The operator (e.g. +, -, and, or, ==, etc. *)
     err_binop_operation : Error_binop.t;
+    (** The clause representing the operation being instrumented. *)
     err_binop_clause : Error_clause.t;
   }
 
   type error_match = {
+    (** The alias chain of the ident begin matched upon. *)
     err_match_aliases : Error_ident.t list;
+    (** The value of the ident that is being matched. *)
     err_match_val : Error_value.t;
+    (** The expected type of the symbol being matched. *)
     err_match_expected : Error_type.t;
+    (** The actual type of the symbol being matched. *)
     err_match_actual : Error_type.t;
+    (** The clause respresenting the operation being instrumented. *)
     err_match_clause : Error_clause.t;
   }
 
   type error_value = {
+    (** The alias chain defining the boolean value. *)
     err_value_aliases : Error_ident.t list;
+    (** The boolean value (should always be false). *)
     err_value_val : Error_value.t;
     err_value_clause : Error_clause.t;
   }
@@ -89,54 +102,29 @@ end;;
 exception Parse_failure of string;;
 
 type error_binop = {
-  (** The clause representing the operation being instrumented. *)
   err_binop_clause : clause;
-
-  (** The operator (e.g. +, -, and, or, ==, etc. *)
   err_binop_operation : binary_operator;
-
-  (** The value of the left side of the binop. *)
   err_binop_left_val : clause_body;
-
-  (** The value of the right side of the binop. *)
   err_binop_right_val : clause_body;
-
-  (** The alias chain leading up to the left value. *)
   err_binop_left_aliases : ident list;
-
-  (** The alias chain leading up to the right value. *)
   err_binop_right_aliases : ident list;
 }
 [@@ deriving eq]
 ;;
 
 type error_match = {
-  (** The alias chain of the ident begin matched upon. *)
   err_match_aliases : ident list;
-
-  (** The value of the ident that is being matched. *)
-  err_match_value : clause_body;
-
-  (** The clause respresenting the operation being instrumented. *)
+  err_match_value : clause_body;  
   err_match_clause : clause;
-
-  (** The expected type, according to the pattern. *)
   err_match_expected_type : type_sig;
-
-  (** The actual type of the symbol being matched. *)
   err_match_actual_type : type_sig;
 }
 [@@ deriving eq]
 ;;
 
 type error_value = {
-  (** The alias chain defining the boolean value. *)
   err_value_aliases : ident list;
-
-  (** The boolean value (should always be false). *)
   err_value_val : clause_body;
-
-  (** The clause representing the operation being constrained. *)
   err_value_clause : clause;
 }
 [@@ deriving eq]
