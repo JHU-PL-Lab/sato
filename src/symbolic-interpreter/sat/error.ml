@@ -235,11 +235,11 @@ module Make
     (Type : Error_type)
   (* : Error = struct *)
   : (Error
-      with type ident = Ident.t
-      and type value = Value.t
-      and type binop = Binop.t
-      and type clause = Clause.t
-      and type type_sig = Type.t) = struct
+      with type ident := Ident.t
+      and type value := Value.t
+      and type binop := Binop.t
+      and type clause := Clause.t
+      and type type_sig := Type.t) = struct
 
   module Error_ident = Ident;;
   module Error_value = Value;;
@@ -247,35 +247,29 @@ module Make
   module Error_clause = Clause;;
   module Error_type = Type;;
 
-  type ident = Ident.t;;
-  type value = Value.t;;
-  type binop = Binop.t;;
-  type clause = Clause.t;;
-  type type_sig = Type.t;;
-
   type error_binop = {
-    err_binop_left_aliases : ident list;
-    err_binop_right_aliases : ident list;
-    err_binop_left_val : value;
-    err_binop_right_val : value;
-    err_binop_operation : binop;
-    err_binop_clause : clause;
+    err_binop_left_aliases : Ident.t list;
+    err_binop_right_aliases : Ident.t list;
+    err_binop_left_val : Value.t;
+    err_binop_right_val : Value.t;
+    err_binop_operation : Binop.t;
+    err_binop_clause : Clause.t;
   }
   (* [@@ deriving eq] *)
 
   type error_match = {
-    err_match_aliases : ident list;
-    err_match_val : value;
-    err_match_expected : type_sig;
-    err_match_actual : type_sig;
-    err_match_clause : clause;
+    err_match_aliases : Ident.t list;
+    err_match_val : Value.t;
+    err_match_expected : Type.t;
+    err_match_actual : Type.t;
+    err_match_clause : Clause.t;
   }
   (* [@@ deriving eq] *)
 
   type error_value = {
-    err_value_aliases : ident list;
-    err_value_val : value;
-    err_value_clause : clause;
+    err_value_aliases : Ident.t list;
+    err_value_val : Value.t;
+    err_value_clause : Clause.t;
   }
   (* [@@ deriving eq] *)
 

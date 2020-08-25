@@ -125,11 +125,11 @@ module Make
     (Type : Error_type)
   (* : Error;; *)
   : (Error
-      with type ident = Ident.t
-      and type value = Value.t
-      and type binop = Binop.t
-      and type clause = Clause.t
-      and type type_sig = Type.t)
+      with type ident := Ident.t
+      and type value := Value.t
+      and type binop := Binop.t
+      and type clause := Clause.t
+      and type type_sig := Type.t)
 
 (* ******************* *)
 
