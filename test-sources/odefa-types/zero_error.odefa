@@ -1,7 +1,7 @@
 # EXPECT-WELL-FORMED
 # EXPECT-STUCK
 # EXPECT-TYPE-ERROR-COUNT 1
-# EXPECT-TYPE-ERROR ~result [] : "binop" "c = b" "0" "" "0" "0 <> 0" "d = a / c"
+# EXPECT-TYPE-ERROR ~result [] "d = a / c" "c = b" "0" "" "0" "0 <> 0" 
 
 a = 2;
 b = 0;

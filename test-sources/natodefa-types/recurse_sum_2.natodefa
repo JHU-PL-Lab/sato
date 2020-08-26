@@ -1,7 +1,7 @@
 # EXPECT-WELL-FORMED
 # EXPECT-TYPE-ERROR-COUNT 2
-# EXPECT-TYPE-ERROR ~result [0] : "match" "" "true" "n < true" "int" "bool"
-# EXPECT-TYPE-ERROR ~result [1] : "match" "" "false" "n < false" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [0] "n < true" "" "true" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [1] "n < false" "" "false" "int" "bool"
 
 let rec sum0 n =
     if n < true then 0 else n + ( sum1 ( n - 1 ) )

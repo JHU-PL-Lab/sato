@@ -159,6 +159,12 @@ module Type_errors : Answer = struct
     let (loc_str, error_str) =
       split_with_regexp (Str.regexp "\"[^\"]*\"") loc_err_str
     in
+    let loc_str =
+      (* Remove quotes *)
+      loc_str
+      |> String.lchop
+      |> String.rchop
+    in
     (*
     let (input_str, error_str) =
       arg_str
@@ -167,7 +173,12 @@ module Type_errors : Answer = struct
     in
     *)
     let inputs = parse_comma_separated_ints input_str in
-    let location = Odefa_parser.Parser.parse_clause_string loc_str in
+    let location =
+      try
+        Odefa_parser.Parser.parse_clause_string loc_str
+      with Odefa_parser.Parser.Parse_error _ ->
+        failwith (Printf.sprintf "Cannot parse clause %s" loc_str)
+    in
     let error = Error.Odefa_error.parse error_str in
     {
       err_input_seq = inputs;
@@ -268,6 +279,12 @@ module Natodefa_type_errors : Answer = struct
     let (loc_str, error_str) =
       split_with_regexp (Str.regexp "\"[^\"]*\"") loc_err_str
     in
+    let loc_str =
+      (* Remove quotes *)
+      loc_str
+      |> String.lchop
+      |> String.rchop
+    in
     (*
     let (input_str, error_str) =
       arg_str
@@ -318,9 +335,11 @@ module Natodefa_type_errors : Answer = struct
   let test_expected (expect_errs : t) (actual_errs : t) =
     let exp_inputs = expect_errs.err_input_seq in
     let act_inputs = actual_errs.err_input_seq in
+    let exp_loc = expect_errs.err_location in
+    let act_loc = actual_errs.err_location in
     let exp_errors = expect_errs.err_errors in
     let act_errors = expect_errs.err_errors in
-    if exp_inputs <> act_inputs then false else begin
+    if (exp_inputs <> act_inputs) || (exp_loc <> act_loc) then false else begin
       let is_mem err =
         List.exists (On_error.On_error.equal err) act_errors
       in

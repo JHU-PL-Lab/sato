@@ -247,11 +247,10 @@ module Make
       |> String.trim
       |> String.lchop
       |> String.rchop
-      |> Str.split (Str.regexp "\"[ ]*\"")
+      |> Str.split_delim (Str.regexp "\"[ ]*\"")
     in
     match args_list with
-    | [error_str; l_alias_str; l_val_str; r_alias_str; r_val_str; op_str]
-      when String.equal error_str "binop" ->
+    | [l_alias_str; l_val_str; r_alias_str; r_val_str; op_str] ->
       begin
         Error_binop {
           err_binop_left_val = Value.parse l_val_str;
@@ -261,8 +260,7 @@ module Make
           err_binop_operation = Binop.parse op_str;
         }
       end
-    | [error_str; alias_str; val_str; expected_str; actual_str]
-      when String.equal error_str "match" ->
+    | [alias_str; val_str; expected_str; actual_str] ->
       begin
         Error_match {
           err_match_aliases = _parse_aliases alias_str;
@@ -271,8 +269,7 @@ module Make
           err_match_actual = Type.parse actual_str;
         }
       end
-    | [error_str; alias_str; val_str]
-      when String.equal error_str "value" ->
+    | [alias_str; val_str] ->
       begin
         Error_value {
           err_value_aliases = _parse_aliases alias_str;

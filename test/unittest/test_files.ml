@@ -1202,12 +1202,12 @@ let make_tests_from_dir pathname =
 let tests =
   "Test_source_files" >::: (
     make_tests_from_dir "test-sources"
-    (* @ make_tests_from_dir "test-sources/odefa-basic" *)
-    (* @ make_tests_from_dir "test-sources/odefa-fails" *)
-    (* @ make_tests_from_dir "test-sources/odefa-input" *)
-    (* @ make_tests_from_dir "test-sources/odefa-stack" *)
+    @ make_tests_from_dir "test-sources/odefa-basic"
+    @ make_tests_from_dir "test-sources/odefa-fails"
+    @ make_tests_from_dir "test-sources/odefa-input"
+    @ make_tests_from_dir "test-sources/odefa-stack"
     @ make_tests_from_dir "test-sources/odefa-types"
-    (* @ make_tests_from_dir "test-sources/natodefa-basic" *)
+    @ make_tests_from_dir "test-sources/natodefa-basic"
     @ make_tests_from_dir "test-sources/natodefa-types"
     (* @ make_tests_from_dir "test-sources/natodefa-input" *)
   )
