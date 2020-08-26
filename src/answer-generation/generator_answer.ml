@@ -129,12 +129,16 @@ module Type_errors : Answer = struct
       begin
         match error_opt with
         | Some (error_loc, error_list) ->
+          let Ast.Clause (Var (x, _), _) = error_loc in
           let rm_inst_fn =
             On_error.odefa_error_remove_instrument_vars odefa_on_maps
           in
+          let trans_inst_fn =
+            On_to_odefa_maps.get_pre_inst_equivalent_clause odefa_on_maps
+          in
           {
             err_input_seq = input_seq;
-            err_location = Some error_loc;
+            err_location = Some (trans_inst_fn x);
             err_errors = List.map rm_inst_fn error_list;
           }
         | None ->
@@ -180,15 +184,16 @@ module Type_errors : Answer = struct
     "[" ^ (String.join ", " @@ List.map string_of_int input_seq) ^ "]"
   ;;
 
-  let show (error_seq : t) : string =
-    if not @@ List.is_empty error_seq.err_errors then begin
-      "Type errors for input sequence " ^
-      (show_input_seq error_seq.err_input_seq) ^ ":\n" ^
-      (String.join "\n-----------------\n"
-        @@ List.map Error.Odefa_error.show error_seq.err_errors)
-    end else begin
-      ""
-    end
+  let show (error : t) : string =
+    match error.err_location with
+    | Some error_loc ->
+      "Type errors for:\n" ^
+      "- Input sequence  : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
+      "- Found at clause : " ^ (Ast_pp.show_clause error_loc) ^ "\n" ^
+      "--------------------\n" ^
+      (String.join "\n--------------------\n"
+        @@ List.map Error.Odefa_error.show error.err_errors)
+    | None -> ""
   ;;
 
   let count (errors : t) = List.length errors.err_errors;;
@@ -289,14 +294,15 @@ module Natodefa_type_errors : Answer = struct
   ;;
 
   let show error =
-    if not @@ List.is_empty error.err_errors then begin
-      "Type errors for input sequence " ^
-      (show_input_seq error.err_input_seq) ^ ":\n" ^
-      (String.join "\n-----------------\n"
+    match error.err_location with
+    | Some error_loc ->
+      "Type errors for:\n" ^
+      "- Input sequence : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
+      "- Found at expr  : " ^ (On_ast_pp.show_expr error_loc) ^ "\n" ^
+      "--------------------\n" ^
+      (String.join "\n--------------------\n"
         @@ List.map On_error.On_error.show error.err_errors)
-    end else begin
-      ""
-    end
+    | None -> ""
   ;;
 
   let count error = List.length error.err_errors;;

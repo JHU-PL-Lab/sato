@@ -117,11 +117,6 @@ let odefa_error_remove_instrument_vars
         not @@ On_to_odefa_maps.is_var_instrumenting odefa_on_maps alias)
       aliases
   in
-  (*
-  let get_pre_instrument_clause clause_var =
-    On_to_odefa_maps.get_pre_inst_equivalent_clause odefa_on_maps clause_var
-  in
-  *)
   match error with
   | Error_binop err ->
     begin

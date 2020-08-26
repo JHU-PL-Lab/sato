@@ -296,7 +296,7 @@ module Make
       let l_value = err.err_binop_left_val in
       if (List.length l_aliases) > 0 then
         Format.fprintf formatter
-          "@[* Left Value  : @[%a@ =@ %a@]@]@,"
+          "@[* Left Val   : @[%a@ =@ %a@]@]@,"
           pp_alias_list l_aliases
           Value.pp l_value
       else
@@ -307,7 +307,7 @@ module Make
       let r_value = err.err_binop_right_val in
       if (List.length r_aliases) > 0 then
         Format.fprintf formatter
-          "@[* Right Value : @[%a@ =@ %a@]@]@,"
+          "@[* Right Val  : @[%a@ =@ %a@]@]@,"
           pp_alias_list r_aliases
           Value.pp r_value
       else
@@ -315,7 +315,7 @@ module Make
     in
     let pp_constraint formatter err =
       Format.fprintf formatter
-        "@[* Constraint  : @[%a@]@]"
+        "@[* Constraint : @[%a@]@]"
         Binop.pp err.err_binop_operation
     in
     Format.fprintf formatter
@@ -362,12 +362,12 @@ module Make
       let value = err.err_value_val in
       if not @@ List.is_empty aliases then
         Format.fprintf formatter 
-          "@[* Value    : @[%a@ =@ %a@]@]"
+          "@[* Value : @[%a@ =@ %a@]@]"
           pp_alias_list aliases
           Value.pp value
       else
         Format.fprintf formatter 
-          "@[* Value    : @[%a@]@]"
+          "@[* Value : @[%a@]@]"
           Value.pp value
     in
     Format.fprintf formatter

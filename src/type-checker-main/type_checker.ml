@@ -107,6 +107,7 @@ let run_error_check
       let _ = steps in (* Temp *)
       print_endline (Ans.show type_errors);
       print_endline (Printf.sprintf "Found in %d steps" steps);
+      print_endline "";
       flush stdout;
       total_errors := !total_errors + Ans.count type_errors;
       results_remaining := (Option.map (fun n -> n - 1) !results_remaining);
