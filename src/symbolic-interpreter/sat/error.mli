@@ -48,7 +48,8 @@ end;;
 
 module Ident : Error_ident with type t = Ast.ident;;
 module Value : Error_value with type t = Ast.clause_body;;
-module Binop : Error_binop with type t = (Ast.clause_body * Ast.binary_operator * Ast.clause_body);;
+module Binop : Error_binop with type t =
+  (Ast.clause_body * Ast.binary_operator * Ast.clause_body);;
 module Clause : Error_clause with type t = Ast.clause;;
 module Type : Error_type with type t = Ast.type_sig;;
 
@@ -123,7 +124,6 @@ module Make
     (Binop : Error_binop)
     (Clause : Error_clause)
     (Type : Error_type)
-  (* : Error;; *)
   : (Error
       with type ident := Ident.t
       and type value := Value.t

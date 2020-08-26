@@ -148,6 +148,10 @@ let rec _construct_alias_chain solver symbol =
   | None -> [symbol]
 ;;
 
+let _alias_symbols_to_idents alias_chain =
+  List.map (fun (Symbol (x, _)) -> x) alias_chain
+;;
+
 let _get_symbol_type solver symbol : symbol_type option =
   Symbol_map.Exceptionless.find symbol solver.type_constraints_by_symbol
 ;;
@@ -767,6 +771,43 @@ let rec _find_errors solver instrument_clause symbol =
       | Binary_operator_less_than_or_equal_to
       | Binary_operator_equal_to
       | Binary_operator_not_equal_to ->
+        let l_val =
+          match _get_value_source solver s1 with
+            | Some vs -> _symbolic_to_concrete_value vs
+            | None -> raise Not_found
+        in
+        let r_val =
+            match _get_value_source solver s2 with
+            | Some vs -> _symbolic_to_concrete_value vs
+            | None -> raise Not_found
+        in
+        let l_aliases =
+          _alias_symbols_to_idents @@ _construct_alias_chain solver s1
+        in
+        let r_aliases =
+          _alias_symbols_to_idents @@ _construct_alias_chain solver s2
+        in
+        let l_operand =
+          if List.is_empty l_aliases then
+            l_val
+          else
+            Ast.Var_body (Var (List.first l_aliases, None))
+        in
+        let r_operand =
+          if List.is_empty r_aliases then
+            r_val
+          else
+            Ast.Var_body (Var (List.first r_aliases, None))
+        in
+        let _ =  Odefa_error.Error_binop {
+          err_binop_clause = instrument_clause;
+          err_binop_left_val = l_val;
+          err_binop_right_val = r_val;
+          err_binop_left_aliases = l_aliases;
+          err_binop_right_aliases = r_aliases;
+          err_binop_operation = (l_operand, op, r_operand);
+        }
+        in
         let binop_error = Error_binop {
           err_binop_clause = instrument_clause;
           err_binop_operation = op;
@@ -829,7 +870,15 @@ let rec _find_errors solver instrument_clause symbol =
               (show_symbol match_symb))
         in
         if not (Ast.Type_signature.subtype actual_type expected_type) then begin
-          let match_error = Error_match{
+          let _ = Odefa_error.Error_match {
+            err_match_aliases = _alias_symbols_to_idents alias_chain;
+            err_match_clause = instrument_clause;
+            err_match_val = match_val_source;
+            err_match_expected = expected_type;
+            err_match_actual = actual_type;
+          }
+          in
+          let match_error = Error_match {
             err_match_aliases = List.map (fun (Symbol(x, _)) -> x) alias_chain;
             err_match_clause = instrument_clause;
             err_match_value = match_val_source;
@@ -857,18 +906,14 @@ let rec _find_errors solver instrument_clause symbol =
           Error_list.empty
         else
           let alias_chain =
-            List.map
-              (fun (Symbol (i1, _)) -> i1)
-              (_construct_alias_chain solver symbol);
+            _alias_symbols_to_idents @@ _construct_alias_chain solver symbol;
           in
-          (*
           let _ = Odefa_error.Error_value {
             err_value_aliases = alias_chain;
             err_value_val = Value_body (Value_bool b);
             err_value_clause = instrument_clause;
           }
           in
-          *)
           let value_error = Error_value {
             err_value_aliases = alias_chain;
             err_value_val = Value_body (Value_bool b);

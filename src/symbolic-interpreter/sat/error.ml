@@ -362,36 +362,9 @@ module Make
         Format.pp_print_string formatter ""
     in
     let pp_constraint formatter err =
-      let l_value = err.err_binop_left_val in
-      let r_value = err.err_binop_right_val in
-      let op = err.err_binop_operation in
-      let l_alias_opt = List.Exceptionless.hd err.err_binop_left_aliases in
-      let r_alias_opt = List.Exceptionless.hd err.err_binop_right_aliases in
-      match (l_alias_opt, r_alias_opt) with
-      | (Some l_alias, Some r_alias) ->
-        Format.fprintf formatter
-          "@[* Constraint  : @[%a@ %a@ %a@]@]@,"
-          Ident.pp l_alias
-          Binop.pp op
-          Ident.pp r_alias
-      | (None, Some r_alias) ->
-        Format.fprintf formatter
-          "@[* Constraint  : @[%a@ %a@ %a@]@]@,"
-          Value.pp l_value
-          Binop.pp op
-          Ident.pp r_alias
-      | (Some l_alias, None) ->
-        Format.fprintf formatter
-          "@[* Constraint  : @[%a@ %a@ %a@]@]@,"
-          Ident.pp l_alias
-          Binop.pp op
-          Value.pp r_value
-      | (None, None) ->
-        Format.fprintf formatter
-          "@[* Constraint  : @[%a@ %a@ %a@]@]@,"
-          Value.pp l_value
-          Binop.pp op
-          Value.pp r_value
+      Format.fprintf formatter
+        "@[* Constraint  : @[%a@]@]@,"
+        Binop.pp err.err_binop_operation
     in
     let pp_clause formatter err =
       Format.fprintf formatter
