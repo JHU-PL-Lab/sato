@@ -151,7 +151,7 @@ module Type_errors : Answer = struct
     | None -> failwith "Odefa/natodefa maps were not set!"
   ;;
 
-  (* Ex: [0, 1] : "a = b" "c = 2" "sum = a or z" "int" "bool" *)
+  (* Ex: [0, 1] "sum = a or z" "a = b" "c = 2" "int" "bool" *)
   let answer_from_string arg_str : t =
         let (input_str, loc_err_str) =
       split_with_regexp (Str.regexp "\\[[^][]*\\]") arg_str
@@ -165,13 +165,6 @@ module Type_errors : Answer = struct
       |> String.lchop
       |> String.rchop
     in
-    (*
-    let (input_str, error_str) =
-      arg_str
-      |> String.split ~by:":"
-      |> (fun (i_str, e_str) -> (String.trim i_str, String.trim e_str))
-    in
-    *)
     let inputs = parse_comma_separated_ints input_str in
     let location =
       try
@@ -285,13 +278,6 @@ module Natodefa_type_errors : Answer = struct
       |> String.lchop
       |> String.rchop
     in
-    (*
-    let (input_str, error_str) =
-      arg_str
-      |> String.split ~by:":"
-      |> (fun (i_str, e_str) -> (String.trim i_str, String.trim e_str))
-    in
-    *)
     let inputs = parse_comma_separated_ints input_str in
     let location = Odefa_natural.On_parse.parse_single_expr_string loc_str in
     let error = On_error.On_error.parse error_str in
