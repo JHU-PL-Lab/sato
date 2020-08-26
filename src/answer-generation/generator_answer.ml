@@ -4,7 +4,7 @@ open Batteries;;
 open Odefa_ast;;
 open Ast;;
 
-open Odefa_symbolic_interpreter.Error;;
+open Odefa_symbolic_interpreter;;
 open Odefa_symbolic_interpreter.Interpreter_types;;
 open Odefa_symbolic_interpreter.Interpreter;;
 
@@ -101,9 +101,9 @@ end;;
 (* **** Type Errors **** *)
 
 module Type_errors : Answer = struct
-
+  
   type error_seq = {
-    err_errors : Error_list.t list;
+    err_errors : Error.Odefa_error.t list;
     err_input_seq : int list;
   }
   ;;
@@ -116,8 +116,8 @@ module Type_errors : Answer = struct
 
   let remove_instrument_vars_error
       (odefa_on_maps : On_to_odefa_maps.t)
-      (error : error)
-    : error =
+      (error : Error.Odefa_error.t)
+    : Error.Odefa_error.t =
     match error with
     | Error_binop err ->
       begin
@@ -202,7 +202,7 @@ module Type_errors : Answer = struct
     : t =
     let rm_inst_var_fn = remove_instrument_vars_error odefa_on_maps in
     let error_list = error.err_errors in
-    let error_list' = List.map (Error_list.map rm_inst_var_fn) error_list in
+    let error_list' = List.map rm_inst_var_fn error_list in
     {
       error with
       err_errors = error_list';
@@ -214,24 +214,15 @@ module Type_errors : Answer = struct
     let (input_seq, abort_symb_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
-    let abort_list_singleton =
+    let error_list =
       match abort_symb_opt with
-      | Some abort_symb -> [abort_symb]
+      | Some abort_symb -> Symbol_map.find abort_symb error_list_map
       | None -> []
-    in
-    let error_lists =
-      List.fold_right
-        (fun abort_symb et_list ->
-          let et = Symbol_map.find abort_symb error_list_map in
-          et :: et_list
-        )
-        abort_list_singleton
-        []
     in
     let errs =
       {
         err_input_seq = input_seq;
-        err_errors = error_lists;
+        err_errors = error_list;
       }
     in
     match !odefa_on_maps_option_ref with
@@ -247,11 +238,10 @@ module Type_errors : Answer = struct
       |> (fun (i_str, e_str) -> (String.trim i_str, String.trim e_str))
     in
     let inputs = parse_comma_separated_ints input_str in
-    let error = parse_error error_str in
-    let err_tree = Error_list.singleton error in
+    let error = Error.Odefa_error.parse error_str in
     {
       err_input_seq = inputs;
-      err_errors = [err_tree];
+      err_errors = [error];
     }
   ;;
 
@@ -268,18 +258,13 @@ module Type_errors : Answer = struct
       "Type errors for input sequence " ^
       (show_input_seq error_seq.err_input_seq) ^ ":\n" ^
       (String.join "\n-----------------\n"
-        @@ List.map Error_list.to_string error_seq.err_errors)
+        @@ List.map Error.Odefa_error.show error_seq.err_errors)
     end else begin
       ""
     end
   ;;
 
-  let count errors =
-    List.fold_left
-      (fun count err_tree -> count + (Error_list.count err_tree))
-      0
-      errors.err_errors
-  ;;
+  let count errors = List.length  errors.err_errors;;
 
   let count_list error_list =
     error_list
@@ -290,6 +275,7 @@ module Type_errors : Answer = struct
   (* Currently always returns true; no mechanism to detect failed answer gen *)
   let generation_successful (_: t) = true;;
 
+  (*
   let test_mem (error_list: t list) (error: t) =
     let input_seq = error.err_input_seq in
     let error_lists = error.err_errors in
@@ -308,6 +294,9 @@ module Type_errors : Answer = struct
     | _ ->
       failwith "test_mem can only test single error"
   ;;
+  *)
+
+  let test_mem _ _ = false;;
 end;;
 
 module Natodefa_type_errors : Answer = struct
@@ -339,7 +328,6 @@ module Natodefa_type_errors : Answer = struct
     end else begin
       let abort = List.first abort_list in
       let error_list = Symbol_map.find abort error_list_map in
-      let error_list = Error_list.flatten_tree error_list in
       match !odefa_on_maps_option_ref with
       | Some odefa_on_maps ->
         let on_error_list =

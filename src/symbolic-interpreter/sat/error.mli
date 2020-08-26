@@ -131,6 +131,14 @@ module Make
       and type clause := Clause.t
       and type type_sig := Type.t)
 
+module Odefa_error
+  : (Error
+      with type ident := Ident.t
+      and type value := Value.t
+      and type binop := Binop.t
+      and type clause := Clause.t
+      and type type_sig := Type.t)
+
 (* ******************* *)
 
 type error_binop = {

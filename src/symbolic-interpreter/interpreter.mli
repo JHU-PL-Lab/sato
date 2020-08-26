@@ -31,7 +31,7 @@ type evaluation_result = {
   er_solution : (symbol -> value option);
   (** The solution to the formulae found by this evaluation. *)
 
-  er_errors : Error.Error_list.t Symbol_map.t;
+  er_errors : (Error.Odefa_error.t list) Symbol_map.t;
   (** The list of errors accumulated via visiting aborts *)
 };;
 

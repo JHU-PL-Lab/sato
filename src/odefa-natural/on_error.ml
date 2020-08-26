@@ -592,8 +592,9 @@ let odefa_to_on_binop
 
 let odefa_to_natodefa_error
     (odefa_on_maps : On_to_odefa_maps.t)
-    (odefa_err : Error.error)
+    (odefa_err : Error.Odefa_error.t)
   : error =
+  let open Error in
   (* Helper functions *)
   let odefa_to_on_expr =
     On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps
@@ -644,13 +645,13 @@ let odefa_to_natodefa_error
   in
   (* Odefa to natodefa *)
   match odefa_err with
-  | Error.Error_binop err ->
+  | Odefa_error.Error_binop err ->
     begin
       let l_aliases = err.err_binop_left_aliases in
       let r_aliases = err.err_binop_right_aliases in
       let l_aliases_on = odefa_to_on_aliases l_aliases in
       let r_aliases_on = odefa_to_on_aliases r_aliases in
-      let op = err.err_binop_operation in
+      let (_, op, _) = err.err_binop_operation in
       let l_value = odefa_to_on_value l_aliases in
       let r_value = odefa_to_on_value r_aliases in
       let (Clause (Var (v, _), _)) = err.err_binop_clause in
@@ -679,7 +680,7 @@ let odefa_to_natodefa_error
         err_binop_expr = odefa_to_on_expr v;
       }
     end
-  | Error.Error_match err ->
+  | Odefa_error.Error_match err ->
     begin
       let aliases = err.err_match_aliases in
       let (Clause (Var (v, _), _)) = err.err_match_clause in
@@ -687,11 +688,11 @@ let odefa_to_natodefa_error
         err_match_aliases = odefa_to_on_aliases aliases;
         err_match_expr = odefa_to_on_expr v;
         err_match_value = odefa_to_on_value aliases;
-        err_match_expected = odefa_to_on_type err.err_match_expected_type;
-        err_match_actual = odefa_to_on_type err.err_match_actual_type;
+        err_match_expected = odefa_to_on_type err.err_match_expected;
+        err_match_actual = odefa_to_on_type err.err_match_actual;
       }
     end
-  | Error.Error_value err ->
+  | Odefa_error.Error_value err ->
     begin
       let aliases = err.err_value_aliases in
       let (Clause (Var (v, _), _)) = err.err_value_clause in

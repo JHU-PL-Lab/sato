@@ -337,7 +337,7 @@ type evaluation_result = {
   er_solver : Solver.t;
   er_stack : Relative_stack.concrete_stack;
   er_solution : (symbol -> value option);
-  er_errors : Error.Error_list.t Symbol_map.t;
+  er_errors : (Error.Odefa_error.t list) Symbol_map.t;
 };;
 
 exception Invalid_query of string;;
@@ -1053,18 +1053,20 @@ struct
             let pred_ids = e.abort_predicate_idents in
             let cond_cls = List.hd e.abort_conditional_clauses in
             let preds = List.map (fun id -> (Symbol(id, rstack))) pred_ids in
-            ((Symbol (symb_id, rstack)), (preds, cond_cls))
+            let symb = (Symbol (symb_id, rstack)) in
+            (symb, (preds, cond_cls))
           )
         |> Enum.map
           (fun (symb, (preds, cond_cls)) ->
-            (symb, (List.map (Solver.find_errors solver cond_cls) preds))
+            let find_err_fn = Solver.find_errors solver cond_cls in
+            let err_list =
+              preds
+              |> List.map find_err_fn
+              |> List.filter (fun l -> not @@ List.is_empty l)
+              |> List.flatten
+            in
+            (symb, err_list)
           )
-        |> Enum.map
-          (fun (symb, err_list) ->
-            (symb, Error.Error_list.tree_from_error_list err_list)
-          )
-        |> Enum.filter
-          (fun (_, err_tree) -> not @@ Error.Error_list.is_empty err_tree)
         |> Symbol_map.of_enum
       in
       Some {

@@ -449,9 +449,9 @@ module Make
   ;;
 
   let show = Pp_utils.pp_to_string pp;;
-
-
 end;;
+
+module Odefa_error = Make(Ident)(Value)(Binop)(Clause)(Type);;
 
 (* ******************* *)
 
