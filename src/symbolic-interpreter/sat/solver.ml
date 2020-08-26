@@ -729,6 +729,14 @@ let solvable solver =
 
 (* **** Error finding **** *)
 
+(* We need to effective negate the logical operations, according to
+    DeMorgan's laws.  (Think negating the predicate of the conditional;
+    the the abort clause is in the true branch.) *)
+
+(** Merge two error trees as if they are part of an AND operation.
+      In an AND operation, all values must be true for the op to return true.
+      Therefore if one error has a false value, the error tree is false. *)
+  (* not (x1 and x2) <=> (not x1) or (not x2) *)
 let add_and errs_1 errs_2 : Error.Odefa_error.t list =
   match (errs_1, errs_2) with
   | ([], []) -> []
@@ -737,6 +745,10 @@ let add_and errs_1 errs_2 : Error.Odefa_error.t list =
   | (_, _) -> errs_1 @ errs_2
 ;;
 
+  (** Merge two error trees as if they are part of an OR operation.
+      In an OR operation, only one value needs to be true for the op to be true
+      so only when all errors have a false value can the error tree be false. *)
+(* not (x1 or x2) <=> (not x1) and (not x2) *)
 let add_or errs_1 errs_2 : Error.Odefa_error.t list =
   match (errs_1, errs_2) with
   | ([], [])
