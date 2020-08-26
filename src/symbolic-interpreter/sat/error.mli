@@ -108,12 +108,16 @@ module type Error = sig
     | Error_value of error_value
   ;;
 
+  (** Returns true if two errors are equal, false otherwise. *)
   val equal : t -> t -> bool;;
 
+  (** Parse a string into an error.  Used primarily for testing. *)
   val parse : string -> t;;
 
+  (** Pretty-printer for an error. *)
   val pp : t Pp_utils.pretty_printer;;
 
+  (** Show the error as a string. *)
   val show : t -> string;;
 end;;
 
