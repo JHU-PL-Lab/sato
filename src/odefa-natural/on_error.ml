@@ -4,19 +4,17 @@ open Jhupllib;;
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
-open Error;;
-
 let _parse_expr expr_str =
   let expr_lst =
     try
       On_parse.parse_expression_string expr_str
     with On_parse.Parse_error _ ->
-      raise @@ Parse_failure (Printf.sprintf "Cannot parse expr %s" expr_str)
+      raise @@ Error.Parse_failure (Printf.sprintf "Cannot parse expr %s" expr_str)
   in
   match expr_lst with
   | [expr] -> expr
-  | [] -> raise @@ Parse_failure "Missing expression"
-  | _ -> raise @@ Parse_failure "More than one expression"
+  | [] -> raise @@ Error.Parse_failure "Missing expression"
+  | _ -> raise @@ Error.Parse_failure "More than one expression"
 ;;
 
 let _parse_type_sig type_str =
@@ -48,7 +46,7 @@ let _parse_type_sig type_str =
     end else if is_variant_str then begin
       VariantType (Variant_label (String.lchop type_str))
     end else begin
-      raise @@ Parse_failure (Printf.sprintf "Cannot parse type %s" type_str)
+      raise @@ Error.Parse_failure (Printf.sprintf "Cannot parse type %s" type_str)
     end
 ;;
 
@@ -134,10 +132,28 @@ module Type : (Error_type with type t = On_ast.type_sig) = struct
   let parse = _parse_type_sig;;
 end;;
 
-module On_error = Make(Ident)(Value)(Binop)(Clause)(Type);;
+module On_error = Error.Make(Ident)(Value)(Binop)(Clause)(Type);;
 
 (* **** Odefa to natodefa error translation **** *)
 
+(* Helper function to remove adjacent duplicate entries in a list (note that
+   this does not remove non-adjacent dupes). *)
+let deduplicate_list list =
+  List.fold_right
+    (fun x deduped_list ->
+      match List.Exceptionless.hd deduped_list with
+      | Some next ->
+        let is_next = On_ast.equal_ident next x in
+        if is_next then deduped_list else x :: deduped_list
+      | None ->
+        x :: deduped_list
+    )
+    list
+    []
+;;
+
+(* Helper function that returns a natodefa binop, depending on the odefa
+   binary operator. *)
 let odefa_to_on_binop
     (odefa_binop : Ast.binary_operator)
   : (On_ast.expr -> On_ast.expr -> On_ast.expr) =
@@ -161,7 +177,6 @@ let odefa_to_natodefa_error
     (odefa_on_maps : On_to_odefa_maps.t)
     (odefa_err : Error.Odefa_error.t)
   : On_error.t =
-  let open Error in
   (* Helper functions *)
   let odefa_to_on_expr =
     On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps
@@ -177,17 +192,7 @@ let odefa_to_natodefa_error
     (* During translation, some odefa vars are assigned to the same natodefa
        vars (namely in var expressions).  The following procedure removes any
        adjacent duplicates from the alias chain. *)
-    |> List.fold_left
-      (fun deduped_list alias ->
-        match List.Exceptionless.hd deduped_list with
-        | Some next ->
-          let is_next = On_ast.equal_ident next alias in
-          if is_next then deduped_list else alias :: deduped_list
-        | None ->
-          alias :: deduped_list
-      )
-      []
-    |> List.rev
+    |> deduplicate_list
   in
   let odefa_to_on_value (aliases : Ast.ident list) : On_ast.expr =
     let last_var =
@@ -212,7 +217,7 @@ let odefa_to_natodefa_error
   in
   (* Odefa to natodefa *)
   match odefa_err with
-  | Odefa_error.Error_binop err ->
+  | Error.Odefa_error.Error_binop err ->
     begin
       let l_aliases = err.err_binop_left_aliases in
       let r_aliases = err.err_binop_right_aliases in
@@ -223,20 +228,15 @@ let odefa_to_natodefa_error
       let r_value = odefa_to_on_value r_aliases in
       let (Clause (Var (v, _), _)) = err.err_binop_clause in
       let constraint_expr =
-        let binop_fn = odefa_to_on_binop op in
         let left_expr =
-          if (List.length l_aliases_on) > 0 then
+          if List.is_empty l_aliases_on then l_value else
             On_ast.Var (List.hd l_aliases_on)
-          else
-            l_value
         in
         let right_expr =
-          if (List.length r_aliases_on) > 0 then
+          if List.is_empty r_aliases_on then r_value else
             On_ast.Var (List.hd r_aliases_on)
-          else
-            r_value
         in
-        binop_fn left_expr right_expr
+        odefa_to_on_binop op left_expr right_expr
       in
       Error_binop {
         err_binop_left_aliases = l_aliases_on;
@@ -247,7 +247,7 @@ let odefa_to_natodefa_error
         err_binop_clause = odefa_to_on_expr v;
       }
     end
-  | Odefa_error.Error_match err ->
+  | Error.Odefa_error.Error_match err ->
     begin
       let aliases = err.err_match_aliases in
       let (Clause (Var (v, _), _)) = err.err_match_clause in
@@ -259,7 +259,7 @@ let odefa_to_natodefa_error
         err_match_actual = odefa_to_on_type err.err_match_actual;
       }
     end
-  | Odefa_error.Error_value err ->
+  | Error.Odefa_error.Error_value err ->
     begin
       let aliases = err.err_value_aliases in
       let (Clause (Var (v, _), _)) = err.err_value_clause in
