@@ -154,7 +154,7 @@ let input_sequence_from_result
             abort_info.abort_predicate_idents
             |> List.map (fun id -> Symbol (id, relstack))
           in
-          let get_error_fn = Solver.find_errors result.er_solver abort_location in
+          let get_error_fn = Solver.find_errors result.er_solver in
           let error_list =
             abort_preds
             |> List.map get_error_fn

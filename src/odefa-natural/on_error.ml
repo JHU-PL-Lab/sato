@@ -61,14 +61,6 @@ module type Error_binop = sig
   val parse : string -> t;;
 end;;
 
-module type Error_clause = sig
-  type t;;
-  val equal : t -> t -> bool;;
-  val pp : t Pp_utils.pretty_printer;;
-  val show : t -> string;;
-  val parse : string -> t;;
-end;;
-
 module type Error_type = sig
   type t;;
   val equal : t -> t -> bool;;
@@ -102,14 +94,6 @@ module Binop : (Error_binop with type t = On_ast.expr) = struct
   let parse = On_parse.parse_single_expr_string;;
 end;;
 
-module Clause : (Error_clause with type t = On_ast.expr) = struct
-  type t = On_ast.expr;;
-  let equal = On_ast.equal_expr;;
-  let pp = On_ast_pp.pp_expr;;
-  let show = On_ast_pp.show_expr;;
-  let parse = On_parse.parse_single_expr_string;;
-end;;
-
 module Type : (Error_type with type t = On_ast.type_sig) = struct
   type t = On_ast.type_sig;;
   let equal = On_ast.equal_type_sig;;
@@ -119,7 +103,7 @@ module Type : (Error_type with type t = On_ast.type_sig) = struct
   let parse = _parse_type_sig;;
 end;;
 
-module On_error = Error.Make(Ident)(Value)(Binop)(Clause)(Type);;
+module On_error = Error.Make(Ident)(Value)(Binop)(Type);;
 
 (* **** Odefa error cleanup **** *)
 
@@ -133,49 +117,36 @@ let odefa_error_remove_instrument_vars
         not @@ On_to_odefa_maps.is_var_instrumenting odefa_on_maps alias)
       aliases
   in
+  (*
   let get_pre_instrument_clause clause_var =
     On_to_odefa_maps.get_pre_inst_equivalent_clause odefa_on_maps clause_var
   in
+  *)
   match error with
   | Error_binop err ->
     begin
-      let binop_cls = err.err_binop_clause in
       let left_aliases = err.err_binop_left_aliases in
       let right_aliases = err.err_binop_right_aliases in
-      let (Clause (Var (binop_var, _), _)) = binop_cls in
-      let binop_cls' =
-        try
-          get_pre_instrument_clause binop_var
-        with Not_found ->
-          binop_cls
-      in
       Error_binop {
         err with
-        err_binop_clause = binop_cls';
         err_binop_left_aliases = remove_instrument_aliases left_aliases;
         err_binop_right_aliases = remove_instrument_aliases right_aliases;
       }
     end
   | Error_match err ->
     begin
-      let match_cls = err.err_match_clause in
-      let (Clause (Var (match_var, _), _)) = match_cls in
       let match_aliases = err.err_match_aliases in
       Error_match {
         err with
         err_match_aliases = remove_instrument_aliases match_aliases;
-        err_match_clause = get_pre_instrument_clause match_var;
       }
     end
   | Error_value err ->
     begin
       let aliases = err.err_value_aliases in
-      let val_clause = err.err_value_clause in
-      let (Clause (Var (val_var, _), _)) = val_clause in
       Error_value {
         err with
         err_value_aliases = remove_instrument_aliases aliases;
-        err_value_clause = get_pre_instrument_clause val_var;
       }
     end
 ;;
@@ -272,7 +243,6 @@ let odefa_to_natodefa_error
       let (_, op, _) = err.err_binop_operation in
       let l_value = odefa_to_on_value l_aliases in
       let r_value = odefa_to_on_value r_aliases in
-      let (Clause (Var (v, _), _)) = err.err_binop_clause in
       let constraint_expr =
         let left_expr =
           if List.is_empty l_aliases_on then l_value else
@@ -290,16 +260,13 @@ let odefa_to_natodefa_error
         err_binop_left_val = l_value;
         err_binop_right_val = r_value;
         err_binop_operation = constraint_expr;
-        err_binop_clause = odefa_to_on_expr v;
       }
     end
   | Error.Odefa_error.Error_match err ->
     begin
       let aliases = err.err_match_aliases in
-      let (Clause (Var (v, _), _)) = err.err_match_clause in
       Error_match {
         err_match_aliases = odefa_to_on_aliases aliases;
-        err_match_clause = odefa_to_on_expr v;
         err_match_val = odefa_to_on_value aliases;
         err_match_expected = odefa_to_on_type err.err_match_expected;
         err_match_actual = odefa_to_on_type err.err_match_actual;
@@ -308,11 +275,9 @@ let odefa_to_natodefa_error
   | Error.Odefa_error.Error_value err ->
     begin
       let aliases = err.err_value_aliases in
-      let (Clause (Var (v, _), _)) = err.err_value_clause in
       Error_value {
         err_value_aliases = odefa_to_on_aliases aliases;
         err_value_val = odefa_to_on_value aliases;
-        err_value_clause = odefa_to_on_expr v;
       }
     end
 ;;

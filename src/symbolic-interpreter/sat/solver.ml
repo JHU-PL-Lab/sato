@@ -758,7 +758,7 @@ let add_or errs_1 errs_2 : Error.Odefa_error.t list =
   | (_, _) -> errs_1 @ errs_2
 ;;
 
-let rec _find_errors solver instrument_clause symbol =
+let rec find_errors solver symbol =
   let open Error in
   (* Get values *)
   let value_opt =
@@ -779,12 +779,12 @@ let rec _find_errors solver instrument_clause symbol =
       let (s1, op, s2) = b in
       match op with
       | Binary_operator_and ->
-        let et1 = _find_errors solver instrument_clause s1 in
-        let et2 = _find_errors solver instrument_clause s2 in
+        let et1 = find_errors solver s1 in
+        let et2 = find_errors solver s2 in
         add_and et1 et2
       | Binary_operator_or ->
-        let et1 = _find_errors solver instrument_clause s1 in
-        let et2 = _find_errors solver instrument_clause s2 in
+        let et1 = find_errors solver s1 in
+        let et2 = find_errors solver s2 in
         add_or et1 et2
       | Binary_operator_xnor
       | Binary_operator_xor
@@ -822,7 +822,6 @@ let rec _find_errors solver instrument_clause symbol =
             Ast.Var_body (Var (List.first r_aliases, None))
         in
         let binop_error =  Odefa_error.Error_binop {
-          err_binop_clause = instrument_clause;
           err_binop_left_val = l_val;
           err_binop_right_val = r_val;
           err_binop_left_aliases = l_aliases;
@@ -870,7 +869,6 @@ let rec _find_errors solver instrument_clause symbol =
         if not (Ast.Type_signature.subtype actual_type expected_type) then begin
           let match_error = Odefa_error.Error_match {
             err_match_aliases = alias_chain;
-            err_match_clause = instrument_clause;
             err_match_val = match_val_source;
             err_match_expected = expected_type;
             err_match_actual = actual_type;
@@ -901,7 +899,6 @@ let rec _find_errors solver instrument_clause symbol =
           let value_error = Odefa_error.Error_value {
             err_value_aliases = alias_chain;
             err_value_val = Value_body (Value_bool b);
-            err_value_clause = instrument_clause;
           }
           in
           lazy_logger `trace (fun () ->
@@ -915,10 +912,6 @@ let rec _find_errors solver instrument_clause symbol =
   | (_, _) ->
     raise @@ Utils.Invariant_failure
       (Printf.sprintf "Multiple definitions for %s" (show_symbol symbol))
-;;
-
-let find_errors solver inst_clause symbol =
-  _find_errors solver inst_clause symbol
 ;;
 
 (* **** Other functions **** *)

@@ -28,14 +28,6 @@ module type Error_binop = sig
   val parse : string -> t;;
 end;;
 
-module type Error_clause = sig
-  type t;;
-  val equal : t -> t -> bool;;
-  val pp : t Pp_utils.pretty_printer;;
-  val show : t -> string;;
-  val parse : string -> t;;
-end;;
-
 module type Error_type = sig
   type t;;
   val equal : t -> t -> bool;;
@@ -49,20 +41,17 @@ module Ident : Error_ident with type t = Ast.ident;;
 module Value : Error_value with type t = Ast.clause_body;;
 module Binop : Error_binop with type t =
   (Ast.clause_body * Ast.binary_operator * Ast.clause_body);;
-module Clause : Error_clause with type t = Ast.clause;;
 module Type : Error_type with type t = Ast.type_sig;;
 
 module type Error = sig
   module Error_ident : Error_ident;;
   module Error_value : Error_value;;
   module Error_binop : Error_binop;;
-  module Error_clause : Error_clause;;
   module Error_type : Error_type;;
 
   type ident;;
   type value;;
   type binop;;
-  type clause;;
   type type_sig;;
 
   type error_binop = {
@@ -76,8 +65,6 @@ module type Error = sig
     err_binop_right_val : value;
     (** The operator (e.g. +, -, and, or, ==, etc. *)
     err_binop_operation : binop;
-    (** The clause representing the operation being instrumented. *)
-    err_binop_clause : clause;
   }
 
   type error_match = {
@@ -89,8 +76,6 @@ module type Error = sig
     err_match_expected : type_sig;
     (** The actual type of the symbol being matched. *)
     err_match_actual : type_sig;
-    (** The clause respresenting the operation being instrumented. *)
-    err_match_clause : clause;
   }
 
   type error_value = {
@@ -98,8 +83,6 @@ module type Error = sig
     err_value_aliases : ident list;
     (** The boolean value (should always be false). *)
     err_value_val : value;
-    (** The clause respresenting the operation being instrumented. *)
-    err_value_clause : clause;
   }
 
   type t =
@@ -125,13 +108,11 @@ module Make
     (Ident : Error_ident)
     (Value : Error_value)
     (Binop : Error_binop)
-    (Clause : Error_clause)
     (Type : Error_type)
   : (Error
       with type ident := Ident.t
       and type value := Value.t
       and type binop := Binop.t
-      and type clause := Clause.t
       and type type_sig := Type.t)
 
 module Odefa_error
@@ -139,6 +120,5 @@ module Odefa_error
       with type ident := Ident.t
       and type value := Value.t
       and type binop := Binop.t
-      and type clause := Clause.t
       and type type_sig := Type.t)
 ;;

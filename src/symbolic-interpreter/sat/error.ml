@@ -80,14 +80,6 @@ module type Error_binop = sig
   val parse : string -> t;;
 end;;
 
-module type Error_clause = sig
-  type t;;
-  val equal : t -> t -> bool;;
-  val pp : t Pp_utils.pretty_printer;;
-  val show : t -> string;;
-  val parse : string -> t;;
-end;;
-
 module type Error_type = sig
   type t;;
   val equal : t -> t -> bool;;
@@ -145,14 +137,6 @@ module Binop : (Error_binop with type t =
 
 end;;
 
-module Clause : (Error_clause with type t = Ast.clause) = struct
-  type t = Ast.clause;;
-  let equal = Ast.equal_clause;;
-  let pp = Ast_pp.pp_clause;;
-  let show = Ast_pp.show_clause;;
-  let parse = Odefa_parser.Parser.parse_clause_string;;
-end;;
-
 module Type : (Error_type with type t = Ast.type_sig) = struct
   type t = Ast.type_sig;;
   let equal = Ast.equal_type_sig;;
@@ -166,13 +150,11 @@ module type Error = sig
   module Error_ident : Error_ident;;
   module Error_value : Error_value;;
   module Error_binop : Error_binop;;
-  module Error_clause : Error_clause;;
   module Error_type : Error_type;;
 
   type ident;;
   type value;;
   type binop;;
-  type clause;;
   type type_sig;;
 
   type error_binop = {
@@ -181,7 +163,6 @@ module type Error = sig
     err_binop_left_val : value;
     err_binop_right_val : value;
     err_binop_operation : binop;
-    err_binop_clause : clause;
   }
 
   type error_match = {
@@ -189,13 +170,11 @@ module type Error = sig
     err_match_val : value;
     err_match_expected : type_sig;
     err_match_actual : type_sig;
-    err_match_clause : clause;
   }
 
   type error_value = {
     err_value_aliases : ident list;
     err_value_val : value;
-    err_value_clause : clause;
   }
 
   type t =
@@ -213,19 +192,16 @@ module Make
     (Ident : Error_ident)
     (Value : Error_value)
     (Binop : Error_binop)
-    (Clause : Error_clause)
     (Type : Error_type)
   : (Error
       with type ident := Ident.t
       and type value := Value.t
       and type binop := Binop.t
-      and type clause := Clause.t
       and type type_sig := Type.t) = struct
 
   module Error_ident = Ident;;
   module Error_value = Value;;
   module Error_binop = Binop;;
-  module Error_clause = Clause;;
   module Error_type = Type;;
 
   type error_binop = {
@@ -234,7 +210,6 @@ module Make
     err_binop_left_val : Value.t;
     err_binop_right_val : Value.t;
     err_binop_operation : Binop.t;
-    err_binop_clause : Clause.t;
   }
   [@@ deriving eq]
 
@@ -243,14 +218,12 @@ module Make
     err_match_val : Value.t;
     err_match_expected : Type.t;
     err_match_actual : Type.t;
-    err_match_clause : Clause.t;
   }
   [@@ deriving eq]
 
   type error_value = {
     err_value_aliases : Ident.t list;
     err_value_val : Value.t;
-    err_value_clause : Clause.t;
   }
   [@@ deriving eq]
 
@@ -277,11 +250,10 @@ module Make
       |> Str.split (Str.regexp "\"[ ]*\"")
     in
     match args_list with
-    | [error_str; l_alias_str; l_val_str; r_alias_str; r_val_str; op_str; clause_str]
+    | [error_str; l_alias_str; l_val_str; r_alias_str; r_val_str; op_str]
       when String.equal error_str "binop" ->
       begin
         Error_binop {
-          err_binop_clause = Clause.parse clause_str;
           err_binop_left_val = Value.parse l_val_str;
           err_binop_right_val = Value.parse r_val_str;
           err_binop_left_aliases = _parse_aliases l_alias_str;
@@ -289,24 +261,22 @@ module Make
           err_binop_operation = Binop.parse op_str;
         }
       end
-    | [error_str; alias_str; val_str; clause_str; expected_str; actual_str]
+    | [error_str; alias_str; val_str; expected_str; actual_str]
       when String.equal error_str "match" ->
       begin
         Error_match {
           err_match_aliases = _parse_aliases alias_str;
           err_match_val = Value.parse val_str;
-          err_match_clause = Clause.parse clause_str;
           err_match_expected = Type.parse expected_str;
           err_match_actual = Type.parse actual_str;
         }
       end
-    | [error_str; alias_str; val_str; clause_str]
+    | [error_str; alias_str; val_str]
       when String.equal error_str "value" ->
       begin
         Error_value {
           err_value_aliases = _parse_aliases alias_str;
           err_value_val = Value.parse val_str;
-          err_value_clause = Clause.parse clause_str;
         }
       end
     | _ -> raise @@ Parse_failure "Missing or spurious arguments"
@@ -345,20 +315,14 @@ module Make
     in
     let pp_constraint formatter err =
       Format.fprintf formatter
-        "@[* Constraint  : @[%a@]@]@,"
+        "@[* Constraint  : @[%a@]@]"
         Binop.pp err.err_binop_operation
     in
-    let pp_clause formatter err =
-      Format.fprintf formatter
-        "@[* Clause      : @[%a@]@]"
-        Clause.pp err.err_binop_clause
-    in
     Format.fprintf formatter
-      "@[<v 0>%a%a%a%a@]"
+      "@[<v 0>%a%a%a@]"
       pp_left_value err
       pp_right_value err
       pp_constraint err
-      pp_clause err
   ;;
 
   let pp_error_match formatter err =
@@ -375,11 +339,6 @@ module Make
           "@[* Value    : @[%a@]@]@,"
           Value.pp value
     in
-    let pp_clause formatter err =
-      Format.fprintf formatter
-        "@[* Clause   : @[%a@]@]@,"
-        Clause.pp err.err_match_clause
-    in
     let pp_expected formatter err =
       Format.fprintf formatter
         "@[* Expected : @[%a@]@]@,"
@@ -391,9 +350,8 @@ module Make
         Type.pp err.err_match_actual
     in
     Format.fprintf formatter
-      "@[<v 0>%a%a%a%a@]"
+      "@[<v 0>%a%a%a@]"
       pp_value err
-      pp_clause err
       pp_expected err
       pp_actual err
   ;;
@@ -404,23 +362,17 @@ module Make
       let value = err.err_value_val in
       if not @@ List.is_empty aliases then
         Format.fprintf formatter 
-          "@[* Value    : @[%a@ =@ %a@]@]@,"
+          "@[* Value    : @[%a@ =@ %a@]@]"
           pp_alias_list aliases
           Value.pp value
       else
         Format.fprintf formatter 
-          "@[* Value    : @[%a@]@]@,"
+          "@[* Value    : @[%a@]@]"
           Value.pp value
     in
-    let pp_clause formatter err =
-      Format.fprintf formatter
-        "@[* Clause   : @[%a@]@]"
-        Clause.pp err.err_value_clause
-    in
     Format.fprintf formatter
-      "@[<v 0>%a%a@]"
+      "@[<v 0>%a@]"
       pp_value err
-      pp_clause err
   ;;
 
   let pp formatter error =
@@ -433,4 +385,4 @@ module Make
   let show = Pp_utils.pp_to_string pp;;
 end;;
 
-module Odefa_error = Make(Ident)(Value)(Binop)(Clause)(Type);;
+module Odefa_error = Make(Ident)(Value)(Binop)(Type);;
