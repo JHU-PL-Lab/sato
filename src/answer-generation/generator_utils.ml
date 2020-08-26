@@ -165,7 +165,7 @@ let input_sequence_from_result
               Symbol_map.find ab_symb result.er_aborts
             with Not_found ->
               raise @@ Jhupllib.Utils.Invariant_failure (
-                Printf.sprintf "Unknown abort symbol %s encountered in interpreter"
+                Printf.sprintf "Unknown abort %s encountered in interpreter"
                 (show_symbol ab_symb)
               )
           in

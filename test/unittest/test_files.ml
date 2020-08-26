@@ -926,8 +926,7 @@ let test_sato
     | Generator_answer.Parse_failure
     | Not_found -> (* TODO: Catch Not_found in answer_from_string *)
       raise @@ Expectation_parse_failure "Cannot parse type error string"
-    | Odefa_symbolic_interpreter.Error.Parse_failure s
-    | Odefa_natural.On_error.Parse_failure s ->
+    | Odefa_symbolic_interpreter.Error.Parse_failure s ->
       raise @@ Expectation_parse_failure s
   in
   let type_err_expectations =
@@ -1036,8 +1035,12 @@ let test_sato
         let (expected_x, expected_err) = type_err_expect in
         try
           let errors = String_map.find expected_x total_err_multimap in
-          let is_mem = Error.test_mem errors expected_err in
-          if not is_mem then Some expected_err else None
+          let not_found =
+            errors
+            |> List.filter (Error.test_expected expected_err)
+            |> List.is_empty
+          in
+          if not_found then Some expected_err else None
         with Not_found -> None
       )
       type_err_expectations

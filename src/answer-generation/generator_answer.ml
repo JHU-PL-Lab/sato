@@ -9,7 +9,6 @@ open Odefa_symbolic_interpreter.Interpreter;;
 
 open Odefa_natural;;
 
-(* let lazy_logger = Jhupllib.Logger_utils.make_lazy_logger "Generator_answer";; *)
 
 exception Parse_failure;;
 
@@ -22,7 +21,7 @@ module type Answer = sig
   val count : t -> int;;
   val count_list : t list -> int;;
   val generation_successful : t -> bool;;
-  val test_mem : t list -> t -> bool;;
+  val test_expected : t -> t -> bool;;
 end;;
 
 (* Utility to parse int sequences separated by commas. *)
@@ -94,54 +93,40 @@ module Input_sequence : Answer = struct
     | None -> false
   ;;
 
-  let test_mem input_seq_list input_seq = List.mem input_seq input_seq_list;;
+  let test_expected expected_inputs actual_inputs =
+    expected_inputs = actual_inputs
+  ;;
 end;;
 
 (* **** Type Errors **** *)
 
 module Type_errors : Answer = struct
   
-  type error_seq = {
+  type t = {
     err_errors : Error.Odefa_error.t list;
     err_input_seq : int list;
-  }
-  ;;
-
-  type t = error_seq;;
+  };;
 
   let odefa_on_maps_option_ref = ref None;;
 
-  (* Remove variables added during instrumentation *)
-  let _remove_instrument_vars
-      (odefa_on_maps : On_to_odefa_maps.t)
-      (error : t)
-    : t =
-    let rm_inst_var_fn = On_error.odefa_error_remove_instrument_vars odefa_on_maps in
-    let error_list = error.err_errors in
-    let error_list' = List.map rm_inst_var_fn error_list in
-    {
-      error with
-      err_errors = error_list';
-    }
-  ;;
-
-  let answer_from_result e x result =
+  let answer_from_result e x result : t =
     let (input_seq, error_list) =
       Generator_utils.input_sequence_from_result e x result
     in
-    let errs =
+    match !odefa_on_maps_option_ref with
+    | Some odefa_on_maps ->
+      let rm_inst_fn =
+        On_error.odefa_error_remove_instrument_vars odefa_on_maps
+      in
       {
         err_input_seq = input_seq;
-        err_errors = error_list;
+        err_errors = List.map rm_inst_fn error_list;
       }
-    in
-    match !odefa_on_maps_option_ref with
-    | Some odefa_on_maps -> _remove_instrument_vars odefa_on_maps errs
     | None -> failwith "Odefa/natodefa maps were not set!"
   ;;
 
   (* Ex: [0, 1] : "a = b" "c = 2" "sum = a or z" "int" "bool" *)
-  let answer_from_string arg_str =
+  let answer_from_string arg_str : t =
     let (input_str, error_str) =
       arg_str
       |> String.split ~by:":"
@@ -155,7 +140,7 @@ module Type_errors : Answer = struct
     }
   ;;
 
-  let set_odefa_natodefa_map odefa_on_maps =
+  let set_odefa_natodefa_map odefa_on_maps : unit =
     odefa_on_maps_option_ref := Some (odefa_on_maps)
   ;;
 
@@ -163,7 +148,7 @@ module Type_errors : Answer = struct
     "[" ^ (String.join ", " @@ List.map string_of_int input_seq) ^ "]"
   ;;
 
-  let show error_seq =
+  let show (error_seq : t) : string =
     if not @@ List.is_empty error_seq.err_errors then begin
       "Type errors for input sequence " ^
       (show_input_seq error_seq.err_input_seq) ^ ":\n" ^
@@ -174,7 +159,7 @@ module Type_errors : Answer = struct
     end
   ;;
 
-  let count errors = List.length  errors.err_errors;;
+  let count (errors : t) = List.length errors.err_errors;;
 
   let count_list error_list =
     error_list
@@ -185,38 +170,26 @@ module Type_errors : Answer = struct
   (* Currently always returns true; no mechanism to detect failed answer gen *)
   let generation_successful (_: t) = true;;
 
-  (*
-  let test_mem (error_list: t list) (error: t) =
-    let input_seq = error.err_input_seq in
-    let error_lists = error.err_errors in
-    let error_assoc_list =
-      List.map
-        (fun err -> (err.err_input_seq, err.err_errors))
-        error_list
-    in
-    let error_list_list = List.assoc input_seq error_assoc_list in
-    match error_lists with
-    | [error_list] ->
-      error_list_list
-      |> List.filter (Error_list.mem_singleton error_list)
-      |> List.is_empty
-      |> Bool.not
-    | _ ->
-      failwith "test_mem can only test single error"
+  let test_expected (expect_errs : t) (actual_errs : t) =
+    let exp_inputs = expect_errs.err_input_seq in
+    let act_inputs = actual_errs.err_input_seq in
+    let exp_errors = expect_errs.err_errors in
+    let act_errors = expect_errs.err_errors in
+    if exp_inputs <> act_inputs then false else begin
+      let is_mem err =
+        List.exists (Error.Odefa_error.equal err) act_errors
+      in
+      not @@ List.is_empty (List.filter is_mem exp_errors)
+    end
   ;;
-  *)
-
-  let test_mem _ _ = false;;
 end;;
 
 module Natodefa_type_errors : Answer = struct
-  type error_seq = {
+
+  type t = {
     err_errors : On_error.On_error.t list;
     err_input_seq : int list;
-  }
-  ;;
-
-  type t = error_seq;;
+  };;
 
   let odefa_on_maps_option_ref = ref None;;
 
@@ -282,19 +255,16 @@ module Natodefa_type_errors : Answer = struct
 
   let generation_successful _ = true;;
 
-  (*
-  let test_mem (error_list: t list) (error: t) =
-    let input_seq = error.err_input_seq in
-    let error_lst = error.err_errors in
-    let error_assoc_list =
-      List.map
-        (fun err -> (err.err_input_seq, err.err_errors))
-        error_list
-    in
-    let error_lst' = List.assoc input_seq error_assoc_list in
-    On_error.Error_list.mem_singleton error_lst' error_lst
+  let test_expected (expect_errs : t) (actual_errs : t) =
+    let exp_inputs = expect_errs.err_input_seq in
+    let act_inputs = actual_errs.err_input_seq in
+    let exp_errors = expect_errs.err_errors in
+    let act_errors = expect_errs.err_errors in
+    if exp_inputs <> act_inputs then false else begin
+      let is_mem err =
+        List.exists (On_error.On_error.equal err) act_errors
+      in
+      not @@ List.is_empty (List.filter is_mem exp_errors)
+    end
   ;;
-  *)
-
-  let test_mem _ _ = false;;
 end;;
