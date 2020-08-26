@@ -134,6 +134,65 @@ end;;
 
 module On_error = Error.Make(Ident)(Value)(Binop)(Clause)(Type);;
 
+(* **** Odefa error cleanup **** *)
+
+let odefa_error_remove_instrument_vars
+    (odefa_on_maps : On_to_odefa_maps.t)
+    (error : Error.Odefa_error.t)
+  : Error.Odefa_error.t =
+  let remove_instrument_aliases aliases =
+    List.filter
+      (fun alias ->
+        not @@ On_to_odefa_maps.is_var_instrumenting odefa_on_maps alias)
+      aliases
+  in
+  let get_pre_instrument_clause clause_var =
+    On_to_odefa_maps.get_pre_inst_equivalent_clause odefa_on_maps clause_var
+  in
+  match error with
+  | Error_binop err ->
+    begin
+      let binop_cls = err.err_binop_clause in
+      let left_aliases = err.err_binop_left_aliases in
+      let right_aliases = err.err_binop_right_aliases in
+      let (Clause (Var (binop_var, _), _)) = binop_cls in
+      let binop_cls' =
+        try
+          get_pre_instrument_clause binop_var
+        with Not_found ->
+          binop_cls
+      in
+      Error_binop {
+        err with
+        err_binop_clause = binop_cls';
+        err_binop_left_aliases = remove_instrument_aliases left_aliases;
+        err_binop_right_aliases = remove_instrument_aliases right_aliases;
+      }
+    end
+  | Error_match err ->
+    begin
+      let match_cls = err.err_match_clause in
+      let (Clause (Var (match_var, _), _)) = match_cls in
+      let match_aliases = err.err_match_aliases in
+      Error_match {
+        err with
+        err_match_aliases = remove_instrument_aliases match_aliases;
+        err_match_clause = get_pre_instrument_clause match_var;
+      }
+    end
+  | Error_value err ->
+    begin
+      let aliases = err.err_value_aliases in
+      let val_clause = err.err_value_clause in
+      let (Clause (Var (val_var, _), _)) = val_clause in
+      Error_value {
+        err with
+        err_value_aliases = remove_instrument_aliases aliases;
+        err_value_clause = get_pre_instrument_clause val_var;
+      }
+    end
+;;
+
 (* **** Odefa to natodefa error translation **** *)
 
 (* Helper function to remove adjacent duplicate entries in a list (note that

@@ -15,7 +15,14 @@ module On_error
       and type type_sig := Type.t)
 ;;
 
+(** Given an odefa/natodefa mapping, removes variables that were added during
+    error instrumentation. *)
+val odefa_error_remove_instrument_vars :
+  On_to_odefa_maps.t -> Error.Odefa_error.t -> Error.Odefa_error.t
+;;
+
 (** Given an odefa/natodefa mapping, converts an odefa error into a natodefa
     error. *)
 val odefa_to_natodefa_error :
-  On_to_odefa_maps.t -> Error.Odefa_error.t -> On_error.t;;
+  On_to_odefa_maps.t -> Error.Odefa_error.t -> On_error.t
+;;

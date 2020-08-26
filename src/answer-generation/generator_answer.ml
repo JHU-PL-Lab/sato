@@ -112,95 +112,12 @@ module Type_errors : Answer = struct
 
   let odefa_on_maps_option_ref = ref None;;
 
-  (* **** Remove variables added during instrumentation **** *)
-
-  let remove_instrument_vars_error
-      (odefa_on_maps : On_to_odefa_maps.t)
-      (error : Error.Odefa_error.t)
-    : Error.Odefa_error.t =
-    match error with
-    | Error_binop err ->
-      begin
-        let binop_cls = err.err_binop_clause in
-        let left_aliases = err.err_binop_left_aliases in
-        let right_aliases = err.err_binop_right_aliases in
-        let (Clause (Var (b_ident, _), _)) = binop_cls in
-        let binop_cls' =
-          try
-            On_to_odefa_maps.get_pre_inst_equivalent_clause
-              odefa_on_maps b_ident
-          with Not_found ->
-            binop_cls
-        in
-        let left_aliases' =
-          List.filter
-            (fun a -> not @@
-              On_to_odefa_maps.is_var_instrumenting odefa_on_maps a)
-            left_aliases
-        in
-        let right_aliases' =
-          List.filter
-            (fun a -> not @@
-              On_to_odefa_maps.is_var_instrumenting odefa_on_maps a)
-            right_aliases
-        in
-        Error_binop {
-          err with
-          err_binop_clause = binop_cls';
-          err_binop_left_aliases = left_aliases';
-          err_binop_right_aliases = right_aliases';
-        }
-      end
-    | Error_match err ->
-      begin
-        let match_cls = err.err_match_clause in
-        let (Clause (Var (v_match, _), _)) = match_cls in
-        let match_aliases = err.err_match_aliases in
-        let match_aliases' =
-          List.filter
-            (* Stacks aren't set during instrumenting, so we're safe *)
-            (fun a -> not @@
-              On_to_odefa_maps.is_var_instrumenting odefa_on_maps a)
-            match_aliases
-        in
-        let match_cls' =
-          On_to_odefa_maps.get_pre_inst_equivalent_clause
-            odefa_on_maps v_match
-        in
-        Error_match {
-          err with
-          err_match_aliases = match_aliases';
-          err_match_clause = match_cls';
-        }
-      end
-    | Error_value err ->
-      begin
-        let aliases = err.err_value_aliases in
-        let val_clause = err.err_value_clause in
-        let (Clause (Var (x, _), _)) = val_clause in
-        let aliases' =
-          List.filter
-            (fun a -> not @@
-              On_to_odefa_maps.is_var_instrumenting odefa_on_maps a)
-            aliases
-        in
-        let clause' =
-          On_to_odefa_maps.get_pre_inst_equivalent_clause
-            odefa_on_maps x
-        in
-        Error_value {
-          err with
-          err_value_aliases = aliases';
-          err_value_clause = clause';
-        }
-      end
-  ;;
-
-  let remove_instrument_vars
+  (* Remove variables added during instrumentation *)
+  let _remove_instrument_vars
       (odefa_on_maps : On_to_odefa_maps.t)
       (error : t)
     : t =
-    let rm_inst_var_fn = remove_instrument_vars_error odefa_on_maps in
+    let rm_inst_var_fn = On_error.odefa_error_remove_instrument_vars odefa_on_maps in
     let error_list = error.err_errors in
     let error_list' = List.map rm_inst_var_fn error_list in
     {
@@ -226,7 +143,7 @@ module Type_errors : Answer = struct
       }
     in
     match !odefa_on_maps_option_ref with
-    | Some odefa_on_maps -> remove_instrument_vars odefa_on_maps errs
+    | Some odefa_on_maps -> _remove_instrument_vars odefa_on_maps errs
     | None -> failwith "Odefa/natodefa maps were not set!"
   ;;
 
