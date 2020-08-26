@@ -46,18 +46,28 @@ let parse_comma_separated_ints lst_str =
     raise Parse_failure
 ;;
 
+let split_with_regexp (regexp : Str.regexp) (str : string) =
+  if Str.string_match regexp str 0 then
+    let split_pos = Str.match_end () in
+    let prefix = String.trim @@ Str.string_before str split_pos in
+    let suffix = String.trim @@ Str.string_after str split_pos in
+    (prefix, suffix)
+  else
+    raise @@ Invalid_argument "string does not match on regexp"
+;;
+
 (* **** Input sequence **** *)
 
 module Input_sequence : Answer = struct
   type t = int list option;;
 
   let answer_from_result e x result =
-    let (input_seq, error_list) =
+    let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
-    match error_list with
-    | [] -> Some input_seq
-    | _ -> None
+    match error_opt with
+    | None -> Some input_seq
+    | Some _ -> None
   ;;
 
   (* String "[ 1, 2, 3 ]" or "1, 2, 3" to input sequence *)
@@ -105,37 +115,59 @@ module Type_errors : Answer = struct
   type t = {
     err_errors : Error.Odefa_error.t list;
     err_input_seq : int list;
+    err_location : Ast.clause option;
   };;
 
   let odefa_on_maps_option_ref = ref None;;
 
   let answer_from_result e x result : t =
-    let (input_seq, error_list) =
+    let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
     match !odefa_on_maps_option_ref with
     | Some odefa_on_maps ->
-      let rm_inst_fn =
-        On_error.odefa_error_remove_instrument_vars odefa_on_maps
-      in
-      {
-        err_input_seq = input_seq;
-        err_errors = List.map rm_inst_fn error_list;
-      }
+      begin
+        match error_opt with
+        | Some (error_loc, error_list) ->
+          let rm_inst_fn =
+            On_error.odefa_error_remove_instrument_vars odefa_on_maps
+          in
+          {
+            err_input_seq = input_seq;
+            err_location = Some error_loc;
+            err_errors = List.map rm_inst_fn error_list;
+          }
+        | None ->
+          {
+            err_input_seq = input_seq;
+            err_location = None;
+            err_errors = [];
+          }
+      end
     | None -> failwith "Odefa/natodefa maps were not set!"
   ;;
 
   (* Ex: [0, 1] : "a = b" "c = 2" "sum = a or z" "int" "bool" *)
   let answer_from_string arg_str : t =
+        let (input_str, loc_err_str) =
+      split_with_regexp (Str.regexp "\\[[^][]*\\]") arg_str
+    in
+    let (loc_str, error_str) =
+      split_with_regexp (Str.regexp "\"[^\"]*\"") loc_err_str
+    in
+    (*
     let (input_str, error_str) =
       arg_str
       |> String.split ~by:":"
       |> (fun (i_str, e_str) -> (String.trim i_str, String.trim e_str))
     in
+    *)
     let inputs = parse_comma_separated_ints input_str in
+    let location = Odefa_parser.Parser.parse_clause_string loc_str in
     let error = Error.Odefa_error.parse error_str in
     {
       err_input_seq = inputs;
+      err_location = Some location;
       err_errors = [error];
     }
   ;;
@@ -164,11 +196,10 @@ module Type_errors : Answer = struct
   let count_list error_list =
     error_list
     |> List.map count
-    |> List.fold_left (fun a x -> x + a) 0
+    |> List.sum
   ;;
 
-  (* Currently always returns true; no mechanism to detect failed answer gen *)
-  let generation_successful (_: t) = true;;
+  let generation_successful error = not @@ List.is_empty error.err_errors;;
 
   let test_expected (expect_errs : t) (actual_errs : t) =
     let exp_inputs = expect_errs.err_input_seq in
@@ -189,36 +220,62 @@ module Natodefa_type_errors : Answer = struct
   type t = {
     err_errors : On_error.On_error.t list;
     err_input_seq : int list;
+    err_location : On_ast.expr option;
   };;
 
   let odefa_on_maps_option_ref = ref None;;
 
   let answer_from_result e x result =
-    let (input_seq, error_list) =
+    let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
-    let on_error_list =
       match !odefa_on_maps_option_ref with
       | Some odefa_on_maps ->
-        List.map (On_error.odefa_to_natodefa_error odefa_on_maps) error_list
+        begin
+          match error_opt with
+          | Some (err_loc, err_lst) ->
+            let Ast.Clause (Var (x, _), _) = err_loc in
+            let on_err_loc =
+              On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps x
+            in
+            let on_err_list =
+              List.map (On_error.odefa_to_natodefa_error odefa_on_maps) err_lst
+            in
+            {
+              err_input_seq = input_seq;
+              err_location = Some on_err_loc;
+              err_errors = on_err_list;
+            }
+          | None ->
+            {
+              err_input_seq = input_seq;
+              err_location = None;
+              err_errors = [];
+            }
+        end
       | None -> failwith "Odefa/natodefa maps were not set!"
-    in
-    {
-      err_input_seq = input_seq;
-      err_errors = on_error_list;
-    }
   ;;
 
   let answer_from_string arg_str =
+    let (input_str, loc_err_str) =
+      split_with_regexp (Str.regexp "\\[[^][]*\\]") arg_str
+    in
+    let (loc_str, error_str) =
+      split_with_regexp (Str.regexp "\"[^\"]*\"") loc_err_str
+    in
+    (*
     let (input_str, error_str) =
       arg_str
       |> String.split ~by:":"
       |> (fun (i_str, e_str) -> (String.trim i_str, String.trim e_str))
     in
+    *)
     let inputs = parse_comma_separated_ints input_str in
+    let location = Odefa_natural.On_parse.parse_single_expr_string loc_str in
     let error = On_error.On_error.parse error_str in
     {
       err_input_seq = inputs;
+      err_location = Some location;
       err_errors = [error];
     }
   ;;
@@ -242,18 +299,15 @@ module Natodefa_type_errors : Answer = struct
     end
   ;;
 
-  let count error =
-    List.length error.err_errors
-  ;;
+  let count error = List.length error.err_errors;;
 
   let count_list error_list =
-    List.fold_left
-      (fun acc error -> acc + (count error))
-      0
-      error_list
+    error_list
+    |> List.map count
+    |> List.sum
   ;;
 
-  let generation_successful _ = true;;
+  let generation_successful error = not @@ List.is_empty error.err_errors;;
 
   let test_expected (expect_errs : t) (actual_errs : t) =
     let exp_inputs = expect_errs.err_input_seq in

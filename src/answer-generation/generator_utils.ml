@@ -55,7 +55,7 @@ let input_sequence_from_result
     (e : expr)
     (x : Ident.t)
     (result : Interpreter.evaluation_result)
-  : (int list * Error.Odefa_error.t list) =
+  : (int list * (Ast.clause * Error.Odefa_error.t list) option) =
   match Solver.solve result.er_solver with
   | None ->
     raise @@ Jhupllib_utils.Invariant_failure
@@ -155,12 +155,15 @@ let input_sequence_from_result
             |> List.map (fun id -> Symbol (id, relstack))
           in
           let get_error_fn = Solver.find_errors result.er_solver abort_location in
-          abort_preds
-          |> List.map get_error_fn
-          |> List.filter (fun l -> not @@ List.is_empty l)
-          |> List.flatten
+          let error_list =
+            abort_preds
+            |> List.map get_error_fn
+            |> List.filter (fun l -> not @@ List.is_empty l)
+            |> List.flatten
+          in
+          Some (abort_location, error_list)
         end
-      | None -> []
+      | None -> None
     in
     (input_seq_ints, abort_var_to_errors !abort_opt_ref)
 ;;
