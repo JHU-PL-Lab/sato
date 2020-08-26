@@ -332,7 +332,7 @@ module Make
 
   let pp_alias_list formatter aliases =
     Pp_utils.pp_concat_sep
-      "="
+      " ="
       (fun formatter x -> Ident.pp formatter x)
       formatter
       (List.enum aliases)

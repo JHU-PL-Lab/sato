@@ -301,7 +301,7 @@ end;;
 
 module Natodefa_type_errors : Answer = struct
   type error_seq = {
-    err_errors : On_error.Error_list.t;
+    err_errors : On_error.On_error.t list;
     err_input_seq : int list;
   }
   ;;
@@ -315,31 +315,27 @@ module Natodefa_type_errors : Answer = struct
     let (input_seq, abort_symb_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
-    let abort_list =
-      match abort_symb_opt with
-      | Some abort_symb -> [abort_symb]
-      | None -> []
-    in
-    if List.is_empty abort_list then begin
+    match abort_symb_opt with
+    | Some abort_symb ->
+      begin
+        let error_list = Symbol_map.find abort_symb error_list_map in
+        match !odefa_on_maps_option_ref with
+        | Some odefa_on_maps ->
+          let on_error_list =
+            List.map (On_error.odefa_to_natodefa_error odefa_on_maps) error_list
+          in
+          {
+            err_input_seq = input_seq;
+            err_errors = on_error_list;
+          }
+        | None ->
+          failwith "Odefa/natodefa maps were not set!"
+      end
+    | None ->
       {
         err_input_seq = input_seq;
-        err_errors = On_error.Error_list.empty;
-      }
-    end else begin
-      let abort = List.first abort_list in
-      let error_list = Symbol_map.find abort error_list_map in
-      match !odefa_on_maps_option_ref with
-      | Some odefa_on_maps ->
-        let on_error_list =
-          List.map (On_error.odefa_to_natodefa_error odefa_on_maps) error_list
-        in
-        {
-          err_input_seq = input_seq;
-          err_errors = On_error.Error_list.wrap on_error_list;
-        }
-      | None ->
-        failwith "Odefa/natodefa maps were not set!"
-    end
+        err_errors = [];
+      }      
   ;;
 
   let answer_from_string arg_str =
@@ -349,11 +345,10 @@ module Natodefa_type_errors : Answer = struct
       |> (fun (i_str, e_str) -> (String.trim i_str, String.trim e_str))
     in
     let inputs = parse_comma_separated_ints input_str in
-    let error = On_error.parse_error error_str in
-    let err_list = On_error.Error_list.wrap [error] in
+    let error = On_error.On_error.parse error_str in
     {
       err_input_seq = inputs;
-      err_errors = err_list;
+      err_errors = [error];
     }
   ;;
 
@@ -366,17 +361,18 @@ module Natodefa_type_errors : Answer = struct
   ;;
 
   let show error =
-    if not @@ On_error.Error_list.is_empty error.err_errors then begin
+    if not @@ List.is_empty error.err_errors then begin
       "Type errors for input sequence " ^
       (show_input_seq error.err_input_seq) ^ ":\n" ^
-      (On_error.Error_list.to_string error.err_errors)
+      (String.join "\n-----------------\n"
+        @@ List.map On_error.On_error.show error.err_errors)
     end else begin
       ""
     end
   ;;
 
   let count error =
-    On_error.Error_list.count error.err_errors
+    List.length error.err_errors
   ;;
 
   let count_list error_list =
@@ -388,6 +384,7 @@ module Natodefa_type_errors : Answer = struct
 
   let generation_successful _ = true;;
 
+  (*
   let test_mem (error_list: t list) (error: t) =
     let input_seq = error.err_input_seq in
     let error_lst = error.err_errors in
@@ -399,5 +396,7 @@ module Natodefa_type_errors : Answer = struct
     let error_lst' = List.assoc input_seq error_assoc_list in
     On_error.Error_list.mem_singleton error_lst' error_lst
   ;;
+  *)
 
+  let test_mem _ _ = false;;
 end;;
