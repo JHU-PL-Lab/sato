@@ -729,7 +729,7 @@ let solvable solver =
 
 (* **** Error finding **** *)
 
-(* We need to effective negate the logical operations, according to
+(* We need to effectively negate the logical operations, according to
    DeMorgan's laws.  (Think negating the predicate of the conditional;
    then the abort clause would be in the true branch.) 
     - And: not (x1 and x2) <=> (not x1) or (not x2)

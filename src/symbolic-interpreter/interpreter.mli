@@ -31,8 +31,8 @@ type evaluation_result = {
   er_solution : (symbol -> value option);
   (** The solution to the formulae found by this evaluation. *)
 
-  er_errors : (Error.Odefa_error.t list) Symbol_map.t;
-  (** The list of errors accumulated via visiting aborts *)
+  er_aborts : abort_value Symbol_map.t;
+  (** A mapping of abort symbols to abort information *)
 };;
 
 (** Raised if a query is invalid (e.g. a variable is requested for an expression

@@ -75,7 +75,7 @@ let input_sequence_from_result
     (e : expr)
     (x : Ident.t)
     (result : Interpreter.evaluation_result)
-  : (int list * symbol option) =
+  : (int list * Error.Odefa_error.t list) =
   match Solver.solve result.er_solver with
   | None ->
     raise @@ Jhupllib_utils.Invariant_failure
@@ -153,21 +153,34 @@ let input_sequence_from_result
         )
         input_sequence
     in
-    let abort_var_to_symbol () =
-      match !abort_opt_ref with
+    let abort_var_to_errors abort_var_opt =
+      match abort_var_opt with
       | Some ab_var ->
         begin
           let (ab_x, ab_stack) = destructure_var ab_var in
-          let ab_relstack = relativize_stack stop_stack ab_stack in
-          let ab_symbol  = Symbol (ab_x, ab_relstack) in
-          if not @@ Symbol_map.mem ab_symbol result.er_errors then
-            raise @@ Jhupllib.Utils.Invariant_failure (
-              "Abort symbol " ^ (show_symbol ab_symbol) ^ " encountered during " ^
-              "forward execution, but is unknown or in dead code.")
-          else
-            Some ab_symbol
+          let relstack = relativize_stack stop_stack ab_stack in
+          let ab_symb = Symbol (ab_x, relstack) in
+          let abort_info =
+            try
+              Symbol_map.find ab_symb result.er_aborts
+            with Not_found ->
+              raise @@ Jhupllib.Utils.Invariant_failure (
+                Printf.sprintf "Unknown abort symbol %s encountered in interpreter"
+                (show_symbol ab_symb)
+              )
+          in
+          let abort_location = List.hd abort_info.abort_conditional_clauses in
+          let abort_preds =
+            abort_info.abort_predicate_idents
+            |> List.map (fun id -> Symbol (id, relstack))
+          in
+          let get_error_fn = Solver.find_errors result.er_solver abort_location in
+          abort_preds
+          |> List.map get_error_fn
+          |> List.filter (fun l -> not @@ List.is_empty l)
+          |> List.flatten
         end
-      | None -> None
+      | None -> []
     in
-    (input_seq_ints, abort_var_to_symbol ())
+    (input_seq_ints, abort_var_to_errors !abort_opt_ref)
 ;;

@@ -5,7 +5,6 @@ open Odefa_ast;;
 open Ast;;
 
 open Odefa_symbolic_interpreter;;
-open Odefa_symbolic_interpreter.Interpreter_types;;
 open Odefa_symbolic_interpreter.Interpreter;;
 
 open Odefa_natural;;
@@ -54,12 +53,12 @@ module Input_sequence : Answer = struct
   type t = int list option;;
 
   let answer_from_result e x result =
-    let (input_seq, ab_symbol_opt) =
+    let (input_seq, error_list) =
       Generator_utils.input_sequence_from_result e x result
     in
-    match ab_symbol_opt with
-    | None -> Some input_seq
-    | Some _ -> None
+    match error_list with
+    | [] -> Some input_seq
+    | _ -> None
   ;;
 
   (* String "[ 1, 2, 3 ]" or "1, 2, 3" to input sequence *)
@@ -127,14 +126,8 @@ module Type_errors : Answer = struct
   ;;
 
   let answer_from_result e x result =
-    let error_list_map = result.er_errors in
-    let (input_seq, abort_symb_opt) =
+    let (input_seq, error_list) =
       Generator_utils.input_sequence_from_result e x result
-    in
-    let error_list =
-      match abort_symb_opt with
-      | Some abort_symb -> Symbol_map.find abort_symb error_list_map
-      | None -> []
     in
     let errs =
       {
@@ -228,31 +221,19 @@ module Natodefa_type_errors : Answer = struct
   let odefa_on_maps_option_ref = ref None;;
 
   let answer_from_result e x result =
-    let error_list_map = result.er_errors in
-    let (input_seq, abort_symb_opt) =
+    let (input_seq, error_list) =
       Generator_utils.input_sequence_from_result e x result
     in
-    match abort_symb_opt with
-    | Some abort_symb ->
-      begin
-        let error_list = Symbol_map.find abort_symb error_list_map in
-        match !odefa_on_maps_option_ref with
-        | Some odefa_on_maps ->
-          let on_error_list =
-            List.map (On_error.odefa_to_natodefa_error odefa_on_maps) error_list
-          in
-          {
-            err_input_seq = input_seq;
-            err_errors = on_error_list;
-          }
-        | None ->
-          failwith "Odefa/natodefa maps were not set!"
-      end
-    | None ->
-      {
-        err_input_seq = input_seq;
-        err_errors = [];
-      }      
+    let on_error_list =
+      match !odefa_on_maps_option_ref with
+      | Some odefa_on_maps ->
+        List.map (On_error.odefa_to_natodefa_error odefa_on_maps) error_list
+      | None -> failwith "Odefa/natodefa maps were not set!"
+    in
+    {
+      err_input_seq = input_seq;
+      err_errors = on_error_list;
+    }
   ;;
 
   let answer_from_string arg_str =
