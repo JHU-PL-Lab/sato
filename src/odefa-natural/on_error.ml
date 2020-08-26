@@ -4,19 +4,6 @@ open Jhupllib;;
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
-let _parse_expr expr_str =
-  let expr_lst =
-    try
-      On_parse.parse_expression_string expr_str
-    with On_parse.Parse_error _ ->
-      raise @@ Error.Parse_failure (Printf.sprintf "Cannot parse expr %s" expr_str)
-  in
-  match expr_lst with
-  | [expr] -> expr
-  | [] -> raise @@ Error.Parse_failure "Missing expression"
-  | _ -> raise @@ Error.Parse_failure "More than one expression"
-;;
-
 let _parse_type_sig type_str =
   let open On_ast in
   match type_str with
@@ -104,7 +91,7 @@ module Value : (Error_value with type t = On_ast.expr) = struct
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
-  let parse = _parse_expr;;
+  let parse = On_parse.parse_single_expr_string;;
 end;;
 
 module Binop : (Error_binop with type t = On_ast.expr) = struct
@@ -112,7 +99,7 @@ module Binop : (Error_binop with type t = On_ast.expr) = struct
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
-  let parse = _parse_expr;;
+  let parse = On_parse.parse_single_expr_string;;
 end;;
 
 module Clause : (Error_clause with type t = On_ast.expr) = struct
@@ -120,7 +107,7 @@ module Clause : (Error_clause with type t = On_ast.expr) = struct
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
-  let parse = _parse_expr;;
+  let parse = On_parse.parse_single_expr_string;;
 end;;
 
 module Type : (Error_type with type t = On_ast.type_sig) = struct

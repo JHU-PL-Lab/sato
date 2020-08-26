@@ -28,4 +28,14 @@ let parse_expression_string (expr_str : string) =
     handle_parse_error buf (fun () -> On_parser.delim_expr On_lexer.token buf)
   in
   LazyList.to_list @@ LazyList.from_while read_expr
-  
+;;
+
+let parse_single_expr_string (expr_str : string) =
+  let expr_lst = parse_expression_string expr_str
+  in
+  match expr_lst with
+  | [expr] -> expr
+  | [] -> raise @@ Invalid_argument "string is issing expression"
+  | _ -> raise @@ Invalid_argument "string has more than one expression"
+
+;;

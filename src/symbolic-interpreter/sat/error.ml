@@ -29,28 +29,10 @@ let _parse_type type_str =
     end
 ;;
 
-let _parse_clause clause_str =
-  let expr_lst =
-    try
-      Odefa_parser.Parser.parse_expression_string clause_str
-    with Odefa_parser.Parser.Parse_error (_, _, _, _) ->
-      raise @@ Parse_failure ("cannot parse clause " ^ clause_str)
-  in
-  match expr_lst with
-  | [expr] ->
-    begin
-      let Ast.Expr clist = expr in
-      match clist with
-      | [clause] -> clause
-      | _ ->
-        raise @@ Parse_failure "expression contains more than one clause"
-    end
-  | _ -> raise @@ Parse_failure "more than one expression"
-;;
-
 let _parse_clause_body clause_body_str =
   let (Ast.Clause (_, body)) =
-    _parse_clause @@ "dummy = " ^ clause_body_str
+    let clause_str = "dummy = " ^ clause_body_str in
+    Odefa_parser.Parser.parse_clause_string clause_str
   in
   body
 ;;
@@ -168,7 +150,7 @@ module Clause : (Error_clause with type t = Ast.clause) = struct
   let equal = Ast.equal_clause;;
   let pp = Ast_pp.pp_clause;;
   let show = Ast_pp.show_clause;;
-  let parse = _parse_clause;;
+  let parse = Odefa_parser.Parser.parse_clause_string;;
 end;;
 
 module Type : (Error_type with type t = Ast.type_sig) = struct
