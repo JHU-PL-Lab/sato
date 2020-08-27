@@ -8,7 +8,6 @@ open Odefa_ddpa;;
 open Ast;;
 open Ddpa_graph;;
 open Interpreter_types;;
-open Error;;
 
 (** This type indicates how work is prioritized during interpretation. *)
 type exploration_policy =
@@ -32,8 +31,8 @@ type evaluation_result = {
   er_solution : (symbol -> value option);
   (** The solution to the formulae found by this evaluation. *)
 
-  er_errors : Error_tree.t Symbol_map.t;
-  (** The list of errors accumulated via visiting aborts *)
+  er_aborts : abort_value Symbol_map.t;
+  (** A mapping of abort symbols to abort information *)
 };;
 
 (** Raised if a query is invalid (e.g. a variable is requested for an expression
@@ -46,7 +45,7 @@ exception Invalid_query of string;;
     respect to the expression. *)
 val start :
   ?exploration_policy:exploration_policy -> ddpa_graph -> expr ->
-  Ident.t -> evaluation;;
+  Ast.ident -> evaluation;;
 
 (** Takes a step of demand-driven evaluation.  This routine returns any
     evaluation results it encounters in this step (as nondeterminism may lead to

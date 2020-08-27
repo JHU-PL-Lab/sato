@@ -1,8 +1,8 @@
 # EXPECT-WELL-FORMED
 # EXPECT-TYPE-ERROR-COUNT 3
-# EXPECT-TYPE-ERROR ~result [0] : "match" "" "0" "if 0 then false else true" "bool" "int"
-# EXPECT-TYPE-ERROR ~result [1, 0] : "match" "" "{}" "if {} then 0 else 1" "bool" "{}"
-# EXPECT-TYPE-ERROR ~result [1, 1] : "match" "" "{}" "if {} then 1 else 2 + {}" "bool" "{}"
+# EXPECT-TYPE-ERROR ~result [0] "if 0 then false else true" "" "0" "bool" "int"
+# EXPECT-TYPE-ERROR ~result [1, 0] "if {} then 0 else 1" "" "{}" "bool" "{}"
+# EXPECT-TYPE-ERROR ~result [1, 1] "if {} then 1 else 2 + {}" "" "{}" "bool" "{}"
 
 if input == 0 then
     if 0 then false else true

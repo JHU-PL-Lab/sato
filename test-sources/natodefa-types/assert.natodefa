@@ -1,5 +1,5 @@
 # EXPECT-WELL-FORMED
 # EXPECT-TYPE-ERROR-COUNT 1
-# EXPECT-TYPE-ERROR ~result [] : "value" "a" "false" "assert ( let a = false in a )"
+# EXPECT-TYPE-ERROR ~result [] "assert ( let a = false in a )" "a" "false" 
 
 assert ( let a = false in a )

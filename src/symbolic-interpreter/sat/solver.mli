@@ -10,7 +10,6 @@ open Jhupllib;;
 
 open Odefa_ast;;
 
-open Error;;
 open Interpreter_types;;
 open Pp_utils;;
 
@@ -65,7 +64,7 @@ val solve : t -> solution option;;
 val solvable : t -> bool;;
 
 (** Find errors associated with a particular abort clause. *)
-val find_errors : t -> Ast.clause -> symbol -> Error_tree.t;;
+val find_errors : t -> symbol -> Error.Odefa_error.t list;;
 
 (** Enumerates the constraints in a solver. *)
 val enum : t -> Constraint.t Enum.t;;

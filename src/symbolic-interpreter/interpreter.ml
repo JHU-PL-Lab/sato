@@ -8,7 +8,6 @@ open Ast_pp;;
 open Ddpa_abstract_ast;;
 open Ddpa_graph;;
 open Ddpa_utils;;
-open Error;;
 open Interpreter_types;;
 open Logger_utils;;
 
@@ -338,7 +337,7 @@ type evaluation_result = {
   er_solver : Solver.t;
   er_stack : Relative_stack.concrete_stack;
   er_solution : (symbol -> value option);
-  er_errors : Error.Error_tree.t Symbol_map.t;
+  er_aborts : abort_value Symbol_map.t;
 };;
 
 exception Invalid_query of string;;
@@ -1046,33 +1045,11 @@ struct
       end;
       let solver = eval_result.M.er_solver in
       let errors = eval_result.M.er_abort_points in
-      let error_tree_map =
-        errors
-        |> Symbol_map.enum
-        |> Enum.map
-          (fun (Symbol (symb_id, rstack), e) ->
-            let pred_ids = e.abort_predicate_idents in
-            let cond_cls = List.hd e.abort_conditional_clauses in
-            let preds = List.map (fun id -> (Symbol(id, rstack))) pred_ids in
-            ((Symbol (symb_id, rstack)), (preds, cond_cls))
-          )
-        |> Enum.map
-          (fun (symb, (preds, cond_cls)) ->
-            (symb, (List.map (Solver.find_errors solver cond_cls) preds))
-          )
-        |> Enum.map
-          (fun (symb, err_list) ->
-            (symb, Error_tree.tree_from_error_list err_list)
-          )
-        |> Enum.filter
-          (fun (_, err_tree) -> not @@ Error_tree.is_empty err_tree)
-        |> Symbol_map.of_enum
-      in
       Some {
         er_solver = solver;
         er_stack = stack;
         er_solution = get_value;
-        er_errors = error_tree_map;
+        er_aborts = errors;
       }
     | None ->
       begin

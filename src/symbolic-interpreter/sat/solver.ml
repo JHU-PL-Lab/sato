@@ -6,7 +6,6 @@ open Odefa_ast;;
 
 open Ast;;
 open Constraint;;
-open Error;;
 open Interpreter_types;;
 open Symbol_cache;;
 
@@ -141,6 +140,10 @@ let rec _construct_alias_chain solver symbol =
   match alias_opt with
   | Some aliased_symb -> symbol :: (_construct_alias_chain solver aliased_symb)
   | None -> [symbol]
+;;
+
+let _alias_symbols_to_idents alias_chain =
+  List.map (fun (Symbol (x, _)) -> x) alias_chain
 ;;
 
 let _get_symbol_type solver symbol : symbol_type option =
@@ -726,7 +729,38 @@ let solvable solver =
 
 (* **** Error finding **** *)
 
-let rec _find_errors solver instrument_clause symbol =
+(* We need to effectively negate the logical operations, according to
+   DeMorgan's laws.  (Think negating the predicate of the conditional;
+   then the abort clause would be in the true branch.) 
+    - And: not (x1 and x2) <=> (not x1) or (not x2)
+    - Or: not (x1 or x2) <=> (not x1) and (not x2)
+*)
+
+(** Merge two error trees as if they are part of an AND operation.
+    In an AND operation, all values must be true for the op to return true.
+    Therefore if one error has a false value, the error tree is false. *)
+let add_and errs_1 errs_2 : Error.Odefa_error.t list =
+  match (errs_1, errs_2) with
+  | ([], []) -> []
+  | (_, []) ->  errs_1
+  | ([], _) -> errs_2
+  | (_, _) -> errs_1 @ errs_2
+;;
+
+(** Merge two error trees as if they are part of an OR operation.
+    In an OR operation, only one value needs to be true for the op to be true
+    so only when all errors have a false value can the error tree be false. *)
+let add_or errs_1 errs_2 : Error.Odefa_error.t list =
+  match (errs_1, errs_2) with
+  | ([], [])
+  | (_, [])
+  | ([], _) -> []
+  | (_, _) -> errs_1 @ errs_2
+;;
+
+let rec find_errors solver symbol =
+  let open Error in
+  (* Get values *)
   let value_opt =
     Symbol_map.Exceptionless.find symbol solver.value_constraints_by_symbol
   in
@@ -736,6 +770,7 @@ let rec _find_errors solver instrument_clause symbol =
   let match_opt =
     Symbol_map.Exceptionless.find symbol solver.match_constraints_by_symbol
   in
+  (* Match on values *)
   match (binop_opt, match_opt) with
   | (Some b, None) ->
     begin
@@ -744,13 +779,13 @@ let rec _find_errors solver instrument_clause symbol =
       let (s1, op, s2) = b in
       match op with
       | Binary_operator_and ->
-        let et1 = _find_errors solver instrument_clause s1 in
-        let et2 = _find_errors solver instrument_clause s2 in
-        Error_tree.add_and et1 et2
+        let et1 = find_errors solver s1 in
+        let et2 = find_errors solver s2 in
+        add_and et1 et2
       | Binary_operator_or ->
-        let et1 = _find_errors solver instrument_clause s1 in
-        let et2 = _find_errors solver instrument_clause s2 in
-        Error_tree.add_or et1 et2
+        let et1 = find_errors solver s1 in
+        let et2 = find_errors solver s2 in
+        add_or et1 et2
       | Binary_operator_xnor
       | Binary_operator_xor
       | Binary_operator_plus
@@ -762,41 +797,49 @@ let rec _find_errors solver instrument_clause symbol =
       | Binary_operator_less_than_or_equal_to
       | Binary_operator_equal_to
       | Binary_operator_not_equal_to ->
-        let binop_error = Error_binop {
-          err_binop_clause = instrument_clause;
-          err_binop_operation = op;
-          err_binop_left_val =
-            begin
-              match _get_value_source solver s1 with
-              | Some vs -> _symbolic_to_concrete_value vs
-              | None -> raise Not_found
-            end;
-          err_binop_right_val =
-            begin
-              match _get_value_source solver s2 with
-              | Some vs -> _symbolic_to_concrete_value vs
-              | None -> raise Not_found
-            end;
-          err_binop_left_aliases =
-            List.map
-              (fun (Symbol (i1, _)) -> i1)
-              (_construct_alias_chain solver s1);
-          err_binop_right_aliases =
-            List.map
-              (fun (Symbol (i2, _)) -> i2)
-              (_construct_alias_chain solver s2);
+        let l_val =
+          match _get_value_source solver s1 with
+            | Some vs -> _symbolic_to_concrete_value vs
+            | None -> raise Not_found
+        in
+        let r_val =
+            match _get_value_source solver s2 with
+            | Some vs -> _symbolic_to_concrete_value vs
+            | None -> raise Not_found
+        in
+        let l_aliases =
+          _alias_symbols_to_idents @@ _construct_alias_chain solver s1
+        in
+        let r_aliases =
+          _alias_symbols_to_idents @@ _construct_alias_chain solver s2
+        in
+        let l_operand =
+          if List.is_empty l_aliases then l_val else
+            Ast.Var_body (Var (List.first l_aliases, None))
+        in
+        let r_operand =
+          if List.is_empty r_aliases then r_val else
+            Ast.Var_body (Var (List.first r_aliases, None))
+        in
+        let binop_error =  Odefa_error.Error_binop {
+          err_binop_left_val = l_val;
+          err_binop_right_val = r_val;
+          err_binop_left_aliases = l_aliases;
+          err_binop_right_aliases = r_aliases;
+          err_binop_operation = (l_operand, op, r_operand);
         }
         in
         lazy_logger `trace (fun () ->
-          Printf.sprintf "Binop error:\n%s" (show binop_error));
-        Error_tree.singleton binop_error
+          Printf.sprintf "Binop error:\n%s" (Odefa_error.show binop_error));
+        List.singleton binop_error
     end
   | (None, Some m) ->
     begin
       lazy_logger `trace (fun () ->
         Printf.sprintf "Pattern match on symbol %s" (show_symbol symbol));
       let (match_symb, pattern) = m in
-      let alias_chain = _construct_alias_chain solver match_symb in
+      let alias_chain =
+        _alias_symbols_to_idents @@ _construct_alias_chain solver match_symb in
       let match_value =
         match value_opt with
         | Some v -> v
@@ -824,22 +867,21 @@ let rec _find_errors solver instrument_clause symbol =
               (show_symbol match_symb))
         in
         if not (Ast.Type_signature.subtype actual_type expected_type) then begin
-          let match_error = Error_match{
-            err_match_aliases = List.map (fun (Symbol(x, _)) -> x) alias_chain;
-            err_match_clause = instrument_clause;
-            err_match_value = match_val_source;
-            err_match_expected_type = expected_type;
-            err_match_actual_type = actual_type;
+          let match_error = Odefa_error.Error_match {
+            err_match_aliases = alias_chain;
+            err_match_val = match_val_source;
+            err_match_expected = expected_type;
+            err_match_actual = actual_type;
           }
           in
           lazy_logger `trace (fun () ->
-            Printf.sprintf "Match error:\n%s" (show match_error));
-          Error_tree.singleton match_error
+            Printf.sprintf "Match error:\n%s" (Odefa_error.show match_error));
+          List.singleton match_error
         end else begin
-          Error_tree.empty
+          []
         end
       | Constraint.Bool true ->
-        Error_tree.empty
+        []
       | _ ->
         raise @@ Utils.Invariant_failure
           (Printf.sprintf "%s is not a boolean value" (show_symbol symbol))
@@ -849,32 +891,28 @@ let rec _find_errors solver instrument_clause symbol =
       match value_opt with
       | Some (Bool b) ->
         if b then
-          Error_tree.empty
+          []
         else
           let alias_chain =
-            List.map
-              (fun (Symbol (i1, _)) -> i1)
-              (_construct_alias_chain solver symbol);
+            _alias_symbols_to_idents @@ _construct_alias_chain solver symbol;
           in
-          let value_error = Error_value {
+          let value_error = Odefa_error.Error_value {
             err_value_aliases = alias_chain;
             err_value_val = Value_body (Value_bool b);
-            err_value_clause = instrument_clause;
           }
           in
           lazy_logger `trace (fun () ->
-            Printf.sprintf "Value error:\n%s" (show value_error));
-          Error_tree.singleton value_error
+            Printf.sprintf "Value error:\n%s" (Odefa_error.show value_error));
+          List.singleton value_error
       | _ ->
         raise @@ Utils.Invariant_failure
           (Printf.sprintf "Error tree on %s has non-boolean values"
             (show_symbol symbol))
     end
   | (_, _) ->
-    raise @@ Utils.Invariant_failure ("Multiple definitions for symbol " ^ (show_symbol symbol))
+    raise @@ Utils.Invariant_failure
+      (Printf.sprintf "Multiple definitions for %s" (show_symbol symbol))
 ;;
-
-let find_errors solver inst_clause symbol = _find_errors solver inst_clause symbol;;
 
 (* **** Other functions **** *)
 

@@ -3,7 +3,8 @@ open Odefa_symbolic_interpreter;;
 
 open Odefa_natural;;
 
-exception Parse_failure;;
+(** Raised when an expected answer fails to parse *)
+exception Parse_failure of string;;
 
 (** The interface of a generic answer, i.e. information that can be extracted
     from a run of the demand-driven symbolic evaluator. *)
@@ -37,9 +38,10 @@ module type Answer = sig
       otherwise. *)
   val generation_successful : t -> bool;;
 
-  (** Test if an answer is a member of a collection of answers. (If the answer
-      is an error, it must be wrapped in a singleton error tree). *)
-  val test_mem : t list -> t -> bool;;
+  (** Test to see if an expected answer is included within an answer produced
+      by the program.  The expected answer is the first argument while the
+      actual answer is the second argument; test_expected returns a boolean. *)
+  val test_expected : t -> t -> bool;;
 end;;
 
 (** An input sequence for a single program flow of symbolic evaluation. *)
@@ -49,4 +51,6 @@ module Input_sequence : Answer;;
     evaluation. *)
 module Type_errors : Answer;;
 
+(** The type errors encountered for a single natodefa program flow of
+    symbolic evaluation. *)
 module Natodefa_type_errors : Answer;;

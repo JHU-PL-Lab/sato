@@ -3,7 +3,7 @@
 # EXPECT-ANALYSIS-STACK-IS 6ddpa
 # EXPECT-REQUIRED-INPUT-SEQUENCE-GENERATION-STEPS 20000
 # EXPECT-TYPE-ERROR-COUNT 1
-# EXPECT-TYPE-ERROR ~result [] : "match" "tru" "true" "r2 = a - tru" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [] "r2 = a - tru" "tru" "true" "int" "bool"
 
 tru = true;
 one = 1;
