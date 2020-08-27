@@ -923,9 +923,10 @@ let test_sato
     try
       Error.answer_from_string err_str
     with
-    | Generator_answer.Parse_failure
     | Not_found -> (* TODO: Catch Not_found in answer_from_string *)
       raise @@ Expectation_parse_failure "Cannot parse type error string"
+    | Generator_answer.Parse_failure s ->
+      raise @@ Expectation_parse_failure s
     | Odefa_symbolic_interpreter.Error.Parse_failure s ->
       raise @@ Expectation_parse_failure s
   in

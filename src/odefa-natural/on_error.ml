@@ -4,6 +4,8 @@ open Jhupllib;;
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
+(* **** String parsing helper functions **** *)
+
 let _parse_type_sig type_str =
   let open On_ast in
   match type_str with
@@ -37,6 +39,8 @@ let _parse_type_sig type_str =
     end
 ;;
 
+(* **** Natodefa module signatures **** *)
+
 module type Error_ident = sig
   type t;;
   val equal : t -> t -> bool;;
@@ -69,6 +73,8 @@ module type Error_type = sig
   val show : t -> string;;
   val parse : string -> t;;
 end;;
+
+(* **** Natodefa modules **** *)
 
 module Ident : (Error_ident with type t = On_ast.ident) = struct
   type t = On_ast.ident;;

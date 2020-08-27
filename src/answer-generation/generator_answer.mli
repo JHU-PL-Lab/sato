@@ -3,7 +3,8 @@ open Odefa_symbolic_interpreter;;
 
 open Odefa_natural;;
 
-exception Parse_failure;;
+(** Raised when an expected answer fails to parse *)
+exception Parse_failure of string;;
 
 (** The interface of a generic answer, i.e. information that can be extracted
     from a run of the demand-driven symbolic evaluator. *)

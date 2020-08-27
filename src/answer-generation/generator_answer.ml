@@ -10,7 +10,7 @@ open Odefa_symbolic_interpreter.Interpreter;;
 open Odefa_natural;;
 
 
-exception Parse_failure;;
+exception Parse_failure of string;;
 
 module type Answer = sig
   type t;;
@@ -24,8 +24,10 @@ module type Answer = sig
   val test_expected : t -> t -> bool;;
 end;;
 
+(* **** String parsing utilities **** *)
+
 (* Utility to parse int sequences separated by commas. *)
-let parse_comma_separated_ints lst_str =
+let parse_comma_separated_ints (lst_str : string) : int list =
   let lst_str' =
     if (String.starts_with lst_str "[") &&
          (String.ends_with lst_str "]") then
@@ -43,17 +45,23 @@ let parse_comma_separated_ints lst_str =
   try
     List.map int_of_string str_lst
   with Failure _ ->
-    raise Parse_failure
+    raise @@ Parse_failure "Unable to parse int list"
 ;;
 
-let split_with_regexp (regexp : Str.regexp) (str : string) =
-  if Str.string_match regexp str 0 then
+let split_with_regexp (re : Str.regexp) (str : string) : (string * string) =
+  if Str.string_match re str 0 then
     let split_pos = Str.match_end () in
     let prefix = String.trim @@ Str.string_before str split_pos in
     let suffix = String.trim @@ Str.string_after str split_pos in
     (prefix, suffix)
   else
-    raise @@ Invalid_argument "string does not match on regexp"
+    raise @@ Parse_failure "string does not match on regexp"
+;;
+
+(* **** String showing utilities **** *)
+
+let show_input_seq (input_seq : int list) =
+  "[" ^ (String.join ", " @@ List.map string_of_int input_seq) ^ "]"
 ;;
 
 (* **** Input sequence **** *)
@@ -153,7 +161,7 @@ module Type_errors : Answer = struct
 
   (* Ex: [0, 1] "sum = a or z" "a = b" "c = 2" "int" "bool" *)
   let answer_from_string arg_str : t =
-        let (input_str, loc_err_str) =
+    let (input_str, loc_err_str) =
       split_with_regexp (Str.regexp "\\[[^][]*\\]") arg_str
     in
     let (loc_str, error_str) =
@@ -184,10 +192,6 @@ module Type_errors : Answer = struct
     odefa_on_maps_option_ref := Some (odefa_on_maps)
   ;;
 
-  let show_input_seq input_seq =
-    "[" ^ (String.join ", " @@ List.map string_of_int input_seq) ^ "]"
-  ;;
-
   let show (error : t) : string =
     match error.err_location with
     | Some error_loc ->
@@ -208,19 +212,26 @@ module Type_errors : Answer = struct
     |> List.sum
   ;;
 
-  let generation_successful error = not @@ List.is_empty error.err_errors;;
+  let generation_successful error =
+    match error.err_location with
+    | Some _ -> true
+    | None -> false
+  ;;
 
   let test_expected (expect_errs : t) (actual_errs : t) =
     let exp_inputs = expect_errs.err_input_seq in
     let act_inputs = actual_errs.err_input_seq in
+    let exp_loc = expect_errs.err_location in
+    let act_loc = actual_errs.err_location in
     let exp_errors = expect_errs.err_errors in
     let act_errors = expect_errs.err_errors in
-    if exp_inputs <> act_inputs then false else begin
-      let is_mem err =
-        List.exists (Error.Odefa_error.equal err) act_errors
-      in
-      not @@ List.is_empty (List.filter is_mem exp_errors)
-    end
+    if (exp_inputs <> act_inputs) || (exp_loc <> act_loc) then false else
+      begin
+        let is_mem err =
+          List.exists (Error.Odefa_error.equal err) act_errors
+        in
+        not @@ List.is_empty (List.filter is_mem exp_errors)
+      end
   ;;
 end;;
 
@@ -292,10 +303,6 @@ module Natodefa_type_errors : Answer = struct
     odefa_on_maps_option_ref := Some (odefa_on_maps)
   ;;
 
-  let show_input_seq input_seq =
-    "[" ^ (String.join ", " @@ List.map string_of_int input_seq) ^ "]"
-  ;;
-
   let show error =
     match error.err_location with
     | Some error_loc ->
@@ -316,7 +323,11 @@ module Natodefa_type_errors : Answer = struct
     |> List.sum
   ;;
 
-  let generation_successful error = not @@ List.is_empty error.err_errors;;
+  let generation_successful error =
+    match error.err_location with
+    | Some _ -> true
+    | None -> false
+  ;;
 
   let test_expected (expect_errs : t) (actual_errs : t) =
     let exp_inputs = expect_errs.err_input_seq in
@@ -325,11 +336,12 @@ module Natodefa_type_errors : Answer = struct
     let act_loc = actual_errs.err_location in
     let exp_errors = expect_errs.err_errors in
     let act_errors = expect_errs.err_errors in
-    if (exp_inputs <> act_inputs) || (exp_loc <> act_loc) then false else begin
-      let is_mem err =
-        List.exists (On_error.On_error.equal err) act_errors
-      in
-      not @@ List.is_empty (List.filter is_mem exp_errors)
-    end
+    if (exp_inputs <> act_inputs) || (exp_loc <> act_loc) then false else
+      begin
+        let is_mem err =
+          List.exists (On_error.On_error.equal err) act_errors
+        in
+        not @@ List.is_empty (List.filter is_mem exp_errors)
+      end
   ;;
 end;;
