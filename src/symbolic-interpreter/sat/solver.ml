@@ -113,6 +113,14 @@ let empty =
   }
 ;;
 
+(* **** Output functions **** *)
+
+let pp formatter solver =
+  Constraint.Set.pp formatter solver.constraints
+;;
+
+let show solver = Pp_utils.pp_to_string pp solver;;
+
 (* **** Helper functions **** *)
 
 let _binop_types (op : binary_operator)
@@ -134,16 +142,19 @@ let _binop_types (op : binary_operator)
 ;;
 
 let rec _construct_alias_chain solver symbol =
+  let Symbol (x, _) = symbol in
   let alias_opt =
     Symbol_map.Exceptionless.find symbol solver.alias_constraints_by_symbol
   in
   match alias_opt with
-  | Some aliased_symb -> symbol :: (_construct_alias_chain solver aliased_symb)
-  | None -> [symbol]
-;;
-
-let _alias_symbols_to_idents alias_chain =
-  List.map (fun (Symbol (x, _)) -> x) alias_chain
+  | Some symbol' ->
+    (* We want the alias chain to only record chains of distinct symbols *)
+    let Symbol (x', _) = symbol' in
+    if not @@ equal_ident x x' then
+      x :: (_construct_alias_chain solver symbol')
+    else
+      _construct_alias_chain solver symbol'
+  | None -> [x]
 ;;
 
 let _get_symbol_type solver symbol : symbol_type option =
@@ -206,18 +217,19 @@ let _get_value_source solver symbol : value_source option =
   match (value_opt, input_opt, binop_opt, match_opt, abort_opt) with
   | (Some value, None, None, None, None) ->
       Some (Constraint.Value value)
-  | (None, Some _, None, None, None) ->
+  | (_, Some _, None, None, None) ->
       Some (Constraint.Input)
-  | (None, None, Some (s1, op, s2), None, None) ->
+  | (_, None, Some (s1, op, s2), None, None) ->
       Some (Constraint.Binop (s1, op, s2))
   | (_, None, None, Some (s, p), None) ->
-      (* Match constraints produce an additional value constraint*)
       Some (Constraint.Match (s, p))
-  | (None, None, None, None, Some _) ->
+  | (_, None, None, None, Some _) ->
       Some (Constraint.Abort)
   | (None, None, None, None, None) ->
       None
   | _ ->
+    lazy_logger `debug (fun () ->
+      Printf.sprintf "Constraint set %s:" (show solver));
     raise @@ Utils.Invariant_failure
       (Printf.sprintf "%s has multiple value definitions" (show_symbol symbol))
 ;;
@@ -807,11 +819,9 @@ let rec find_errors solver symbol =
             | Some vs -> _symbolic_to_concrete_value vs
             | None -> raise Not_found
         in
-        let l_aliases =
-          _alias_symbols_to_idents @@ _construct_alias_chain solver s1
+        let l_aliases = _construct_alias_chain solver s1
         in
-        let r_aliases =
-          _alias_symbols_to_idents @@ _construct_alias_chain solver s2
+        let r_aliases = _construct_alias_chain solver s2
         in
         let l_operand =
           if List.is_empty l_aliases then l_val else
@@ -838,8 +848,7 @@ let rec find_errors solver symbol =
       lazy_logger `trace (fun () ->
         Printf.sprintf "Pattern match on symbol %s" (show_symbol symbol));
       let (match_symb, pattern) = m in
-      let alias_chain =
-        _alias_symbols_to_idents @@ _construct_alias_chain solver match_symb in
+      let alias_chain = _construct_alias_chain solver match_symb in
       let match_value =
         match value_opt with
         | Some v -> v
@@ -893,8 +902,7 @@ let rec find_errors solver symbol =
         if b then
           []
         else
-          let alias_chain =
-            _alias_symbols_to_idents @@ _construct_alias_chain solver symbol;
+          let alias_chain = _construct_alias_chain solver symbol;
           in
           let value_error = Odefa_error.Error_value {
             err_value_aliases = alias_chain;
@@ -906,7 +914,7 @@ let rec find_errors solver symbol =
           List.singleton value_error
       | _ ->
         raise @@ Utils.Invariant_failure
-          (Printf.sprintf "Error tree on %s has non-boolean values"
+          (Printf.sprintf "Error list on %s has non-boolean values"
             (show_symbol symbol))
     end
   | (_, _) ->
@@ -921,9 +929,3 @@ let enum solver = Constraint.Set.enum solver.constraints;;
 let of_enum constraints = Enum.fold (flip add) empty constraints;;
 
 let iter fn solver = Constraint.Set.iter fn solver.constraints;;
-
-let pp formatter solver =
-  Constraint.Set.pp formatter solver.constraints
-;;
-
-let show solver = Pp_utils.pp_to_string pp solver;;
