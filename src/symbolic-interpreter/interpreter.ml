@@ -552,8 +552,9 @@ struct
 
       (* ### Binop rule ### *)
       begin
-        (* Grab variable from lookup stack *)
-        let%orzero lookup_var :: lookup_stack' = lookup_stack in
+        (* Lookup stack needs to be a singleton, since no binop returns
+           function values (which are the only valid non-bottom elements) *)
+        let%orzero [lookup_var] = lookup_stack in
         (* This must be a binary operator clause assigning to that variable. *)
         let%orzero Unannotated_clause(
             Abs_clause (Abs_var x,
@@ -573,17 +574,6 @@ struct
         let%bind () = record_constraint @@
           Constraint.Constraint_binop (lookup_symbol, symbol_1, op, symbol_2)
         in
-        (* The "further" clause in the Binop rule says that, if the lookup
-            stack is non-empty, we have to look that stuff up too.  That
-            should never happen because none of our operators operate on
-            functions and functions are the only non-bottom elements in the
-            lookup stack.  So instead, we'll just skip the check here and
-            play defensively; it saves us a bind. *)
-        if not @@ List.is_empty lookup_stack' then begin
-          raise @@ Jhupllib.Utils.Not_yet_implemented
-            (Printf.sprintf "Non-singleton lookup stack on %s in Binop rule!"
-              (show_ident lookup_var))
-        end;
         lazy_logger `trace (fun () ->
           Printf.sprintf "Binop rule discovered that %s = %s %s %s"
             (show_symbol lookup_symbol)
