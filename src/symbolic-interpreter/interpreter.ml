@@ -737,13 +737,17 @@ struct
         (* Proceed to look up the variable in the context of the function's
             definition. *)
         let%bind symbol_list = recurse (xf :: x :: lookup_stack') acl1 relstack' in
-        let%orzero discard_symbol :: ret_symbol :: symbol_list' = symbol_list in
-        let _ = discard_symbol in
+        let%orzero _ :: ret_symbol :: symbol_list' = symbol_list in
+        (* Add alias constraints (as symbols have different relative stacks *)
+        let lookup_symbol = Symbol (x, relstack) in
+        let%bind () = record_constraint @@
+          Constraint.Constraint_alias (lookup_symbol, ret_symbol)
+        in
         (* And we are done. *)
         lazy_logger `trace (fun () ->
-          Printf.sprintf "Function Enter Non-Local rule looks up %s, returns %s"
-            (show_ident x) (show_symbol ret_symbol));
-        return (ret_symbol :: symbol_list')
+          Printf.sprintf "Function Enter Non-Local rule discovers %s = %s"
+            (show_symbol lookup_symbol) (show_symbol ret_symbol));
+        return (lookup_symbol :: symbol_list')
       end;
 
       (* ### Function Exit rule ### *)
