@@ -44,14 +44,14 @@ make benchmark
 
 TODOs
 ---
-- [ ] Refactor codebase and fix bugs
-  - [ ] Write shared module type sig for odefa and natodefa errors
-- [ ] Formalize revised rules
-  - [ ] Add projection, match, and abort rules
-  - [ ] Formally incorporate alias-passing (ie. on a = b, return a instead of b)
-  - [ ] Fix bugs involving alias passing and non-singleton lookup stacks
+- [x] Refactor codebase and fix bugs
+  - [x] Write shared module type sig for odefa and natodefa errors
+- [x] Formalize revised rules
+  - [x] Add projection, match, and abort rules
+  - [x] Formally incorporate alias-passing (ie. on a = b, return a instead of b)
+  - [x] Fix bugs involving alias passing and non-singleton lookup stacks
 - [ ] Continue to write tests
-  - [ ] Tests that exercise alias passing to test revised rules
+  - [x] Tests that exercise alias passing to test revised rules
   - [ ] More list tests (fold, sort, etc.)
 - [ ] Write theory that maps errors in original code to aborts in instrumented code
   - [ ] Ignore errors in dead odefa code by throwing out aborts/errors encountered after the first one
