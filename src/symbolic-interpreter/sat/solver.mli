@@ -28,6 +28,8 @@ type contradiction =
   | TypeContradiction of
       symbol * Constraint.symbol_type * Constraint.symbol_type
   | ValueContradiction of symbol * Constraint.value * Constraint.value
+  | ValueDefinitionContradiction of
+      symbol * Constraint.value_def * Constraint.value_def
   | ProjectionContradiction of symbol * symbol * Ast.ident
   | MatchContradiction of symbol * symbol * Ast.pattern
 ;;

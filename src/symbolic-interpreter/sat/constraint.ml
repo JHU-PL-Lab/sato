@@ -48,7 +48,7 @@ let pp_value formatter v =
 
 let show_value = Pp_utils.pp_to_string pp_value;;
 
-type value_source =
+type value_def =
   | Value of value
   | Input
   | Binop of symbol * binary_operator * symbol
@@ -57,7 +57,7 @@ type value_source =
 [@@ deriving eq, ord, to_yojson]
 ;;
 
-let pp_value_source formatter val_src =
+let pp_value_def formatter val_src =
   match val_src with
   | Value v -> pp_value formatter v
   | Input -> Format.pp_print_string formatter "input"
@@ -73,10 +73,11 @@ let pp_value_source formatter val_src =
   | Abort -> Format.pp_print_string formatter "abort"
 ;;
 
-let show_value_source = Pp_utils.pp_to_string pp_value_source;;
+let show_value_def = Pp_utils.pp_to_string pp_value_def;;
 
 type t =
   | Constraint_value of symbol * value (* x = v *)
+  | Constraint_value_clause of symbol * value (* x = v *)
   | Constraint_input of symbol (* x = input *)
   | Constraint_alias of symbol * symbol (* x = x *)
   | Constraint_binop of symbol * symbol * binary_operator * symbol (* x = x + x *)
@@ -91,6 +92,8 @@ type t =
 let pp formatter sc =
   match sc with
   | Constraint_value(x,v) ->
+    Format.fprintf formatter "%a = %a" pp_symbol x pp_value v
+  | Constraint_value_clause(x,v) ->
     Format.fprintf formatter "%a = %a" pp_symbol x pp_value v
   | Constraint_input(x) ->
     Format.fprintf formatter "%a = input" pp_symbol x

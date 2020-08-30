@@ -17,6 +17,7 @@ type contradiction =
   | TypeContradiction of
       symbol * Constraint.symbol_type * Constraint.symbol_type
   | ValueContradiction of symbol * value * value
+  | ValueDefinitionContradiction of symbol * value_def * value_def
   | ProjectionContradiction of symbol * symbol * ident
   | MatchContradiction of symbol * symbol * pattern
 ;;
@@ -32,12 +33,6 @@ end;;
 
 module Symbol_to_symbol_and_ident_multimap =
   Jhupllib.Multimap.Make(Symbol)(Symbol_and_ident)
-;;
-
-type symbol_and_pattern = (symbol * pattern)
-;;
-
-type binop = (symbol * binary_operator * symbol)
 ;;
 
 type t =
@@ -59,13 +54,10 @@ type t =
         map. *)
     value_constraints_by_symbol : value Symbol_map.t;
 
-    (** An index of all input constraints by symbol.  As all inputs clause
-        bodies are identical, this is a set. *)
-    input_constraints_by_symbol : Symbol_set.t;
-
-    (** An index of all binary operator constraints by symbol.  As a symbol can
-        only assign one binary operator, this is a map. *)
-    binop_constraints_by_symbol : binop Symbol_map.t;
+    (** An index of all value definition constraints by symbol, in which a "value
+        definition" is the clause that assigns a value to a symbol.  Since each
+        symbol is alphatized and maps exactly to one clause, this is a map. *)
+    value_def_constraints_by_symbol : value_def Symbol_map.t;
 
     (** An index of all record projection constraints over the record symbol.
         As a given record symbol may be projected many times (and the results
@@ -74,18 +66,9 @@ type t =
         is the key of the map. *)
     projection_constraints_by_record_symbol : Symbol_to_symbol_and_ident_multimap.t;
 
-    (** An index of all match constraints by the symbol being bound (as opposed
-        to the variable being matched upon).  Since each variable can only be
-        bound to a unique pattern matching clause, this is a map. *)
-    match_constraints_by_symbol : symbol_and_pattern Symbol_map.t;
-
     (** An index of all symbol type constraints.  Because each symbol must have
         exactly one type, this is a map. *)
     type_constraints_by_symbol : symbol_type Symbol_map.t;
-
-    (** An index of all abort constraints by symbol.  Because a symbol can only
-        identify a single abort clause, this is a set. *)
-    abort_constraints_by_symbol : Symbol_set.t;
 
     (** The unique stack constraint which may appear in this solver.  Only one
         stack constraint may appear in any particular solver because all stack
@@ -102,16 +85,21 @@ let empty =
   { constraints = Constraint.Set.empty;
     alias_constraints_by_symbol = Symbol_map.empty;
     value_constraints_by_symbol = Symbol_map.empty;
-    input_constraints_by_symbol = Symbol_set.empty;
-    binop_constraints_by_symbol = Symbol_map.empty;
+    value_def_constraints_by_symbol = Symbol_map.empty;
     projection_constraints_by_record_symbol =
       Symbol_to_symbol_and_ident_multimap.empty;
-    match_constraints_by_symbol = Symbol_map.empty;
     type_constraints_by_symbol = Symbol_map.empty;
-    abort_constraints_by_symbol = Symbol_set.empty;
     stack_constraint = None;
   }
 ;;
+
+(* **** Output functions **** *)
+
+let pp formatter solver =
+  Constraint.Set.pp formatter solver.constraints
+;;
+
+let show solver = Pp_utils.pp_to_string pp solver;;
 
 (* **** Helper functions **** *)
 
@@ -133,17 +121,20 @@ let _binop_types (op : binary_operator)
   | Binary_operator_xor -> (BoolSymbol, BoolSymbol, BoolSymbol)
 ;;
 
-let rec _construct_alias_chain solver symbol =
+let rec _construct_alias_chain solver symbol : ident list =
+  let Symbol (x, _) = symbol in
   let alias_opt =
     Symbol_map.Exceptionless.find symbol solver.alias_constraints_by_symbol
   in
   match alias_opt with
-  | Some aliased_symb -> symbol :: (_construct_alias_chain solver aliased_symb)
-  | None -> [symbol]
-;;
-
-let _alias_symbols_to_idents alias_chain =
-  List.map (fun (Symbol (x, _)) -> x) alias_chain
+  | Some symbol' ->
+    (* We want the alias chain to only record chains of distinct symbols *)
+    let Symbol (x', _) = symbol' in
+    if not @@ equal_ident x x' then
+      x :: _construct_alias_chain solver symbol'
+    else
+      _construct_alias_chain solver symbol'
+  | None -> [x]
 ;;
 
 let _get_symbol_type solver symbol : symbol_type option =
@@ -187,42 +178,11 @@ let _get_type solver symbol : type_sig =
     Rec_type rec_lbls
 ;;
 
-let _get_value_source solver symbol : value_source option =
-  let value_opt =
-    Symbol_map.Exceptionless.find symbol solver.value_constraints_by_symbol
-  in
-  let input_opt =
-    Symbol_set.Exceptionless.find symbol solver.input_constraints_by_symbol
-  in
-  let binop_opt =
-    Symbol_map.Exceptionless.find symbol solver.binop_constraints_by_symbol
-  in
-  let match_opt =
-    Symbol_map.Exceptionless.find symbol solver.match_constraints_by_symbol
-  in
-  let abort_opt =
-    Symbol_set.Exceptionless.find symbol solver.abort_constraints_by_symbol
-  in
-  match (value_opt, input_opt, binop_opt, match_opt, abort_opt) with
-  | (Some value, None, None, None, None) ->
-      Some (Constraint.Value value)
-  | (None, Some _, None, None, None) ->
-      Some (Constraint.Input)
-  | (None, None, Some (s1, op, s2), None, None) ->
-      Some (Constraint.Binop (s1, op, s2))
-  | (_, None, None, Some (s, p), None) ->
-      (* Match constraints produce an additional value constraint*)
-      Some (Constraint.Match (s, p))
-  | (None, None, None, None, Some _) ->
-      Some (Constraint.Abort)
-  | (None, None, None, None, None) ->
-      None
-  | _ ->
-    raise @@ Utils.Invariant_failure
-      (Printf.sprintf "%s has multiple value definitions" (show_symbol symbol))
+let _get_value_def solver symbol : value_def option =
+  Symbol_map.Exceptionless.find symbol solver.value_def_constraints_by_symbol
 ;;
 
-let _symbolic_to_concrete_value (val_src : value_source) : clause_body =
+let _symbolic_to_concrete_value (val_src : value_def) : clause_body =
   match val_src with
   | Constraint.Value v ->
     begin
@@ -253,6 +213,15 @@ let _symbolic_to_concrete_value (val_src : value_source) : clause_body =
 
 (* **** Constraint set operations **** *)
 
+let _check_value_def_constraints solver x vdef : unit =
+  let vdef_map = solver.value_def_constraints_by_symbol in
+  match Symbol_map.Exceptionless.find x vdef_map with
+  | None -> ();
+  | Some vdef' ->
+    if not (equal_value_def vdef vdef') then
+      raise @@ Contradiction(ValueDefinitionContradiction(x, vdef, vdef'))
+;;
+
 let rec _add_constraints_and_close
     (constraints : Constraint.Set.t) (solver : t)
   : t =
@@ -263,7 +232,7 @@ let rec _add_constraints_and_close
     else
       let new_solver : t =
         match c with
-        | Constraint_value(x,v) ->
+        | Constraint_value(x, v) ->
           { solver with
             constraints = Constraint.Set.add c solver.constraints;
             value_constraints_by_symbol =
@@ -279,39 +248,58 @@ let rec _add_constraints_and_close
                 Symbol_map.add x v solver.value_constraints_by_symbol
               end;
           }
+        | Constraint_value_clause(x, v) ->
+          { solver with
+            constraints = Constraint.Set.add c solver.constraints;
+            value_def_constraints_by_symbol =
+              begin
+                let vdef = Constraint.Value v in
+                _check_value_def_constraints solver x vdef;
+                Symbol_map.add x vdef solver.value_def_constraints_by_symbol;
+              end
+            }
         | Constraint_input(x) ->
           { solver with
             constraints = Constraint.Set.add c solver.constraints;
-            input_constraints_by_symbol =
-              Symbol_set.add x solver.input_constraints_by_symbol
+            value_def_constraints_by_symbol =
+              begin
+                let vdef = Constraint.Input in
+                _check_value_def_constraints solver x vdef;
+                Symbol_map.add x vdef solver.value_def_constraints_by_symbol;
+              end
           }
-        | Constraint_alias(x1,x2) ->
+        | Constraint_alias(x1, x2) ->
           { solver with
             constraints = Constraint.Set.add c solver.constraints;
             alias_constraints_by_symbol =
-              (* Symbol_to_symbol_multimap.add x1 x2
-                solver.alias_constraints_by_symbol *)
               Symbol_map.add x1 x2 solver.alias_constraints_by_symbol
           }
         | Constraint_binop (x1, x2, op, x3) ->
           { solver with
             constraints = Constraint.Set.add c solver.constraints;
-            binop_constraints_by_symbol =
-              Symbol_map.add x1 (x2, op, x3)
-                solver.binop_constraints_by_symbol
+            value_def_constraints_by_symbol =
+              begin
+                let vdef = Constraint.Binop (x2, op, x3) in
+                _check_value_def_constraints solver x1 vdef;
+                Symbol_map.add x1 vdef solver.value_def_constraints_by_symbol;
+              end
           }
-        | Constraint_projection(x1,x2,lbl) ->
+        | Constraint_projection(x1, x2, lbl) ->
           { solver with
             constraints = Constraint.Set.add c solver.constraints;
             projection_constraints_by_record_symbol =
               Symbol_to_symbol_and_ident_multimap.add x2 (x1,lbl)
                 solver.projection_constraints_by_record_symbol
           }
-        | Constraint_match(x1,x2,p) ->
+        | Constraint_match(x1, x2, p) ->
           { solver with
             constraints = Constraint.Set.add c solver.constraints;
-            match_constraints_by_symbol =
-              Symbol_map.add x1 (x2, p) solver.match_constraints_by_symbol
+            value_def_constraints_by_symbol =
+              begin
+                let vdef = Constraint.Match (x2, p) in
+                _check_value_def_constraints solver x1 vdef;
+                Symbol_map.add x1 vdef solver.value_def_constraints_by_symbol;
+              end
           }
         | Constraint_type(x,t) ->
           { solver with
@@ -345,12 +333,16 @@ let rec _add_constraints_and_close
             constraints = Constraint.Set.add c solver.constraints;
             stack_constraint = Some s;
           }
-        | Constraint_abort ab ->
+        | Constraint_abort x ->
           begin
             { solver with
               constraints = Constraint.Set.add c solver.constraints;
-              abort_constraints_by_symbol =
-                Symbol_set.add ab solver.abort_constraints_by_symbol
+              value_def_constraints_by_symbol =
+                begin
+                  let vdef = Constraint.Abort in
+                  _check_value_def_constraints solver x vdef;
+                  Symbol_map.add x vdef solver.value_def_constraints_by_symbol;
+                end
             }
           end;
       in
@@ -390,39 +382,38 @@ let rec _add_constraints_and_close
               in
               Enum.singleton (Constraint_type(x,t))
             in
-            Constraint.Set.of_enum @@
-            (* Enum.append transitivity_constraints @@ *)
-            Enum.append projection_constraints type_constraints
+            Constraint.Set.of_enum
+              @@ Enum.append projection_constraints type_constraints
           end
+        | Constraint_value_clause(x, v) ->
+          Constraint.Set.singleton @@ Constraint_value(x, v)
         | Constraint_input(x) ->
           Constraint.Set.singleton @@ Constraint_type(x, IntSymbol)
         | Constraint_alias(x, x') ->
           begin
             let value_constraints =
-              match _get_value_source solver x' with
-              | Some (Constraint.Value v) ->
-                Enum.singleton (Constraint_value (x, v))
-              | Some (Constraint.Input) ->
-                Enum.singleton (Constraint_input x)
-              | Some (Constraint.Binop (x1, op, x2)) ->
-                Enum.singleton (Constraint_binop (x, x1, op, x2))
-              | Some (Constraint.Match (x'', p)) ->
-                Enum.singleton (Constraint_match (x, x'', p))
-              | Some (Constraint.Abort) ->
-                Enum.singleton (Constraint_abort (x))
-              | None ->
-                Enum.empty ()
-            in
-            let type_constraints =
               match Symbol_map.Exceptionless.find x'
-                      solver.type_constraints_by_symbol with
-              | Some t -> Enum.singleton(Constraint_type(x,t))
+                      solver.value_constraints_by_symbol with
               | None -> Enum.empty ()
+              | Some v -> Enum.singleton @@ Constraint_value(x, v)
             in
-            let constraint_enum =
-              Enum.append value_constraints type_constraints
+            let value_def_constraints =
+              match Symbol_map.Exceptionless.find x'
+                      solver.value_def_constraints_by_symbol with
+              | None -> Enum.empty ()
+              | Some (Constraint.Value v) ->
+                Enum.singleton @@ Constraint_value_clause (x, v)
+              | Some (Constraint.Input) ->
+                Enum.singleton @@ Constraint_input x
+              | Some (Constraint.Binop (s1, op, s2)) ->
+                Enum.singleton @@ Constraint_binop (x, s1, op, s2)
+              | Some (Constraint.Match (s, p)) ->
+                Enum.singleton @@ Constraint_match (x, s, p)
+              | Some (Constraint.Abort) ->
+                Enum.singleton @@ Constraint_abort x
             in
-            Constraint.Set.of_enum constraint_enum
+            Constraint.Set.of_enum
+              @@ Enum.append value_constraints value_def_constraints
           end
         | Constraint_binop(x, x', op, x'') ->
           begin
@@ -642,6 +633,8 @@ let z3_constraint_of_constraint
           let not_zero = Z3.Boolean.mk_not ctx is_zero in
           Some([binary_c; not_zero]))
       | _ -> Some ([binary_c]) )
+  | Constraint_value_clause _ ->
+    None
   | Constraint_input _ ->
     None
   | Constraint_match _ ->
@@ -761,22 +754,13 @@ let add_or errs_1 errs_2 : Error.Odefa_error.t list =
 let rec find_errors solver symbol =
   let open Error in
   (* Get values *)
-  let value_opt =
-    Symbol_map.Exceptionless.find symbol solver.value_constraints_by_symbol
-  in
-  let binop_opt =
-    Symbol_map.Exceptionless.find symbol solver.binop_constraints_by_symbol
-  in
-  let match_opt =
-    Symbol_map.Exceptionless.find symbol solver.match_constraints_by_symbol
-  in
+  let value_def_opt = _get_value_def solver symbol in
   (* Match on values *)
-  match (binop_opt, match_opt) with
-  | (Some b, None) ->
+  match value_def_opt with
+  | Some (Constraint.Binop (s1, op, s2)) ->
     begin
       lazy_logger `trace (fun () ->
         Printf.sprintf "Binary operation on symbol %s" (show_symbol symbol));
-      let (s1, op, s2) = b in
       match op with
       | Binary_operator_and ->
         let et1 = find_errors solver s1 in
@@ -797,21 +781,17 @@ let rec find_errors solver symbol =
       | Binary_operator_less_than_or_equal_to
       | Binary_operator_equal_to
       | Binary_operator_not_equal_to ->
+        let l_aliases = _construct_alias_chain solver s1 in
+        let r_aliases = _construct_alias_chain solver s2 in
         let l_val =
-          match _get_value_source solver s1 with
+          match _get_value_def solver s1 with
             | Some vs -> _symbolic_to_concrete_value vs
             | None -> raise Not_found
         in
         let r_val =
-            match _get_value_source solver s2 with
+            match _get_value_def solver s2 with
             | Some vs -> _symbolic_to_concrete_value vs
             | None -> raise Not_found
-        in
-        let l_aliases =
-          _alias_symbols_to_idents @@ _construct_alias_chain solver s1
-        in
-        let r_aliases =
-          _alias_symbols_to_idents @@ _construct_alias_chain solver s2
         in
         let l_operand =
           if List.is_empty l_aliases then l_val else
@@ -833,15 +813,16 @@ let rec find_errors solver symbol =
           Printf.sprintf "Binop error:\n%s" (Odefa_error.show binop_error));
         List.singleton binop_error
     end
-  | (None, Some m) ->
+  | Some (Constraint.Match (match_symb, pattern)) ->
     begin
       lazy_logger `trace (fun () ->
         Printf.sprintf "Pattern match on symbol %s" (show_symbol symbol));
-      let (match_symb, pattern) = m in
-      let alias_chain =
-        _alias_symbols_to_idents @@ _construct_alias_chain solver match_symb in
+      let match_aliases =
+        _construct_alias_chain solver match_symb
+      in
       let match_value =
-        match value_opt with
+        match Symbol_map.Exceptionless.find symbol
+            solver.value_constraints_by_symbol with
         | Some v -> v
         | None ->
           raise @@ Utils.Invariant_failure
@@ -860,7 +841,7 @@ let rec find_errors solver symbol =
         in
         let actual_type = _get_type solver match_symb in
         let match_val_source =
-          match _get_value_source solver match_symb with
+          match _get_value_def solver match_symb with
           | Some vs -> _symbolic_to_concrete_value vs
           | None -> raise @@ Utils.Invariant_failure
             (Printf.sprintf "%s has no value in constraint set!"
@@ -868,7 +849,7 @@ let rec find_errors solver symbol =
         in
         if not (Ast.Type_signature.subtype actual_type expected_type) then begin
           let match_error = Odefa_error.Error_match {
-            err_match_aliases = alias_chain;
+            err_match_aliases = match_aliases;
             err_match_val = match_val_source;
             err_match_expected = expected_type;
             err_match_actual = actual_type;
@@ -886,16 +867,12 @@ let rec find_errors solver symbol =
         raise @@ Utils.Invariant_failure
           (Printf.sprintf "%s is not a boolean value" (show_symbol symbol))
     end
-  | (None, None) ->
+  | Some (Constraint.Value v) ->
     begin
-      match value_opt with
-      | Some (Bool b) ->
-        if b then
-          []
-        else
-          let alias_chain =
-            _alias_symbols_to_idents @@ _construct_alias_chain solver symbol;
-          in
+      match v with
+      | Bool b ->
+        if b then [] else
+          let alias_chain = _construct_alias_chain solver symbol in
           let value_error = Odefa_error.Error_value {
             err_value_aliases = alias_chain;
             err_value_val = Value_body (Value_bool b);
@@ -906,12 +883,20 @@ let rec find_errors solver symbol =
           List.singleton value_error
       | _ ->
         raise @@ Utils.Invariant_failure
-          (Printf.sprintf "Error tree on %s has non-boolean values"
+          (Printf.sprintf "Error list on %s has non-boolean values"
             (show_symbol symbol))
     end
-  | (_, _) ->
+  | Some (Constraint.Input) ->
     raise @@ Utils.Invariant_failure
-      (Printf.sprintf "Multiple definitions for %s" (show_symbol symbol))
+      (Printf.sprintf "Error on %s has non-boolean value"
+            (show_symbol symbol))
+  | Some (Constraint.Abort) ->
+    raise @@ Utils.Invariant_failure
+      (Printf.sprintf "Error on %s has abort value"
+        (show_symbol symbol))
+  | None ->
+    raise @@ Utils.Invariant_failure
+      (Printf.sprintf "%s has no value definition" (show_symbol symbol))
 ;;
 
 (* **** Other functions **** *)
@@ -921,9 +906,3 @@ let enum solver = Constraint.Set.enum solver.constraints;;
 let of_enum constraints = Enum.fold (flip add) empty constraints;;
 
 let iter fn solver = Constraint.Set.iter fn solver.constraints;;
-
-let pp formatter solver =
-  Constraint.Set.pp formatter solver.constraints
-;;
-
-let show solver = Pp_utils.pp_to_string pp solver;;
