@@ -228,6 +228,14 @@ struct
           (Constraint.show_value v2)
           (Solver.show log1.log_solver)
           (Solver.show log2.log_solver)
+    | Solver.ValueDefinitionContradiction(symbol, vdef1, vdef2) ->
+        Printf.sprintf
+          "Immediate contradiction at symbol %s wiht value definitions %s and %s while merging two formula sets.\nSet 1:\n%sSet 2:\n%s\n"
+          (show_symbol symbol)
+          (Constraint.show_value_def vdef1)
+          (Constraint.show_value_def vdef2)
+          (Solver.show log1.log_solver)
+          (Solver.show log2.log_solver)
     | Solver.ProjectionContradiction(s1, s2, lbl) ->
         Printf.sprintf
           "Immediate contradiction at symbol %s by projection of label %s from symbol %s while merging two formula sets.\nSet 1:\n%s\nSet 2:\n%s\n"

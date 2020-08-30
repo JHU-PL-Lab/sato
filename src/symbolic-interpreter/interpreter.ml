@@ -511,7 +511,7 @@ struct
           | Value_bool b -> return @@ Constraint.Bool b
         in
         let%bind () = record_constraint @@
-          Constraint.Constraint_value(lookup_symbol, constraint_value)
+          Constraint.Constraint_value_clause(lookup_symbol, constraint_value)
         in
         (* If we're at the top of the program, we should record a stack
             constraint. *)

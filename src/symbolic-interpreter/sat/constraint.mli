@@ -30,7 +30,7 @@ type value =
 [@@deriving eq, ord, show, to_yojson]
 ;;
 
-type value_source =
+type value_def =
   | Value of value
   | Input
   | Binop of symbol * binary_operator * symbol
@@ -43,6 +43,7 @@ type value_source =
     interpreter and/or used within constraint checking. *)
 type t =
   | Constraint_value of symbol * value (* x = v *)
+  | Constraint_value_clause of symbol * value (* x = v *)
   | Constraint_input of symbol (* x = input *)
   | Constraint_alias of symbol * symbol (* x = x *)
   | Constraint_binop of symbol * symbol * binary_operator * symbol (* x = x + x *)
