@@ -6,8 +6,6 @@ open Odefa_ddpa;;
 open Ast;;
 open Ast_pp;;
 open Ddpa_abstract_ast;;
-open Ddpa_graph;;
-open Ddpa_utils;;
 open Interpreter_types;;
 open Logger_utils;;
 
@@ -21,7 +19,7 @@ type exploration_policy =
 
 (** This type describes the information which must be in context during lookup. *)
 type lookup_environment = {
-  le_cfg : ddpa_graph;
+  le_cfg : Ddpa_graph.ddpa_graph;
   (** The DDPA CFG to use during lookup. *)
 
   le_clause_mapping : clause Ident_map.t;
@@ -125,7 +123,7 @@ and enum_all_aborts_in_value value : (ident * var list) Enum.t =
    environment.
 *)
 let prepare_environment
-    (cfg : ddpa_graph)
+    (cfg : Ddpa_graph.ddpa_graph)
     (e : expr)
   : lookup_environment =
   let (function_parameter_mapping, function_return_mapping) =
@@ -345,7 +343,7 @@ exception Invalid_query of string;;
 module type Interpreter =
 sig
   type evaluation;;
-  val start : ddpa_graph -> expr -> ident -> evaluation;;
+  val start : Ddpa_graph.ddpa_graph -> expr -> ident -> evaluation;;
   val step : evaluation -> evaluation_result list * evaluation option;;
 end;;
 
@@ -437,7 +435,7 @@ struct
       loop tl (Ident_map.add k v map)
   ;;
 
-  (* Add a stack constraint if the lookup has reached the top fo the program *)
+  (* Add a stack constraint if the lookup has reached the top of the program *)
   let record_stack_constraint
       (env : lookup_environment)
       (lookup_var : Ident.t)
@@ -806,14 +804,14 @@ struct
         (* Report Conditional Top rule lookup *)
         trace_rule "Conditional Top" lookup_var;
         (* Look up the subject symbol. *)
-        let%bind subject_symbol_list =
+        let%bind pred_symbol =
           recurse [x1] (Unannotated_clause c) relstack
         in
-        let%orzero [subject_symbol] = subject_symbol_list in
+        let%orzero [pred_symbol] = pred_symbol in
         (* Require that it has the same value as the wiring node. *)
         let%orzero Abs_value_bool b = av in
         let%bind () = record_constraint @@
-          Constraint.Constraint_value(subject_symbol, Constraint.Bool b)
+          Constraint.Constraint_value(pred_symbol, Constraint.Bool b)
         in
         (* Proceed by moving through the wiring node. *)
         let%bind symbol_list = recurse lookup_stack acl1 relstack in
@@ -834,18 +832,17 @@ struct
         [%guard equal_ident x lookup_var];
         (* Ensure that we're considering the true branch *)
         let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, e1, _)) = c in
-        let Abs_var e1ret = retv e1 in
+        let Abs_var e1ret = Ddpa_utils.retv e1 in
         [%guard equal_ident x' e1ret];
         (* Report Conditional Bottom - True rule lookup *)
         trace_rule "Conditional Bottom - True" lookup_var;
-        (* Look up the subject symbol. *)
-        let%bind subject_symbol_list =
+        (* Look up the predicate and ensure it is true *)
+        let%bind pred_symbol_list =
           recurse [x1] (Unannotated_clause c) relstack
         in
-        let%orzero [subject_symbol] = subject_symbol_list in
-        (* Require that its value matches this conditional branch. *)
+        let%orzero [pred_symbol] = pred_symbol_list in
         let%bind () = record_constraint @@
-          Constraint.Constraint_value (subject_symbol, Constraint.Bool true)
+          Constraint.Constraint_value (pred_symbol, Constraint.Bool true)
         in
         (* Proceed to look up the value returned by this branch. *)
         let%bind symbol_list = recurse (x' :: lookup_stack') acl1 relstack in
@@ -861,7 +858,7 @@ struct
         return (lookup_symbol :: symbol_list')
       end;
 
-      (* ### Conditional Bottom - False rule ### *)
+      (* ### Conditional Bottom - False (Non-Abort) rule ### *)
       begin
         (* Grab variable from lookup stack *)
         let%orzero lookup_var :: lookup_stack' = lookup_stack in
@@ -869,20 +866,22 @@ struct
             variable. *)
         let%orzero Binding_exit_clause (Abs_var x, Abs_var x', c) = acl1 in
         [%guard equal_ident x lookup_var];
-        (* Report Conditional Bottom - False rule lookup *)
-        trace_rule "Conditional Bottom - False" lookup_var;
         (* Ensure that we're considering the false branch *)
         let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, _, e2)) = c in
-        let Abs_var e2ret = retv e2 in
+        let Abs_clause (Abs_var e2ret, e2cls) = Ddpa_utils.retcls e2 in
         [%guard equal_ident x' e2ret];
-        (* Look up the subject symbol. *)
-        let%bind subject_symbol_list =
+        let _ = e2cls in
+        (* Ensure we're not considering abort clauses *)
+        [%guard (match e2cls with Abs_abort_body _ -> false | _ -> true)];
+        (* Report Conditional Bottom - False (Non-abort) rule lookup *)
+        trace_rule "Conditional Bottom - False (Non-Abort)" lookup_var;
+        (* Look up the predicate and ensure it is false *)
+        let%bind pred_symbol_list =
           recurse [x1] (Unannotated_clause c) relstack
         in
-        let%orzero [subject_symbol] = subject_symbol_list in
-        (* Require that its value matches this conditional branch. *)
+        let%orzero [pred_symbol] = pred_symbol_list in
         let%bind () = record_constraint @@
-          Constraint.Constraint_value(subject_symbol, Constraint.Bool false)
+          Constraint.Constraint_value(pred_symbol, Constraint.Bool false)
         in
         (* Proceed to look up the value returned by this branch. *)
         let%bind symbol_list = recurse (x' :: lookup_stack') acl1 relstack in
@@ -890,12 +889,52 @@ struct
         (* Alias the call site with the return symbol *)
         let lookup_symbol = Symbol (x, relstack) in
         lazy_logger `trace (fun () ->
-          Printf.sprintf "Conditional Bottom - False rule returns %s = %s"
+          Printf.sprintf "Conditional Bottom - False (Non-Abort) rule returns %s = %s"
             (show_symbol lookup_symbol) (show_symbol ret_symbol));
         let%bind () = record_constraint @@
           Constraint.Constraint_alias (lookup_symbol, ret_symbol)
         in
         return (lookup_symbol :: symbol_list')
+      end;
+
+      (* ### Conditional Bottom - False (Abort) rule ### *)
+      begin
+        (* Grab variable from lookup stack, which must be a singleton *)
+        let%orzero [lookup_var] = lookup_stack in
+        (* This must be a binding exit clause which defines our lookup
+            variable. *)
+        let%orzero Binding_exit_clause (Abs_var x, Abs_var x', c) = acl1 in
+        [%guard equal_ident x lookup_var];
+        (* Ensure that we're considering the false branch *)
+        let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, _, e2)) = c in
+        let Abs_clause (Abs_var e2ret, e2cls) = Ddpa_utils.retcls e2 in
+        [%guard equal_ident x' e2ret];
+        (* Ensure we're only considering abort clauses *)
+        let%orzero Abs_abort_body _ = e2cls in        
+        (* Report Conditional Bottom - False (Non-abort) rule lookup *)
+        trace_rule "Conditional Bottom - False (Abort)" lookup_var;
+        (* Look up the predicate and ensure it is false *)
+        let%bind pred_symbol_list =
+          recurse [x1] (Unannotated_clause c) relstack
+        in
+        let%orzero [pred_symbol] = pred_symbol_list in
+        let%bind () = record_constraint @@
+          Constraint.Constraint_value(pred_symbol, Constraint.Bool false)
+        in
+        (* Proceed to look up the first value in the program. *)
+        let%bind symbol_list = recurse [env.le_first_var] acl1 relstack in
+        let%orzero [_] = symbol_list in
+        (* Add the abort to the log *)
+        let abort_symbol = Symbol (e2ret, relstack) in
+        let abort_value = Ident_map.find e2ret env.le_abort_mapping in
+        let%bind () = record_abort_point abort_symbol abort_value in
+        let%bind () = record_constraint @@ Constraint_abort(abort_symbol) in
+        (* Alias the call site with the return symbol *)
+        let lookup_symbol = Symbol (x, relstack) in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Conditional Bottom - False (Abort) rule returns %s"
+            (show_symbol lookup_symbol));
+        return [lookup_symbol]
       end;
 
       (* Record Projection *)
@@ -931,10 +970,12 @@ struct
         return (lookup_symbol :: symbol_list')
       end;
 
+      (*
       (* Abort (not a written rule) *)
       begin
         (* Obtain lookup stack (the lookup var itself becomes unimportant) *)
         let%orzero _ :: lookup_stack' = lookup_stack in
+        [%guard List.is_empty lookup_stack'];
         (* This must be an abort clause *)
         let%orzero Unannotated_clause(
             Abs_clause (Abs_var x, Abs_abort_body _)) = acl1
@@ -958,6 +999,7 @@ struct
         (* TODO: Replace with mathematically sound return value *)
         return (List.make (List.length symbol_list) abort_symbol)
       end;
+      *)
 
       (* Start-of-block and end-of-block handling (not actually a rule) *)
       (
@@ -988,7 +1030,7 @@ struct
       (relstack : Relative_stack.t)
     : (symbol list) M.m =
     let open M in
-    let%bind acl1 = pick @@ preds acl0 env.le_cfg in
+    let%bind acl1 = pick @@ Ddpa_graph.preds acl0 env.le_cfg in
     let%bind () = pause () in
     _trace_log_lookup lookup_stack relstack acl0 acl1;
     let rule_list = rule_computations env lookup_stack acl0 acl1 relstack in
@@ -999,7 +1041,7 @@ struct
   type evaluation = Evaluation of unit M.evaluation;;
 
   let start
-      (cfg : ddpa_graph)
+      (cfg : Ddpa_graph.ddpa_graph)
       (e : expr)
       (program_point : ident)
     : evaluation =
@@ -1009,7 +1051,8 @@ struct
     let acl =
       try
         Unannotated_clause (
-          lift_clause @@ Ident_map.find program_point env.le_clause_mapping)
+          Ddpa_graph.lift_clause
+            @@ Ident_map.find program_point env.le_clause_mapping)
       with
       | Not_found ->
         raise @@ Invalid_query (
@@ -1102,7 +1145,7 @@ module LeastRelativeStackRepetitionInterpreter =
 
 let start
     ?exploration_policy:(exploration_policy=Explore_breadth_first)
-    (cfg : ddpa_graph) (e : expr) (x : ident)
+    (cfg : Ddpa_graph.ddpa_graph) (e : expr) (x : ident)
   : evaluation =
   match exploration_policy with
   | Explore_breadth_first ->

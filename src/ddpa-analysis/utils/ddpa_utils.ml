@@ -11,11 +11,17 @@ exception Non_record_projection of string;;
 
 let rv body =
   match body with
-  | [] -> raise @@ Utils.Invariant_failure "empty function body provided to rv"
+  | [] -> raise @@ Utils.Invariant_failure "empty fun/cond body provided to rv"
   | _ -> let Abs_clause(x,_) = List.last body in x
 ;;
 
 let retv (Abs_expr(body)) = rv body;;
+
+let retcls (Abs_expr(body)) =
+  match body with
+  | [] -> raise @@ Utils.Invariant_failure "empty fun/cond body provided to rv"
+  | _ -> List.last body
+;;
 
 let is_immediate acl =
   match acl with
