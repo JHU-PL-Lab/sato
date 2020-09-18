@@ -8,39 +8,41 @@ _"I am so embarrassed. My name's Asami. Let me make this up to you somehow. Uh..
 Install
 -------
 
-For Ubuntu install as follows.
-
+For MacOS, first install the requisite OCaml version: 4.09.0+flambda.
 ```
-sudo apt upgrade opam
+brew upgrade opam
 opam update
 opam switch create 4.09.0+flambda
 ```
 
+(For Linux, replace `brew` with `apt get`.)
 
 Run this to produce libraries needed
 ```
 # dune external-lib-deps --missing @@default
 ```
 
-Here are the libraries needed:
+Now we can install the dependencies for Sato.
 ```
 opam install shexp core batteries gmap jhupllib monadlib ocaml-monadic pds-reachability ppx_deriving ppx_deriving_yojson -y
-opam pin z3 4.8.1 -y
 ```
 
-For Z3:
+For Z3, we need to pin it to version 4.8.1 due to a bug with later versions; then we need to export the path Z3 is installed on:
 ```
+opam pin z3 4.8.1 -y
 export LD_LIBRARY_PATH=`opam config var z3:lib`
 ```
 
 Run
 ---
 
+To build Sato itself, we can run the `make sato` command; we can also run `make` in order to build Sato, DDSE, and the DDPA toploop, as well as a translator from Natodefa to Odefa.  The basic usage of Sato is as follows:
 ```
-make
-make test
-make benchmark
+./type_checker -linfo -t<variable> <filename>
 ```
+where `<filename>` refers to a `.odefa` or `.natodefa` file that Sato will typecheck, and `<variable>` is the variable that Sato begins symbolic lookup on.  For the full command list, run `./type_checker --help`.
+
+To run tests on Sato (as well as DDPA and DDSE), run the `make test` command.
 
 TODOs
 ---
