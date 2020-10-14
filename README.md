@@ -55,10 +55,19 @@ TODOs
 - [ ] Continue to write tests
   - [x] Tests that exercise alias passing to test revised rules
   - [ ] More list tests (fold, sort, etc.)
-- [ ] Write theory that maps errors in original code to aborts in instrumented code
-  - [ ] Ignore errors in dead odefa code by throwing out aborts/errors encountered after the first one
+- [x] Write theory that maps errors in original code to aborts in instrumented code
+  - [x] Ignore errors in dead odefa code by throwing out aborts/errors encountered after the first one
+- [ ] Fix bugs relating to DDPA
 - [ ] Write benchmarks
 - [ ] Write library of commonly used predicates/contracts (copy from Clojure predicates?)
+
+TODOs for theory refactor
+----
+- [ ] Change abort syntax
+  - [ ] No enocding with lists: only one instrumentation conditional/predicate per abort
+  - [ ] Accumulate abort constraints at Conditional Bottom, not Abort
+  - [ ] Change pattern match encoding
+  - [ ] Change `==` encoding (if needed)
 
 More TODOs
 ----
