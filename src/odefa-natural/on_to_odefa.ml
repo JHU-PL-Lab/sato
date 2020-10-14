@@ -603,54 +603,60 @@ and flatten_eq_binop
     (* e1 and e2 *)
     let%bind (e1_clist, e1_var) = flatten_expr e1 in
     let%bind (e2_clist, e2_var) = flatten_expr e2 in
-    (* Outer true path *)
+    (* Int matching: ml = x ~ int; mr = y ~ int; m1 = ml and mr *)
     let%bind m_bl_int = add_var "m_bl_int" in
     let%bind m_br_int = add_var "m_br_int" in
+    let m_clause_l_int = Ast.Clause (m_bl_int, Match_body (e1_var, Int_pattern)) in
+    let m_clause_r_int = Ast.Clause (m_br_int, Match_body (e2_var, Int_pattern)) in
     let%bind m_b_int = add_var "m_b_int" in
-    let%bind c_binop_int = add_var "c_binop_int" in
-    let m_clause_l = Ast.Clause (m_bl_int, Match_body (e1_var, Int_pattern)) in
-    let m_clause_r = Ast.Clause (m_br_int, Match_body (e2_var, Int_pattern)) in
-    let m_clause_body =
-      Ast.Binary_operation_body (m_bl_int, Binary_operator_and, m_br_int)
+    let m_clause_int =
+      Ast.Clause (m_b_int, Binary_operation_body (m_bl_int, Binary_operator_and, m_br_int))
     in
-    let m_clause = Ast.Clause (m_b_int, m_clause_body) in
-    let t_path_clause = 
-      Ast.Clause(c_binop_int, Binary_operation_body(e1_var, binop_int, e2_var))
-    in
-    (* Inner true path *)
+    let clist_int = [m_clause_l_int; m_clause_r_int; m_clause_int] in
+    (* Bool matching: ml = x ~ bool; mr = y ~ bool; m1 = ml and mr *)
     let%bind m_bl_bool = add_var "m_bl_bool" in
     let%bind m_br_bool = add_var "m_br_bool" in
     let%bind m_b_bool = add_var "m_b_bool" in
+    let m_clause_l_bool = Ast.Clause (m_bl_bool, Match_body (e1_var, Bool_pattern)) in
+    let m_clause_r_bool = Ast.Clause (m_br_bool, Match_body (e2_var, Bool_pattern)) in
+    let m_clause_bool =
+      Ast.Clause(m_b_bool, Binary_operation_body (m_bl_bool, Binary_operator_and, m_br_bool))
+    in
+    let clist_bool = [m_clause_l_bool; m_clause_r_bool; m_clause_bool] in
+    (* Instrumentation predicate: m = m1 or m2 *)
+    let%bind m_b = add_var "m_b" in
+    let m_clause_body =
+      Ast.Binary_operation_body (m_b_int, Binary_operator_or, m_b_bool)
+    in
+    let m_clause = Ast.Clause (m_b, m_clause_body) in
+    let clist_predicates = clist_int @ clist_bool @ [m_clause] in
+    (* Bool conditional: m2 ? ( x xnor y ) : ( abort ) *)
+    let%bind c_binop_bool' = add_var "c_binop_bool_inner" in
     let%bind c_binop_bool = add_var "c_binop_bool" in
-    let m_clause_l' = Ast.Clause (m_bl_bool, Match_body (e1_var, Bool_pattern)) in
-    let m_clause_r' = Ast.Clause (m_br_bool, Match_body (e2_var, Bool_pattern)) in
-    let m_clause_body' =
-      Ast.Binary_operation_body (m_bl_bool, Binary_operator_and, m_br_bool)
+    let%bind f_path_bool = add_abort_expr expr [c_binop_bool] in
+    let t_path_bool =
+      Ast.Expr [Clause (c_binop_bool', Binary_operation_body(e1_var, binop_bool, e2_var))]
     in
-    let m_clause' = Ast.Clause (m_b_bool, m_clause_body') in
-    let t_path_clause' =
-      Ast.Clause(c_binop_bool, Binary_operation_body(e1_var, binop_bool, e2_var))
+    let cond_bool =
+      Ast.Clause (c_binop_bool, Conditional_body (m_b_bool, t_path_bool, f_path_bool))
     in
-    (* Inner conditional *)
-    let%bind binop_int = add_var "binop" in
-    let%bind binop_bool = add_var "binop" in
-    let%bind f_path = add_abort_expr expr [binop_bool; binop_int] in
-    let%bind t_path' = return @@ Ast.Expr [t_path_clause'] in
-    let inner_cond =
-      Ast.Clause(binop_bool, Conditional_body(m_b_bool, t_path', f_path))
+    (* Int conditional: m1 ? ( x == y ) : ( [see above] ) *)
+    let%bind c_binop_int' = add_var "c_binop_int_inner" in
+    let%bind c_binop_int = add_var "c_binop_int" in
+    let f_path_int = Ast.Expr [cond_bool] in
+    let t_path_int =
+      Ast.Expr [Clause (c_binop_int', Binary_operation_body(e1_var, binop_int, e2_var))]
     in
-    let inner_cond_expr =
-      Ast.Expr [m_clause_l'; m_clause_r'; m_clause'; inner_cond]
+    let cond_int =
+      Ast.Clause (c_binop_int, Conditional_body (m_b_int, t_path_int, f_path_int))
     in
-    (* Outer conditional *)
-    let outer_cond =
-      Ast.Clause(binop_int,
-        Conditional_body(m_b_int, Expr [t_path_clause], inner_cond_expr))
-    in
-    let outer_cond_clist =
-      [m_clause_l; m_clause_r; m_clause; outer_cond]
-    in
-    return (e1_clist @ e2_clist @ outer_cond_clist, binop_int)
+    (* Conditional: m ? ( [see above] ) : ( abort ) *)
+    let%bind c_binop = add_var "binop" in
+    let%bind f_path = add_abort_expr expr [c_binop] in
+    let t_path = Ast.Expr [cond_int] in
+    let cond = Ast.Clause (c_binop, Conditional_body (m_b, t_path, f_path)) in
+    (* Putting it all together *)
+    return (e1_clist @ e2_clist @ clist_predicates @ [cond], c_binop)
 
 (** Flatten an entire expression (i.e. convert natodefa into odefa code) *)
 and flatten_expr
