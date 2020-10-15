@@ -12,7 +12,7 @@ open Ast_tools;;
 type illformedness =
   | Duplicate_variable_binding of var
   | Variable_not_in_scope of var * var
-  | Invalid_variable_in_abort of var * var
+  | Invalid_abort of var
   | Duplicate_record_labels of var * ident list
   [@@deriving eq, ord, show]
 ;;
@@ -60,21 +60,17 @@ let check_wellformed_expr expression : unit =
       in
       raise @@ Illformedness_found illformednesses
   end;
-  (*
   begin
-    let conditional_scope_violations = cond_scope_violations expression in
-    if not (List.is_empty conditional_scope_violations) then
+    let expression_abort_clause_violations = abort_clause_violations expression in
+    if not (List.is_empty expression_abort_clause_violations) then
       let illformedness =
-        conditional_scope_violations
+        expression_abort_clause_violations
         |> List.enum
-        |> Enum.map
-          (fun (abort_prog_point, bad_var) ->
-            Invalid_variable_in_abort (abort_prog_point, bad_var))
+        |> Enum.map (fun (program_point) -> Invalid_abort program_point)
         |> List.of_enum
       in
       raise @@ Illformedness_found illformedness
   end;
-  *)
   begin
     let records_with_duplicate_labels = record_label_duplications expression in
     if not (List.is_empty records_with_duplicate_labels) then
