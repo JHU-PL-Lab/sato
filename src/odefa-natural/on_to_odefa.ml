@@ -640,22 +640,22 @@ and flatten_eq_binop
     let m_clause = Ast.Clause (m_b, m_clause_body) in
     let clist_predicates = clist_int @ clist_bool @ [m_clause] in
     (* Inner conditionals *)
-    let create_conditional pat_name t_operator f_expr =
+    let create_conditional pred pat_name t_operator f_expr =
       let%bind c_binop' = add_var ("eq_binop_" ^ pat_name ^ "_inner") in
       let%bind c_binop = add_var ("eq_binop_" ^ pat_name) in
       let t_expr =
         Ast.Expr [Clause (c_binop', Binary_operation_body (e1_var, t_operator, e2_var))]
       in
-      return @@ Ast.Clause (c_binop, Conditional_body (m_bool, t_expr, f_expr))
+      return @@ Ast.Clause (c_binop, Conditional_body (pred, t_expr, f_expr))
     in
     (* Bool conditional: m2 ? ( x xnor y ) : ( abort ) *)
     let%bind inner_abort = add_abort_expr expr [] in
     let%bind cond_bool =
-      create_conditional "bool" binop_bool inner_abort
+      create_conditional m_bool "bool" binop_bool inner_abort
     in
     (* Int conditional: m1 ? ( x == y ) : ( [see above] ) *)
     let%bind cond_int =
-      create_conditional "int" binop_int (Ast.Expr [cond_bool])
+      create_conditional m_int "int" binop_int (Ast.Expr [cond_bool])
     in
     (* Conditional: m ? ( [see above] ) : ( abort ) *)
     let%bind c_binop = add_var "eq_binop" in
