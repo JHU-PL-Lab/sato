@@ -68,6 +68,7 @@ TODOs for theory refactor
   - [ ] Accumulate abort constraints at Conditional Bottom, not Abort
   - [ ] Change pattern match encoding
   - [x] Change `==` encoding (if needed)
+- Add `nonzero` pattern
 
 More TODOs
 ----
