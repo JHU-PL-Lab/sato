@@ -48,17 +48,17 @@ end;;
 (* **** Abort info **** *)
 
 type abort_value = {
-  (** The sequence of conditional clauses that, if the false path is always
-      taken, lead to this abort point. *)
-  abort_conditional_clauses : clause list;
+  (** The identifier of the conditional clause the abort clause
+      is nested in. *)
+  abort_conditional_ident : ident;
 
-  (** The identifier variables of the conditional clauses, in the order that
-      the clauses are nested. *)
-  abort_conditional_idents : ident list;
+  (** The predicate of the conditional clauses the abort clause
+      is nested in. *)
+  abort_predicate_ident : ident;
 
-  (** The predicates of the conditional clauses, in the order that the clauses
-      are nested. *)
-  abort_predicate_idents : ident list;
+  (** The branch of the conditional clause that the abort clause
+      is nested in. *)
+  abort_conditional_branch : bool;
 }
 [@@ deriving eq, ord, show]
 ;;

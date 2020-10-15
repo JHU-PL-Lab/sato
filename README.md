@@ -66,7 +66,7 @@ TODOs for theory refactor
 - [ ] Change abort syntax
   - [ ] No enocding with lists: only one instrumentation conditional/predicate per abort
   - [ ] Accumulate abort constraints at Conditional Bottom, not Abort
-  - [ ] Change pattern match encoding
+  - [x] Change pattern match encoding
   - [x] Change `==` encoding (if needed)
 - Add `nonzero` pattern
 

@@ -87,7 +87,7 @@ let use_occurrences expression =
         Var_set.singleton subject
       | Binary_operation_body (left_operand, _, right_operand) ->
         Var_set.of_list [left_operand; right_operand]
-      | Abort_body vlist -> Var_set.of_list vlist
+      | Abort_body -> Var_set.empty
   )
   |> List.fold_left Var_set.union Var_set.empty
 ;;
@@ -159,7 +159,7 @@ and check_scope_clause_body
   | Projection_body (Var(x,_), _) -> _bind_filter bound site_x [x]
   | Binary_operation_body (Var(x1,_), _, Var(x2,_)) ->
     _bind_filter bound site_x [x1;x2]
-  | Abort_body _ -> [] (* Variables in abort bodies are treated separately *)
+  | Abort_body -> []
 ;;
 
 (** Returns a list of pairs of variables. The pair represents a violation on the
@@ -176,7 +176,7 @@ let scope_violations expression =
 (* An abort clause's variable list is considered valid if the nesting
    conditionals' identifier variables are found in the list, in order
    of nesting. *)
-let abort_var_list_valid cond_list abort_list =
+(* let abort_var_list_valid cond_list abort_list =
   let rec v_list_eq c_list v_list =
     match c_list, v_list with
     | id1 :: tl1, id2 :: tl2 ->
@@ -232,7 +232,7 @@ and check_abort_vars_in_clause
 let cond_scope_violations expression =
   check_abort_vars_in_expr [] expression
   |> List.map (fun (i1,i2) -> (Var (i1,None)), Var (i2,None))
-;;
+;; *)
 
 (* Record label duplication check *)
 
@@ -346,7 +346,7 @@ and map_clause_body_vars (fn : Var.t -> Var.t) (b : clause_body)
     Projection_body(fn x, l)
   | Binary_operation_body (x1, op, x2) ->
     Binary_operation_body (fn x1, op, fn x2)
-  | Abort_body vlist -> Abort_body (List.map fn vlist)
+  | Abort_body -> Abort_body
 
 and map_value_vars (fn : Var.t -> Var.t) (v : value) : value =
   match (v : value) with
@@ -386,7 +386,7 @@ and transform_exprs_in_clause_body (fn : expr -> expr) (body : clause_body)
     Match_body(x, p)
   | Projection_body (_, _) -> body
   | Binary_operation_body (_, _, _) -> body
-  | Abort_body _ -> body
+  | Abort_body -> body
 
 and transform_exprs_in_value (fn : expr -> expr) (v : value) : value =
   match (v : value) with

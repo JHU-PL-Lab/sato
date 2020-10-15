@@ -44,7 +44,6 @@ type lookup_environment = {
   (** A mapping from abort clause identifiers to identifier information
     associated with the error. *)
 
-
   le_first_var : Ident.t;
   (** The identifier which represents the first defined variable in the
       program. *)
@@ -76,7 +75,7 @@ and enum_all_functions_in_body body : function_value Enum.t =
       (enum_all_functions_in_expr e1) (enum_all_functions_in_expr e2)
   | Match_body (_, _)
   | Projection_body (_, _)
-  | Abort_body _ ->
+  | Abort_body ->
     Enum.empty ()
 
 and enum_all_functions_in_value value : function_value Enum.t =
@@ -90,20 +89,42 @@ and enum_all_functions_in_value value : function_value Enum.t =
 
 (* Enumerate all aborts in a program *)
 
-let rec enum_all_aborts_in_expr expr : (ident * var list) Enum.t =
+let rec enum_all_aborts_in_expr expr : (ident * abort_value) Enum.t =
   let Expr clauses = expr in
   Enum.concat @@ Enum.map enum_all_aborts_in_clause @@ List.enum clauses
 
-and enum_all_aborts_in_clause clause : (ident * var list) Enum.t =
-  let Clause (Var(ident, _), body) = clause in
+and enum_all_aborts_in_clause clause : (ident * abort_value) Enum.t =
+  let Clause (Var (cls_id, _), body) = clause in
   match body with
+  | Conditional_body (Var (pred_id, _), e1, e2) ->
+    begin
+      let enum_ret_abort e branch =
+        let Expr(c_list) = e in
+        match List.Exceptionless.last c_list with
+        | None -> Enum.empty ()
+        | Some cls ->
+          begin
+            match cls with
+            | Clause (Var (abort_id, _), Abort_body) ->
+              let abort_val = {
+                abort_conditional_ident = cls_id;
+                abort_predicate_ident = pred_id;
+                abort_conditional_branch = branch;
+              }
+              in
+              Enum.singleton (abort_id, abort_val)
+            | _ -> Enum.empty ()
+          end
+      in
+      Enum.empty ()
+      |> Enum.append (enum_ret_abort e1 true)
+      |> Enum.append (enum_ret_abort e2 false)
+      |> Enum.append (enum_all_aborts_in_expr e1)
+      |> Enum.append (enum_all_aborts_in_expr e2)
+    end
   | Value_body v ->
     enum_all_aborts_in_value v
-  | Conditional_body (_, e1, e2) ->
-    Enum.append
-      (enum_all_aborts_in_expr e1) (enum_all_aborts_in_expr e2)
-  | Abort_body vlist ->
-    Enum.singleton (ident, vlist)
+  | Abort_body (* Aborts are enumerated in conditionals *)
   | Var_body _
   | Input_body
   | Appl_body (_, _)
@@ -112,7 +133,7 @@ and enum_all_aborts_in_clause clause : (ident * var list) Enum.t =
   | Projection_body (_, _) ->
     Enum.empty ()
 
-and enum_all_aborts_in_value value : (ident * var list) Enum.t =
+and enum_all_aborts_in_value value : (ident * abort_value) Enum.t =
   match value with
   | Value_function (Function_value (_, e)) ->
     enum_all_aborts_in_expr e
@@ -167,7 +188,7 @@ let prepare_environment
           | Match_body (_, _)
           | Projection_body (_, _)
           | Binary_operation_body (_, _, _)
-          | Abort_body _ -> []
+          | Abort_body -> []
           | Conditional_body (_, e1, e2) ->
             e1 :: e2 :: expr_flatten e1 @ expr_flatten e2
        )
@@ -197,35 +218,6 @@ let prepare_environment
   in
   let abort_map =
     enum_all_aborts_in_expr e
-    |> Enum.map
-        (fun ((abort_ident: ident), (cond_vars : var list)) ->
-          let cond_vars = List.rev cond_vars in
-          let (cond_idents, cond_clauses) =
-            List.fold_left
-              (fun (ident_acc, cls_acc) (Var (id, _)) ->
-                let cls = Ident_map.find id clause_mapping in
-                (id :: ident_acc, cls :: cls_acc))
-              ([], [])
-              cond_vars
-          in
-          let pred_idents =
-            List.map
-              (fun (Clause (x, cls_body)) ->
-                match cls_body with
-                | Conditional_body (Var (pred, _), _, _) -> pred
-                | _ -> raise @@ Utils.Invariant_failure ((show_var x) ^ " is not a conditional!")
-              )
-              cond_clauses
-          in
-          let abort_val : abort_value =
-            {
-              abort_conditional_clauses = cond_clauses;
-              abort_conditional_idents = cond_idents;
-              abort_predicate_idents = pred_idents;
-            }
-          in
-          (abort_ident, abort_val)
-        )
     |> Ident_map.of_enum
   in
   let lookup_env =
@@ -937,7 +929,7 @@ struct
         let%orzero _ :: lookup_stack' = lookup_stack in
         (* This must be an abort clause *)
         let%orzero Unannotated_clause(
-            Abs_clause (Abs_var x, Abs_abort_body _)) = acl1
+            Abs_clause (Abs_var x, Abs_abort_body)) = acl1
         in
         (* Report Abort rule lookup *)
         trace_rule "Abort" x;

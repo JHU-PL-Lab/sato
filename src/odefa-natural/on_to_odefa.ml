@@ -494,10 +494,10 @@ let nonempty_body
 ;;
 
 (** Create a new abort clause with multiple conditional clause variables *)
-let add_abort_expr (expr : On_ast.expr) (cond_vars : Ast.var list) : Ast.expr m =
+let add_abort_expr (expr : On_ast.expr) (_ : Ast.var list) : Ast.expr m =
   let%bind abort_var = fresh_var "ab" in
   let%bind () = add_odefa_natodefa_mapping abort_var expr in
-  let abort_clause = Ast.Clause(abort_var, Abort_body cond_vars) in
+  let abort_clause = Ast.Clause(abort_var, Abort_body) in
   return @@ Ast.Expr([abort_clause]);
 ;;
 
@@ -552,10 +552,10 @@ let flatten_pattern
     return (Ast.Any_pattern, [clause])
   | On_ast.VariantPat (_) ->
     raise @@ Utils.Invariant_failure
-    "match_converter: Variants patterns should have been encoded!"
+    "flatten_pattern: Variants patterns should have been encoded!"
   | On_ast.EmptyLstPat | On_ast.LstDestructPat _ ->
     raise @@ Utils.Invariant_failure
-    "match_converter: List patterns should have been encoded!"
+    "flatten_pattern: List patterns should have been encoded!"
 ;;
 
 (** Flatten a function *)

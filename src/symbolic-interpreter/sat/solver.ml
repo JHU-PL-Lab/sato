@@ -208,7 +208,7 @@ let _symbolic_to_concrete_value (val_src : value_def) : clause_body =
   | Constraint.Match (x', pattern) ->
     let (Symbol (id, _)) = x' in
     Match_body (Var(id, None), pattern)
-  | Constraint.Abort -> Abort_body []
+  | Constraint.Abort -> Abort_body
 ;;
 
 (* **** Constraint set operations **** *)

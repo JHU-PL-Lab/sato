@@ -46,8 +46,8 @@ let rec mark_dupes_record_labels lbls_seen r_list =
 %token CLOSE_BRACE
 %token OPEN_PAREN
 %token CLOSE_PAREN
-%token OPEN_BRACKET
-%token CLOSE_BRACKET
+/* %token OPEN_BRACKET */
+/* %token CLOSE_BRACKET */
 %token SEMICOLON
 %token COMMA
 %token EQUALS
@@ -124,8 +124,8 @@ clause_body:
       { Value_body($1) }
   | KEYWORD_INPUT
       { Input_body }
-  | KEYWORD_ABORT variable_list
-      { Abort_body $2 }
+  | KEYWORD_ABORT
+      { Abort_body }
   | variable
       { Var_body($1) }
   | variable variable
@@ -196,11 +196,13 @@ record_element:
       { ($1,$3) }
   ;
 
+/*
 variable_list:
   | OPEN_BRACKET CLOSE_BRACKET
       { [] }
   | OPEN_BRACKET separated_nonempty_trailing_list(COMMA, variable) CLOSE_BRACKET
       { $2 }
+*/
 
 function_value:
   | KEYWORD_FUN variable ARROW OPEN_PAREN expr CLOSE_PAREN

@@ -60,6 +60,7 @@ let check_wellformed_expr expression : unit =
       in
       raise @@ Illformedness_found illformednesses
   end;
+  (*
   begin
     let conditional_scope_violations = cond_scope_violations expression in
     if not (List.is_empty conditional_scope_violations) then
@@ -73,6 +74,7 @@ let check_wellformed_expr expression : unit =
       in
       raise @@ Illformedness_found illformedness
   end;
+  *)
   begin
     let records_with_duplicate_labels = record_label_duplications expression in
     if not (List.is_empty records_with_duplicate_labels) then
