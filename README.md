@@ -55,10 +55,31 @@ TODOs
 - [ ] Continue to write tests
   - [x] Tests that exercise alias passing to test revised rules
   - [ ] More list tests (fold, sort, etc.)
-- [ ] Write theory that maps errors in original code to aborts in instrumented code
-  - [ ] Ignore errors in dead odefa code by throwing out aborts/errors encountered after the first one
+- [x] Write theory that maps errors in original code to aborts in instrumented code
+  - [x] Ignore errors in dead odefa code by throwing out aborts/errors encountered after the first one
+- [ ] Fix bugs relating to DDPA
+  - Update: bugs revealed something fundamental to how lookup works; see below
 - [ ] Write benchmarks
 - [ ] Write library of commonly used predicates/contracts (copy from Clojure predicates?)
+
+TODOs for theory refactor
+----
+- [x] Change abort syntax
+  - [x] No enocding with lists: only one instrumentation conditional/predicate per abort
+  - ~~Accumulate abort constraints at Conditional Bottom, not Abort~~
+  - [x] Change pattern match encoding
+  - [x] Change `==` encoding (if needed)
+- [ ] Add `nonzero` pattern (?)
+
+TODOs for 100% coverage algorithm
+----
+- [ ] Algorithm to discover all `abort` clauses
+- [ ] Record all visited aborts during lookup
+- [ ] Restart lookup until all aborts have been looked up/visited
+  - [ ] Deal with the "lookup starts off-by-one" problem
+- [ ] Write new tests for this
+- [ ] Note this in writeup
+  - [ ] Describe how a single lookup is not complete (though it is sound)
 
 More TODOs
 ----

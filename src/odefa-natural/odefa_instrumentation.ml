@@ -8,9 +8,9 @@ open On_to_odefa_monad.TranslationMonad;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "Type_instrumentation";;
 
-let add_abort_expr cond_var =
+let add_abort_expr _ =
   let%bind abort_var = fresh_var "ab" in
-  let abort_clause = Clause(abort_var, Abort_body [cond_var]) in
+  let abort_clause = Clause(abort_var, Abort_body) in
   return @@ Expr([abort_clause]);
 ;;
 
@@ -41,13 +41,6 @@ let rec change_abort_vars
     let cl2' = List.map (change_abort_vars old_var new_var) cl2 in
     let body' = Conditional_body (pred, Expr(cl1'), Expr(cl2')) in
     Clause (v, body')
-  | Abort_body var_list ->
-    let var_list' =
-      List.map
-        (fun v -> if equal_var v old_var then new_var else v)
-         var_list
-    in
-    Clause (v, Abort_body var_list')
   | _ -> clause
 ;;
 
@@ -80,7 +73,7 @@ let rec instrument_clauses (c_list : clause list) : (clause list) m =
       | Var_body _
       | Input_body
       | Match_body _
-      | Abort_body _ ->
+      | Abort_body ->
         (* Nothing to constrain *)
         begin
           let%bind new_clauses' = instrument_clauses clauses' in

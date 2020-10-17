@@ -739,6 +739,8 @@ let test_ddse
     (expr: Ast.expr)
   : unit =
   let _ = filename in
+  (* Check ill-formedness *)
+  Ast_wellformedness.check_wellformed_expr expr;
   (* Configure DDSE options. *)
   (* Select the appropriate context stack for DDPA. *)
   let chosen_module_option =
@@ -888,6 +890,8 @@ let test_sato
     (expr : expr)
   : unit =
   let observation = _observation filename in
+  (* Check ill-formedness *)
+  Ast_wellformedness.check_wellformed_expr expr;
   (* Set modules depending on filetype *)
   let is_natodefa = On_to_odefa_maps.is_natodefa odefa_on_map in
   let error_generator =
@@ -1100,9 +1104,11 @@ let make_test filename expectations =
       Option.default 10000 !gen_steps_ref (* TODO: Increase from 10000 *)
     in
     (* Perform tests *)
-    test_ddpa filename expectations_left !module_choice i_expr;
-    test_ddse filename expectations_left !module_choice gen_steps i_expr;
-    test_sato filename expectations_left !module_choice gen_steps i_map i_expr;
+    try
+      test_ddpa filename expectations_left !module_choice i_expr;
+      test_ddse filename expectations_left !module_choice gen_steps i_expr;
+      test_sato filename expectations_left !module_choice gen_steps i_map i_expr;
+    with Ast_wellformedness.Illformedness_found _ -> ();
     (* Now assert that every expectation has been addressed. *)
     match !expectations_left with
     | [] -> ()

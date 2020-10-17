@@ -137,7 +137,6 @@ module Type_errors : Answer = struct
       begin
         match error_opt with
         | Some (error_loc, error_list) ->
-          let Ast.Clause (Var (x, _), _) = error_loc in
           let rm_inst_fn =
             On_error.odefa_error_remove_instrument_vars odefa_on_maps
           in
@@ -146,7 +145,7 @@ module Type_errors : Answer = struct
           in
           {
             err_input_seq = input_seq;
-            err_location = Some (trans_inst_fn x);
+            err_location = Some (trans_inst_fn error_loc);
             err_errors = List.map rm_inst_fn error_list;
           }
         | None ->
@@ -253,13 +252,12 @@ module Natodefa_type_errors : Answer = struct
       | Some odefa_on_maps ->
         begin
           match error_opt with
-          | Some (err_loc, err_lst) ->
-            let Ast.Clause (Var (x, _), _) = err_loc in
+          | Some (error_loc, error_lst) ->
             let on_err_loc =
-              On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps x
+              On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps error_loc
             in
             let on_err_list =
-              List.map (On_error.odefa_to_natodefa_error odefa_on_maps) err_lst
+              List.map (On_error.odefa_to_natodefa_error odefa_on_maps) error_lst
             in
             {
               err_input_seq = input_seq;

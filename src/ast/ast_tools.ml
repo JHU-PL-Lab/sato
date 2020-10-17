@@ -87,7 +87,7 @@ let use_occurrences expression =
         Var_set.singleton subject
       | Binary_operation_body (left_operand, _, right_operand) ->
         Var_set.of_list [left_operand; right_operand]
-      | Abort_body vlist -> Var_set.of_list vlist
+      | Abort_body -> Var_set.empty
   )
   |> List.fold_left Var_set.union Var_set.empty
 ;;
@@ -159,7 +159,7 @@ and check_scope_clause_body
   | Projection_body (Var(x,_), _) -> _bind_filter bound site_x [x]
   | Binary_operation_body (Var(x1,_), _, Var(x2,_)) ->
     _bind_filter bound site_x [x1;x2]
-  | Abort_body _ -> [] (* Variables in abort bodies are treated separately *)
+  | Abort_body -> []
 ;;
 
 (** Returns a list of pairs of variables. The pair represents a violation on the
@@ -171,67 +171,65 @@ let scope_violations expression =
   |> List.map (fun (i1,i2) -> (Var(i1,None)),Var(i2,None))
 ;;
 
-(* Abort variable well-formedness *)
+(* Abort clause well-formedness *)
 
-(* An abort clause's variable list is considered valid if the nesting
-   conditionals' identifier variables are found in the list, in order
-   of nesting. *)
-let abort_var_list_valid cond_list abort_list =
-  let rec v_list_eq c_list v_list =
-    match c_list, v_list with
-    | id1 :: tl1, id2 :: tl2 ->
-      if Ident.equal id1 id2 then
-        v_list_eq tl1 tl2
-      else
-        v_list_eq tl1 v_list
-    | [], (id2 :: _) -> Some id2
-    | _, [] -> None
-  in
-  v_list_eq cond_list abort_list
-;;
-
-let rec check_abort_vars_in_expr
-    (cond_idents : Ident.t list) (e : expr)
-  : (ident * ident) list =
+let rec check_abort_clauses_in_expr
+    (e : expr) (aborts : bool Ident_map.t) : bool Ident_map.t =
   let Expr(clauses) = e in
   List.fold_left
-    (fun results clause ->
-       results @ check_abort_vars_in_clause cond_idents clause
-    )
-    []
+    (fun aborts clause -> check_abort_clauses_in_clause clause aborts)
+    aborts
     clauses
 
-and check_abort_vars_in_clause
-    (cond_idents : Ident.t list) (cls : clause)
-  : (ident * ident) list =
-  let (Clause (Var (site_x, _), body)) = cls in
+and check_abort_clauses_in_clause
+    (clause : clause) (aborts : bool Ident_map.t)  : bool Ident_map.t =
+  let (Clause (Var (ident, _), body)) = clause in
   match body with
-  | Abort_body v_list ->
-    begin
-      let i_list = List.map (fun (Var (id, _)) -> id) v_list in
-      match abort_var_list_valid cond_idents i_list with
-      | Some id -> [(site_x, id)]
-      | None -> []
-    end
   | Conditional_body (_, e1, e2) ->
     begin
-      let cond_idents' = site_x :: cond_idents in
-      check_abort_vars_in_expr cond_idents' e1 @
-      check_abort_vars_in_expr cond_idents' e2
+      let check_cond_branch (Expr (c_list)) aborts =
+        match List.Exceptionless.last c_list with
+        | Some ret_cls ->
+          begin
+            match ret_cls with
+            | (Clause (Var (ab_ident, _), Abort_body)) ->
+              Ident_map.add ab_ident true aborts
+            | _ -> aborts
+          end
+        | None -> aborts
+      in
+      aborts
+      |> check_cond_branch e1
+      |> check_cond_branch e2
+      |> check_abort_clauses_in_expr e1
+      |> check_abort_clauses_in_expr e2
     end
+  | Abort_body ->
+    let is_ret_cls =
+      Ident_map.exists (fun k v -> equal_ident ident k && v) aborts
+    in
+    Ident_map.add ident is_ret_cls aborts
   | Value_body v ->
     begin
       match v with
       | Value_function (Function_value (_, e)) ->
-        check_abort_vars_in_expr cond_idents e
-      | _ -> []
+        check_abort_clauses_in_expr e aborts
+      | _ -> aborts
     end
-  | _ -> []
+  | Var_body _
+  | Input_body
+  | Appl_body _
+  | Match_body _
+  | Projection_body _
+  | Binary_operation_body _ -> aborts
 ;;
 
-let cond_scope_violations expression =
-  check_abort_vars_in_expr [] expression
-  |> List.map (fun (i1,i2) -> (Var (i1,None)), Var (i2,None))
+let abort_clause_violations expression =
+  Ident_map.empty
+  |> check_abort_clauses_in_expr expression
+  |> Ident_map.enum
+  |> Enum.filter_map (fun (ab_id, b) -> if b then None else Some (Var (ab_id, None)))
+  |> List.of_enum
 ;;
 
 (* Record label duplication check *)
@@ -346,7 +344,7 @@ and map_clause_body_vars (fn : Var.t -> Var.t) (b : clause_body)
     Projection_body(fn x, l)
   | Binary_operation_body (x1, op, x2) ->
     Binary_operation_body (fn x1, op, fn x2)
-  | Abort_body vlist -> Abort_body (List.map fn vlist)
+  | Abort_body -> Abort_body
 
 and map_value_vars (fn : Var.t -> Var.t) (v : value) : value =
   match (v : value) with
@@ -386,7 +384,7 @@ and transform_exprs_in_clause_body (fn : expr -> expr) (body : clause_body)
     Match_body(x, p)
   | Projection_body (_, _) -> body
   | Binary_operation_body (_, _, _) -> body
-  | Abort_body _ -> body
+  | Abort_body -> body
 
 and transform_exprs_in_value (fn : expr -> expr) (v : value) : value =
   match (v : value) with

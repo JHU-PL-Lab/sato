@@ -124,7 +124,6 @@ module Binop : (Error_binop with type t =
       raise @@ Parse_failure "Missing or spurious arguments"
   ;;
 
-
   let pp formatter (binop : t) =
     let (left, op, right) = binop in
     Format.fprintf formatter "%a %a %a"

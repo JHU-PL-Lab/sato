@@ -55,7 +55,7 @@ let input_sequence_from_result
     (e : expr)
     (x : Ident.t)
     (result : Interpreter.evaluation_result)
-  : (int list * (Ast.clause * Error.Odefa_error.t list) option) =
+  : (int list * (Ast.ident * Error.Odefa_error.t list) option) =
   match Solver.solve result.er_solver with
   | None ->
     raise @@ Jhupllib_utils.Invariant_failure
@@ -149,10 +149,9 @@ let input_sequence_from_result
                 (show_symbol ab_symb)
               )
           in
-          let abort_location = List.hd abort_info.abort_conditional_clauses in
-          let abort_preds =
-            abort_info.abort_predicate_idents
-            |> List.map (fun id -> Symbol (id, relstack))
+          let abort_location = abort_info.abort_conditional_ident in
+          let abort_preds = (* TODO: Turn into a singleton *)
+            [Symbol (abort_info.abort_predicate_ident, relstack)]
           in
           let get_error_fn = Solver.find_errors result.er_solver in
           let error_list =
