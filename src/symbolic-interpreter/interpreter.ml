@@ -926,7 +926,7 @@ struct
       (* Abort (not a written rule) *)
       begin
         (* Obtain lookup stack (the lookup var itself becomes unimportant) *)
-        let%orzero _ :: lookup_stack' = lookup_stack in
+        let%orzero [_] = lookup_stack in
         (* This must be an abort clause *)
         let%orzero Unannotated_clause(
             Abs_clause (Abs_var x, Abs_abort_body)) = acl1
@@ -937,9 +937,7 @@ struct
         (* TODO: Take care of any uncaught exceptions? *)
         (* Look up the first variable of the program *)
         let abort_value = Ident_map.find x env.le_abort_mapping in
-        let lookup_var = env.le_first_var in
-        let new_lookup_stack = lookup_var :: lookup_stack' in
-        let%bind symbol_list = recurse new_lookup_stack acl1 relstack in
+        let%bind symbol_list = recurse [env.le_first_var] acl1 relstack in
         (* Record the abort point and the abort constraint *)
         let%bind () = record_abort_point abort_symbol abort_value in
         let%bind () = record_constraint @@ Constraint_abort(abort_symbol) in
