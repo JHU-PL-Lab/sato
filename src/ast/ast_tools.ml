@@ -232,6 +232,26 @@ let abort_clause_violations expression =
   |> List.of_enum
 ;;
 
+(* Abort clause list construction (above uses maps instead) *)
+
+let rec list_aborts_in_expr expression : ident list =
+  let Expr(clist) = expression in
+  List.fold_left (fun ab_list cls -> (list_aborts_in_clause cls) @ ab_list) [] clist
+
+and list_aborts_in_clause clause : ident list =
+  let (Clause (Var (ident, _), body)) = clause in
+  match body with
+  | Abort_body -> [ident]
+  | Value_body v -> list_aborts_in_value v
+  | Conditional_body (_, e1, e2) -> list_aborts_in_expr e1 @ list_aborts_in_expr e2
+  | _ -> []
+
+and list_aborts_in_value value : ident list =
+  match value with
+  | Value_function (Function_value (_, e)) -> list_aborts_in_expr e
+  | _ -> []
+;;
+
 (* Record label duplication check *)
 
 (* This separator functions separately from the usual separator "~" used
