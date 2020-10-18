@@ -51,9 +51,26 @@ let pp_variant_label formatter (Variant_label label) =
   Format.fprintf formatter "`%s" label
 ;;
 
+let pp_type_sig formatter t = 
+  match t with
+  | IntType -> Format.pp_print_string formatter "int"
+  | BoolType -> Format.pp_print_string formatter "bool"
+  | _ -> failwith "not yet implemented"
+;;
+
+let rec pp_type_decl formatter type_decl =
+  match type_decl with
+  | FirstOrderType t -> Format.fprintf formatter "%a" pp_type_sig t
+  | HigherOrderType (t1, t2) ->  Format.fprintf formatter "(%a -> %a)" pp_type_decl t1 pp_type_decl t2
+;;
+  
 let rec pp_funsig formatter (Funsig (x, ident_list, e)) =
   Format.fprintf formatter "%a@ %a =@ @[%a@]"
     pp_ident x pp_ident_list ident_list pp_expr e
+
+and pp_funsig_with_type formatter (Funsig (x, ident_list, e), type_decl) =
+  Format.fprintf formatter "(%a@ : %a) %a =@ @[%a@]"
+    pp_ident x pp_type_decl type_decl pp_ident_list ident_list pp_expr e
 
 and pp_pattern formatter pattern =
   match pattern with
@@ -147,9 +164,29 @@ and pp_expr formatter expr =
     in
     Format.fprintf formatter "let rec@ %a@ in@ @[%a@]"
       pp_funsig_list funsig_lst pp_expr e
+  | LetRecFunWithType (funsig_lst, e, type_decl_lst) ->
+    let pp_funsig_list formatter funsig_lst_with_type =
+      Pp_utils.pp_concat_sep
+        " with "
+        pp_funsig_with_type
+        formatter
+        (List.enum funsig_lst_with_type)
+    in
+    (* let pp_type_decl_list formatter tyle_decl_lst =
+      Pp_utils.pp_concat_sep
+        " with "
+        pp_type_decl
+        formatter
+        (List.enum tyle_decl_lst)
+    in *)
+    Format.fprintf formatter "let rec@ %a@ in@ @[%a@]"
+    pp_funsig_list (List.combine funsig_lst type_decl_lst) pp_expr e
   | LetFun (funsig, e) ->
     Format.fprintf formatter "let@ %a@ in@ @[%a@]"
       pp_funsig funsig pp_expr e
+  | LetFunWithType (funsig, e, type_decl) -> 
+    Format.fprintf formatter "let@ %a@ in@ @[%a@]"
+      pp_funsig_with_type (funsig, type_decl) pp_expr e
   | If (pred, e1, e2) ->
     Format.fprintf formatter "if@ %a@ then@ @[<2>%a@]@ else @[<2>%a@]"
       pp_expr pred pp_expr e1 pp_expr e2

@@ -47,10 +47,14 @@ let rec env_out_transform_expr
       let (funsigs', outs) = List.split @@ List.map transform_funsig funsigs in
       let out = List.fold_left combiner out1 outs in
       (On_ast.LetRecFun(funsigs', e1'), out)
+    (* TODO: Actually implement this - EW *)
+    | On_ast.LetRecFunWithType _ -> failwith "undefined"
     | On_ast.LetFun (funsig, e1) ->
       let (e1', out1) = recurse env e1 in
       let (funsig', out2) = transform_funsig funsig in
       (On_ast.LetFun(funsig', e1'), combiner out1 out2)
+    (* TODO: Actually implement this - EW *)
+    | On_ast.LetFunWithType _ -> failwith "undefined"
     | On_ast.Plus (e1, e2) ->
       let (e1', out1) = recurse env e1 in
       let (e2', out2) = recurse env e2 in

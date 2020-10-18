@@ -35,6 +35,7 @@ rule token = parse
 | "`"                  { BACKTICK }
 | "="                  { EQUALS }
 | "."                  { DOT }
+| ":"                  { COLON }
 | "::"                 { DOUBLE_COLON }
 | "_"                  { UNDERSCORE }
 | "|"                  { PIPE }

@@ -32,6 +32,21 @@ end;;
 
 type variant_label = Variant_label of string [@@deriving eq, ord, show]
 
+type type_sig =
+  | TopType
+  | IntType
+  | BoolType
+  | FunType
+  | RecType of Ident_set.t
+  | ListType
+  | VariantType of variant_label
+[@@ deriving eq, ord, show]
+
+type type_decl = 
+  | FirstOrderType of type_sig
+  | HigherOrderType of type_decl * type_decl
+[@@ deriving eq, ord, show]
+
 type funsig = Funsig of ident * ident list * expr
 
 (* and variant_content = Variant of variant_label * pattern *)
@@ -41,7 +56,7 @@ and pattern = AnyPat | IntPat | BoolPat | FunPat
             | VariantPat of variant_label * ident
             | VarPat of ident
             | EmptyLstPat | LstDestructPat of ident * ident
-
+            
 and expr =
   | Int of int | Bool of bool
   | Var of ident | Function of ident list * expr
@@ -49,6 +64,8 @@ and expr =
   | Appl of expr * expr
   | Let of ident * expr * expr
   | LetRecFun of funsig list * expr | LetFun of funsig * expr
+  | LetRecFunWithType of funsig list * expr * type_decl list
+  | LetFunWithType of funsig * expr * type_decl
   | Plus of expr * expr | Minus of expr * expr
   | Times of expr * expr | Divide of expr * expr | Modulus of expr * expr
   | Equal of expr * expr | Neq of expr * expr
@@ -76,22 +93,11 @@ module Pattern = struct
   let compare = compare_pattern;;
 end;;
 
-type type_sig =
-  | TopType
-  | IntType
-  | BoolType
-  | FunType
-  | RecType of Ident_set.t
-  | ListType
-  | VariantType of variant_label
-[@@ deriving eq, ord, show]
-;;
-
 (** Takes [expr] as an argument.  Returns the relative precedence of the
     expression.  Higher ints correspond to higher precedences. *)
 let expr_precedence expr =
   match expr with
-  | Function _ | Let _ | LetFun _ | LetRecFun _ | Match _ -> 0
+  | Function _ | Let _ | LetFun _ | LetRecFun _ | LetFunWithType _ | LetRecFunWithType _ | Match _ -> 0
   | If _ -> 1
   | Or _ -> 2
   | And _ -> 3

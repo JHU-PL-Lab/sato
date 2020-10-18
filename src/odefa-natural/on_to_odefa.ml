@@ -129,6 +129,8 @@ let rec rename_variable
         LetFun(new_funsig, new_outer_e)
       end
     end
+  (* TODO: Actually implement this - EW *)
+  | LetFunWithType _ -> failwith "undefined"
   | LetRecFun (f_sigs, e') ->
     let function_names =
       f_sigs
@@ -156,6 +158,8 @@ let rec rename_variable
         recurse e'
     in
     LetRecFun(f_sigs', e'')
+  (* TODO: Actually implement this - EW *)
+  | LetRecFunWithType _ -> failwith "undefined"
   | Match (e0, cases) ->
     let e0' = recurse e0 in
     let cases' =
@@ -317,6 +321,8 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
             ([], seen_declared'')
         in
         return (LetRecFun(List.rev funsigs'''_rev, expr'), seen_declared''')
+      (* TODO: Actually implement this - EW *)
+      | LetRecFunWithType _ -> failwith "undefined"
       | LetFun (funsig, expr) ->
         (* FIXME?: assuming that parameters in functions are not duplicated;
                   probably should verify that somewhere *)
@@ -340,6 +346,8 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
           ensure_expr_unique_names params body' seen_declared'''
         in
         return (LetFun(Funsig(name', params', body''), expr''), seen_declared'''')
+      (* TODO: Actually implement this - EW *)
+      | LetFunWithType _ -> failwith "undefined"
       | Plus (e1, e2) ->
         let%bind e1', seen_declared' = walk e1 seen_declared in
         let%bind e2', seen_declared'' = walk e2 seen_declared' in
@@ -786,9 +794,13 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Var_body(return_var)) in
     return (fun_clauses @ [assignment_clause] @ e_clist, e_var)
+  (* TODO: Actually implement this - EW *)
+  | LetFunWithType _ -> failwith "undefined"
   | LetRecFun (_, _) ->
     raise @@
       Utils.Invariant_failure "LetRecFun should not have been passed to flatten_expr"
+  (* TODO: Actually implement this - EW *)
+  | LetRecFunWithType _ -> failwith "undefined"
   | Plus (e1, e2) ->
     flatten_binop expr e1 e2 Ast.Binary_operator_plus
   | Minus (e1, e2) ->
@@ -958,7 +970,7 @@ let debug_transform_odefa
 
 let translate
     ?translation_context:(translation_context=None)
-    ?is_instrumented:(is_instrumented=true)
+    ?is_instrumented:(is_instrumented=false)
     (e : On_ast.expr)
   : (Ast.expr * On_to_odefa_maps.t) =
   let (e_m_with_info : (Ast.expr * On_to_odefa_maps.t) m) =
