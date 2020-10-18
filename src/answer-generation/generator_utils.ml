@@ -51,6 +51,49 @@ let destructure_var v =
   | Var (x, Some(Freshening_stack(stack))) -> (x, stack)
 ;;
 
+let successor_var (e : expr) (x : Ident.t) : Ident.t =
+  let rec expr_flatten ((Expr clauses) as expr) : expr list =
+    expr ::
+    (clauses
+     |>
+     List.map
+       (fun (Clause(_,b)) ->
+          match b with
+          | Value_body (Value_function(Function_value(_,e))) -> expr_flatten e
+          | Value_body _
+          | Var_body _
+          | Input_body
+          | Appl_body (_, _)
+          | Match_body (_, _)
+          | Projection_body (_, _)
+          | Binary_operation_body (_, _, _)
+          | Abort_body -> []
+          | Conditional_body (_, e1, e2) ->
+            e1 :: e2 :: expr_flatten e1 @ expr_flatten e2
+       )
+     |> List.concat
+    )
+  in
+  let map_of_expr =
+    expr_flatten e
+    |> List.enum
+    |> Enum.map
+      (fun (Expr clauses) ->
+          let c1 = List.enum clauses in
+          let c2 = List.enum clauses in
+          Enum.drop 1 c2;
+          Enum.combine c1 c2
+          |> Enum.map
+            (fun (Clause(Var(x,_),_),clause) -> (x,clause))
+      )
+    |> Enum.concat
+    |> Ident_map.of_enum
+  in
+  match Ident_map.Exceptionless.find x map_of_expr with
+  | Some (Clause (Var (x', _), _)) -> x'
+  | None -> x
+;;
+
 let input_sequence_from_result
     (e : expr)
     (x : Ident.t)
@@ -63,7 +106,10 @@ let input_sequence_from_result
   | Some solution ->
     let (get_value, _) = solution in
     let Concrete_stack stack = result.er_stack in
-    let stop_var = Var(x, Some(Freshening_stack(stack))) in
+    let stop_var =
+      (* Var(successor_var e x, Some(Freshening_stack(stack))) *)
+      Var (x, Some (Freshening_stack stack))
+    in
     let (_, stop_stack) = destructure_var stop_var in
     let input_record = ref [] in
     (* Function to call to read from input *)
@@ -88,6 +134,7 @@ let input_sequence_from_result
     (* Callback function executed on each clause encountered *)
     let stop_at_stop_var (Clause(x, _)) =
       if equal_var x stop_var then
+        (* (); *)
         raise Halt_execution_as_input_sequence_is_complete;
     in
     (* Function to record the first abort error encountered *)

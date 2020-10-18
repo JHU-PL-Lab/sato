@@ -68,7 +68,7 @@ module Make(Answer : Answer) : Generator = struct
       (max_steps : int)
       (evaluation : Interpreter.evaluation)
     : generation_result =
-    let rec loop
+    let rec take_one_step
         (step_count : int)
         (ev : Interpreter.evaluation)
       : generation_result =
@@ -94,7 +94,7 @@ module Make(Answer : Answer) : Generator = struct
             (* No result and no termination.  Keep running. *)
             lazy_logger `trace (fun () ->
                 "Interpreter evaluation not yet complete; continuing.");
-            loop (step_count + 1) ev'
+            take_one_step (step_count + 1) ev'
           | None ->
             (* No result and no remaining computation; we terminated!  Give
               back a result indicating as much. *)
@@ -128,7 +128,7 @@ module Make(Answer : Answer) : Generator = struct
         end
       end
     in
-    loop 0 evaluation
+    take_one_step 0 evaluation
   ;;
 
   let create
@@ -156,16 +156,47 @@ module Make(Answer : Answer) : Generator = struct
     }
   ;;
 
+  (* Logging functions *)
+
+  let _log_trace_start_generating expr =
+    lazy_logger `trace
+      (fun () -> "Generating answers for expression:\n" ^
+              Pp_utils.pp_to_string pp_expr expr)
+  ;;
+
+  let _log_trace_exhausted_steps () =
+    lazy_logger `trace
+      (fun () -> "Out of generation steps; stopping with waiting generator.")
+  ;;
+
+  let _log_trace_non_exhausted_steps steps_to_take =
+    lazy_logger `trace
+    (fun () -> Printf.sprintf
+        "Taking up to %d step%s of generation in this loop" steps_to_take
+        (if steps_to_take = 1 then "" else "s"));
+  ;;
+
+  let _log_trace_generation_terminated () =
+    lazy_logger `trace
+      (fun () -> "Generation terminated with no further results.");
+  ;;
+
+  let _log_trace_took_steps steps_so_far steps_taken =
+    lazy_logger `trace
+      (fun () -> Printf.sprintf "Took %d step%s (%d so far)"
+          steps_so_far
+          (if steps_so_far = 1 then "" else "s")
+          steps_taken);
+  ;;
+
   let generate_answers
       ?generation_callback:(generation_callback=fun _ _ -> ())
       (max_steps_opt : int option)
       (original_generator : generator)
     : (Answer.t list * int) list * generator option =
-    lazy_logger `trace
-      (fun () -> "Generating inputs for expression:\n" ^
-                Pp_utils.pp_to_string pp_expr original_generator.gen_program
-      );
+    _log_trace_start_generating original_generator.gen_program;
     let max_steps_per_loop = 100 in
+    (* Keep running the generator until we run out of steps per loop *)
     let rec loop
         (gen : generator)
         (steps_left_opt : int option)
@@ -178,30 +209,23 @@ module Make(Answer : Answer) : Generator = struct
         | Some n -> min n max_steps_per_loop
       in
       if steps_to_take = 0 then begin
-        (* We're quitting now! *)
-        lazy_logger `trace
-          (fun () -> "Out of generation steps; stopping with waiting generator.");
+        (* We ran out of steps, so we are quitting now! *)
+        _log_trace_exhausted_steps ();
         (results, Some gen)
       end else begin
-        lazy_logger `trace
-          (fun () -> Printf.sprintf
-              "Taking up to %d step%s of generation in this loop" steps_to_take
-              (if steps_to_take = 1 then "" else "s"));
+        _log_trace_non_exhausted_steps steps_to_take;
         match gen.generator_fn with
         | None ->
           (* No further generation is possible. *)
-          lazy_logger `trace
-            (fun () -> "Generation terminated with no further results.");
+          _log_trace_generation_terminated ();
           (results, None)
         | Some fn ->
+          (* Further generation is possible, so run it *)
           let result = fn steps_to_take in
           let steps_taken' = steps_taken + result.gen_steps in
-          lazy_logger `trace
-            (fun () -> Printf.sprintf "Took %d step%s (%d so far)"
-                result.gen_steps
-                (if result.gen_steps = 1 then "" else "s")
-                steps_taken');
+          _log_trace_took_steps result.gen_steps steps_taken';
           begin
+            (* Run the callback for any discovered answers *)
             match result.gen_answers with
             | _ :: _ ->
               List.iter
@@ -212,8 +236,7 @@ module Make(Answer : Answer) : Generator = struct
             | [] ->
               lazy_logger `trace (fun () -> "No answer found on iteration.");
           end;
-          let results' = [(result.gen_answers, steps_taken')] @ results
-          in
+          let results' = (result.gen_answers, steps_taken') :: results in
           let steps_left_opt' =
             Option.map (fun n -> max 0 @@ n - result.gen_steps) steps_left_opt
           in

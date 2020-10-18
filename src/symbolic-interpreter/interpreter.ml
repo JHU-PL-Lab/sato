@@ -51,6 +51,34 @@ type lookup_environment = {
 [@@deriving show]
 ;;
 
+(* Record of all visited clauses in a program *)
+
+module Ident_hashtbl = Hashtbl.Make(Ident);;
+
+let clause_visits_hashtbl : int Ident_hashtbl.t = Ident_hashtbl.create 20;;
+
+(* let pp_ident_hashtbl = Pp_utils.pp_map pp_ident Format.pp_print_int Ident_hashtbl.enum;;
+let show_ident_hashtbl = Pp_utils.pp_to_string pp_ident_hashtbl;; *)
+
+(*
+let rec enum_all_clauses_in_expr expr : unit =
+  let Expr(clauses) = expr in
+  Enum.iter (fun clause -> enum_all_clauses_in_clause clause) @@ List.enum clauses
+
+and enum_all_clauses_in_clause clause : unit =
+  let Clause(Var (ident, _), body) = clause in
+  begin
+    match body with
+    | Value_body (Value_function (Function_value (_, body))) ->
+      enum_all_clauses_in_expr body
+    | Conditional_body (_, e1, e2) ->
+      enum_all_clauses_in_expr e1;
+      enum_all_clauses_in_expr e2;
+    | _ -> ()
+  end;
+  Ident_hashtbl.add clause_visits_hashtbl ident 0
+*)
+
 (* Enumerate all functions in a program *)
 
 let rec enum_all_functions_in_expr expr : function_value Enum.t =
@@ -446,6 +474,38 @@ struct
     end else
       return ()
   ;;
+
+  let increment_clause_visit_count acl =
+    match acl with
+    | Unannotated_clause unannotated_cls ->
+      let (Abs_clause (Abs_var ident, _)) = unannotated_cls in
+      Ident_hashtbl.modify_opt
+        ident
+        (function Some v -> Some (v + 1) | None -> Some 1)
+        clause_visits_hashtbl
+    | _ -> ()
+  ;;
+
+  (* let gather_stop_vars cfg acls =
+    let rec loop s =
+      match s with
+      | [] -> []
+      | acl :: acls' ->
+        begin
+          match acl with
+          | Unannotated_clause (Abs_clause (x, _))
+          | Start_clause x | End_clause x ->
+            let (Abs_var ident) = x in
+            ident :: loop acls'
+          | Binding_enter_clause _
+          | Binding_exit_clause _
+          | Nonbinding_enter_clause _ ->
+            let acl_succs = List.of_enum @@ succs acl cfg in
+            (loop acl_succs) @ (loop acls')
+        end
+    in
+    loop acls
+  ;; *)
 
   let rec rule_computations
       (env : lookup_environment)
@@ -934,7 +994,6 @@ struct
         (* Report Abort rule lookup *)
         trace_rule "Abort" x;
         let abort_symbol = Symbol(x, relstack) in
-        (* TODO: Take care of any uncaught exceptions? *)
         (* Look up the first variable of the program *)
         let abort_value = Ident_map.find x env.le_abort_mapping in
         let%bind symbol_list = recurse [env.le_first_var] acl1 relstack in
@@ -970,7 +1029,7 @@ struct
     let mon_val = lookup env lookup_stack' acl0' relstack' in
     let cache_key = Cache_lookup (lookup_stack', acl0', relstack') in
     cache cache_key mon_val
-
+  
   and lookup
       (env : lookup_environment)
       (lookup_stack : Ident.t list)
@@ -978,6 +1037,7 @@ struct
       (relstack : Relative_stack.t)
     : (symbol list) M.m =
     let open M in
+    increment_clause_visit_count acl0;
     let%bind acl1 = pick @@ preds acl0 env.le_cfg in
     let%bind () = pause () in
     _trace_log_lookup lookup_stack relstack acl0 acl1;
@@ -1012,7 +1072,9 @@ struct
          the concrete stack it produces.  The symbol is only used to generate
          formulae, which we'll get from the completed computations. *)
       let%bind _ =
-        lookup env [initial_lookup_var] acl Relative_stack.empty
+        let%bind acl' = pick @@ succs acl cfg in
+        lookup env [initial_lookup_var] acl' Relative_stack.empty
+        (* lookup env [initial_lookup_var] acl Relative_stack.empty *)
       in
       return ()
     in
@@ -1036,6 +1098,7 @@ struct
               (Solver.show eval_result.M.er_solver)
           )
       end;
+      (* print_endline @@ show_ident_hashtbl clause_visits_hashtbl; *)
       let solver = eval_result.M.er_solver in
       let errors = eval_result.M.er_abort_points in
       Some {
