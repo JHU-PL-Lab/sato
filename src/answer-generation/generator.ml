@@ -121,37 +121,83 @@ module Make(Answer : Answer) : Generator = struct
                 "Interpreter evaluation not yet complete; continuing.");
             take_one_step (step_count + 1) ev'
           | None ->
-            (* No result and no remaining computation; we terminated!  Give
-              back a result indicating as much. *)
-            lazy_logger `trace (fun () ->
-                "Interpreter evaluation complete; stopping.");
-            { gen_answers = [];
-              gen_steps = step_count + 1;
-              gen_generator =
-              { generator_reference = gen_ref;
-                gen_target = x_list;
-                generator_fn = None;
-              };
-            }
+            begin
+              match List.tl x_list with
+              | [] ->
+                (* No result and no remaining computation; we terminated!  Give
+                  back a result indicating as much. *)
+                lazy_logger `trace (fun () ->
+                    "Interpreter evaluation complete; stopping.");
+                { gen_answers = [];
+                  gen_steps = step_count + 1;
+                  gen_generator =
+                  { generator_reference = gen_ref;
+                    gen_target = x_list;
+                    generator_fn = None;
+                  };
+                }
+              | (x :: _)  as x_list' ->
+                let ev' =
+                  Interpreter.start
+                    ~exploration_policy:gen_ref.gen_exploration_policy
+                    gen_ref.gen_cfg
+                    gen_ref.gen_program
+                    x
+                in
+                { gen_answers = [];
+                  gen_steps = step_count + 1;
+                  gen_generator =
+                  { generator_reference = gen_ref;
+                    gen_target = x_list';
+                    generator_fn = Some(fun n -> take_steps gen_ref x_list' n ev');
+                  };
+                }
+            end
         end else begin
           (* We have results! *)
           lazy_logger `trace (fun () -> "New result found in this step.");
           let e = gen_ref.gen_program in
           let x = List.hd x_list in
           let answers = List.map (Answer.answer_from_result e x) results in
-          let generator_fn =
             match ev'_opt with
-            | None -> None
-            | Some ev' -> Some(fun n -> take_steps gen_ref x_list n ev')
-          in
-          { gen_answers = answers;
-            gen_steps = step_count + 1;
-            gen_generator =
-              { generator_reference = gen_ref;
-                gen_target = x_list;
-                generator_fn = generator_fn;
-              };
-          }
+            | None ->
+              begin
+                match List.tl x_list with
+                | [] ->
+                  { gen_answers = answers;
+                    gen_steps = step_count + 1;
+                    gen_generator =
+                      { generator_reference = gen_ref;
+                        gen_target = x_list;
+                        generator_fn = None;
+                      };
+                  }
+                | x_list' ->
+                  let ev' =
+                    Interpreter.start
+                      ~exploration_policy:gen_ref.gen_exploration_policy
+                      gen_ref.gen_cfg
+                      gen_ref.gen_program
+                      x
+                  in
+                  { gen_answers = answers;
+                    gen_steps = step_count + 1;
+                    gen_generator =
+                      { generator_reference = gen_ref;
+                        gen_target = x_list';
+                        generator_fn = Some(fun n -> take_steps gen_ref x_list' n ev');
+                      };
+                  }
+              end
+            | Some ev' ->
+              { gen_answers = answers;
+                gen_steps = step_count + 1;
+                gen_generator =
+                  { generator_reference = gen_ref;
+                    gen_target = x_list;
+                    generator_fn = Some(fun n -> take_steps gen_ref x_list n ev');
+                  };
+              }
         end
       end
     in
