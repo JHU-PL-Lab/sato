@@ -73,7 +73,7 @@ module Make(Answer : Answer) : Generator = struct
 
   let rec take_steps
       (e : expr)
-      (x : Ident.t)
+      (x_list : Ident.t list)
       (max_steps : int)
       (evaluation : Interpreter.evaluation)
     : generation_result =
@@ -90,8 +90,8 @@ module Make(Answer : Answer) : Generator = struct
           gen_steps = step_count;
           gen_generator =
             { gen_program = e;
-              gen_target = [x];
-              generator_fn = Some(fun n -> take_steps e x n ev)
+              gen_target = x_list;
+              generator_fn = Some(fun n -> take_steps e x_list n ev)
             };
         }
       end else begin
@@ -113,24 +113,25 @@ module Make(Answer : Answer) : Generator = struct
               gen_steps = step_count + 1;
               gen_generator =
                 { gen_program = e;
-                  gen_target = [x];
+                  gen_target = x_list;
                   generator_fn = None;
                 };
             }
         end else begin
           (* We have results! *)
           lazy_logger `trace (fun () -> "New result found in this step.");
+          let x = List.hd x_list in
           let answers = List.map (Answer.answer_from_result e x) results in
           let generator_fn =
             match ev'_opt with
             | None -> None
-            | Some ev' -> Some(fun n -> take_steps e x n ev')
+            | Some ev' -> Some(fun n -> take_steps e x_list n ev')
           in
           { gen_answers = answers;
             gen_steps = step_count + 1;
             gen_generator =
               { gen_program = e;
-                gen_target = [x];
+                gen_target = x_list;
                 generator_fn = generator_fn;
               };
           }
@@ -166,7 +167,7 @@ module Make(Answer : Answer) : Generator = struct
     in
     { gen_program = e;
       gen_target = x_list;
-      generator_fn = Some(fun n -> take_steps e x n evaluation)
+      generator_fn = Some(fun n -> take_steps e x_list n evaluation)
     }
   ;;
 
