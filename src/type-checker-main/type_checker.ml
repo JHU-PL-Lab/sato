@@ -100,7 +100,7 @@ let run_error_check
         ~exploration_policy:args.tc_exploration_policy
         args.tc_generator_configuration
         expr
-        args.tc_target_var
+        [args.tc_target_var]
     in
     let generation_callback
       (type_errors : Ans.t) (steps: int) : unit =

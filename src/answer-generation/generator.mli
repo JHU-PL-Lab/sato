@@ -25,7 +25,8 @@ module type Generator = sig
 
       (** The program point we are trying to reach.  This is stored for
           reference purposes. *)
-      gen_target : Ident.t;
+      (* TODO: Turn into list *)
+      gen_target : Ident.t list;
 
       (** A function which, given a maximum number of steps to take, attempts
           to reach the point in question.  Here, "steps" are not of any fixed
@@ -69,7 +70,7 @@ module type Generator = sig
       [Odefa_symbolic_interpreter.Interpreter.Invalid_query]. *)
   val create :
     ?exploration_policy:exploration_policy ->
-    configuration -> expr -> ident -> generator;;
+    configuration -> expr -> ident list -> generator;;
   
   (** A convenience routine for running generation with a generator.  The
       given optional integer is the maximum number of steps to take.  This
