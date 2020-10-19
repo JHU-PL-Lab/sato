@@ -8,6 +8,7 @@ open Ast_pp;;
 open Ddpa_abstract_ast;;
 open Ddpa_graph;;
 open Ddpa_utils;;
+open Interpreter_environment;;
 open Interpreter_types;;
 open Logger_utils;;
 
@@ -17,38 +18,6 @@ type exploration_policy =
   | Explore_breadth_first
   | Explore_smallest_relative_stack_length
   | Explore_least_relative_stack_repetition
-;;
-
-(** This type describes the information which must be in context during lookup. *)
-type lookup_environment = {
-  le_cfg : ddpa_graph;
-  (** The DDPA CFG to use during lookup. *)
-
-  le_clause_mapping : clause Ident_map.t;
-  (** A mapping from identifiers to the concrete clauses which define them. *)
-
-  le_clause_predecessor_mapping : clause Ident_map.t;
-  (** A mapping from clauses (represented by the identifier they define) to the
-      concrete clauses which appear immediately *before* them.  The first clause
-      in each expression does not appear in this map. *)
-
-  le_function_parameter_mapping : function_value Ident_map.t;
-  (** A mapping from function parameter variables to the functions which declare
-      them. *)
-
-  le_function_return_mapping : function_value Ident_map.t;
-  (** A mapping from function return variables to the functions which declare
-      them. *)
-
-  le_abort_mapping : abort_value Ident_map.t;
-  (** A mapping from abort clause identifiers to identifier information
-    associated with the error. *)
-
-  le_first_var : Ident.t;
-  (** The identifier which represents the first defined variable in the
-      program. *)
-}
-[@@deriving show]
 ;;
 
 (* Record of all visited clauses in a program *)
@@ -78,190 +47,6 @@ and enum_all_clauses_in_clause clause : unit =
   end;
   Ident_hashtbl.add clause_visits_hashtbl ident 0
 *)
-
-(* Enumerate all functions in a program *)
-
-let rec enum_all_functions_in_expr expr : function_value Enum.t =
-  let Expr(clauses) = expr in
-  Enum.concat @@ Enum.map enum_all_functions_in_clause @@ List.enum clauses
-
-and enum_all_functions_in_clause clause : function_value Enum.t =
-  let Clause(_, body) = clause in
-  enum_all_functions_in_body body
-
-and enum_all_functions_in_body body : function_value Enum.t =
-  match body with
-  | Value_body v ->
-    enum_all_functions_in_value v
-  | Var_body _
-  | Input_body
-  | Appl_body (_, _)
-  | Binary_operation_body (_, _, _) ->
-    Enum.empty ()
-  | Conditional_body (_, e1, e2) ->
-    Enum.append
-      (enum_all_functions_in_expr e1) (enum_all_functions_in_expr e2)
-  | Match_body (_, _)
-  | Projection_body (_, _)
-  | Abort_body ->
-    Enum.empty ()
-
-and enum_all_functions_in_value value : function_value Enum.t =
-  match value with
-  | Value_record _ -> Enum.empty ()
-  | Value_function(Function_value(_,e) as f) ->
-    Enum.append (Enum.singleton f) @@ enum_all_functions_in_expr e
-  | Value_int _
-  | Value_bool _ -> Enum.empty ()
-;;
-
-(* Enumerate all aborts in a program *)
-
-let rec enum_all_aborts_in_expr expr : (ident * abort_value) Enum.t =
-  let Expr clauses = expr in
-  Enum.concat @@ Enum.map enum_all_aborts_in_clause @@ List.enum clauses
-
-and enum_all_aborts_in_clause clause : (ident * abort_value) Enum.t =
-  let Clause (Var (cls_id, _), body) = clause in
-  match body with
-  | Conditional_body (Var (pred_id, _), e1, e2) ->
-    begin
-      let enum_ret_abort e branch =
-        let Expr(c_list) = e in
-        match List.Exceptionless.last c_list with
-        | None -> Enum.empty ()
-        | Some cls ->
-          begin
-            match cls with
-            | Clause (Var (abort_id, _), Abort_body) ->
-              let abort_val = {
-                abort_conditional_ident = cls_id;
-                abort_predicate_ident = pred_id;
-                abort_conditional_branch = branch;
-              }
-              in
-              Enum.singleton (abort_id, abort_val)
-            | _ -> Enum.empty ()
-          end
-      in
-      Enum.empty ()
-      |> Enum.append (enum_ret_abort e1 true)
-      |> Enum.append (enum_ret_abort e2 false)
-      |> Enum.append (enum_all_aborts_in_expr e1)
-      |> Enum.append (enum_all_aborts_in_expr e2)
-    end
-  | Value_body v ->
-    enum_all_aborts_in_value v
-  | Abort_body (* Aborts are enumerated in conditionals *)
-  | Var_body _
-  | Input_body
-  | Appl_body (_, _)
-  | Binary_operation_body (_, _, _)
-  | Match_body (_, _)
-  | Projection_body (_, _) ->
-    Enum.empty ()
-
-and enum_all_aborts_in_value value : (ident * abort_value) Enum.t =
-  match value with
-  | Value_function (Function_value (_, e)) ->
-    enum_all_aborts_in_expr e
-  | Value_int _ | Value_bool _ | Value_record _ ->
-    Enum.empty ()
-;;
-
-(**
-   Given a program and its corresponding CFG, constructs an appropriate lookup
-   environment.
-*)
-let prepare_environment
-    (cfg : ddpa_graph)
-    (e : expr)
-  : lookup_environment =
-  let (function_parameter_mapping, function_return_mapping) =
-    enum_all_functions_in_expr e
-    |> Enum.fold
-      (fun (pm,rm) (Function_value(Var(p,_),Expr(clss)) as f) ->
-         let pm' = Ident_map.add p f pm in
-         let retvar =
-           clss
-           |> List.last
-           |> (fun (Clause(Var(r,_),_)) -> r)
-         in
-         let rm' = Ident_map.add retvar f rm in
-         (pm', rm')
-      )
-      (Ident_map.empty, Ident_map.empty)
-  in
-  let clause_mapping =
-    Ast_tools.flatten e
-    |> List.enum
-    |> Enum.fold
-      (fun map (Clause(Var(x,_),_) as c) ->
-         Ident_map.add x c map
-      )
-      Ident_map.empty
-  in
-  let rec expr_flatten ((Expr clauses) as expr) : expr list =
-    expr ::
-    (clauses
-     |>
-     List.map
-       (fun (Clause(_,b)) ->
-          match b with
-          | Value_body (Value_function(Function_value(_,e))) -> expr_flatten e
-          | Value_body _
-          | Var_body _
-          | Input_body
-          | Appl_body (_, _)
-          | Match_body (_, _)
-          | Projection_body (_, _)
-          | Binary_operation_body (_, _, _)
-          | Abort_body -> []
-          | Conditional_body (_, e1, e2) ->
-            e1 :: e2 :: expr_flatten e1 @ expr_flatten e2
-       )
-     |> List.concat
-    )
-  in
-  let clause_predecessor_mapping =
-    expr_flatten e
-    |> List.enum
-    |> Enum.map
-      (fun (Expr clauses) ->
-         let c1 = List.enum clauses in
-         let c2 = List.enum clauses in
-         Enum.drop 1 c1;
-         Enum.combine c1 c2
-         |> Enum.map
-           (fun (Clause(Var(x,_),_),clause) -> (x,clause))
-      )
-    |> Enum.concat
-    |> Ident_map.of_enum
-  in
-  let first_var =
-    e
-    |> (fun (Expr cls) -> cls)
-    |> List.first
-    |> (fun (Clause(Var(x,_),_)) -> x)
-  in
-  let abort_map =
-    enum_all_aborts_in_expr e
-    |> Ident_map.of_enum
-  in
-  let lookup_env =
-    { le_cfg = cfg;
-      le_clause_mapping = clause_mapping;
-      le_clause_predecessor_mapping = clause_predecessor_mapping;
-      le_function_parameter_mapping = function_parameter_mapping;
-      le_function_return_mapping = function_return_mapping;
-      le_abort_mapping = abort_map;
-      le_first_var = first_var;
-    }
-  in
-  lazy_logger `debug (fun () -> Printf.sprintf "Lookup environment:\n%s"
-      (show_lookup_environment lookup_env));
-  lookup_env
-;;
 
 (* The type of the symbolic interpreter's cache key.  The arguments are the
    lookup stack, the clause identifying the program point at which lookup is
@@ -1072,6 +857,10 @@ struct
          the concrete stack it produces.  The symbol is only used to generate
          formulae, which we'll get from the completed computations. *)
       let%bind _ =
+        (* We need to start from the successor of the program point, since the
+           lookup itself starts at the previous clause.  The successor clause
+           will either be another unannotated clause or a end clause, so only
+           a single successor is picked with the same call stack. *)
         let%bind acl' = pick @@ succs acl cfg in
         lookup env [initial_lookup_var] acl' Relative_stack.empty
         (* lookup env [initial_lookup_var] acl Relative_stack.empty *)
