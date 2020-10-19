@@ -33,6 +33,9 @@ type evaluation_result = {
 
   er_aborts : abort_value Symbol_map.t;
   (** A mapping of abort symbols to abort information *)
+
+  er_visited : Ident_set.t;
+  (** A set of all visited clauses, represented by their identifiers *)
 };;
 
 (** Raised if a query is invalid (e.g. a variable is requested for an expression

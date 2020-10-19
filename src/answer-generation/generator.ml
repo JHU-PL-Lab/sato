@@ -112,14 +112,32 @@ module Make(Answer : Answer) : Generator = struct
             };
         }
       end else begin
+        let results, ev'_opt = Interpreter.step ev in
         let (x, x_list') =
           match x_list with
           | [] ->
             raise @@ Invalid_argument "cannot have empty list of start vars"
           | x :: x_list' ->
-            (x, x_list')
+            (* Eliminate already-visited vars from the list *)
+            let visited_clauses =
+              List.fold_left
+                (fun accum res ->
+                  Ident_set.union accum res.Interpreter.er_visited
+                )
+                Ident_set.empty
+                results
+            in
+            let x_list'' =
+              List.filter
+                (fun cls_id ->
+                  match Ident_set.Exceptionless.find cls_id visited_clauses with
+                  | None -> true
+                  | Some _ -> false
+                )
+              x_list'
+            in
+            (x, x_list'')
         in
-        let results, ev'_opt = Interpreter.step ev in
         let answers =
           List.map (Answer.answer_from_result gen_ref.gen_program x) results
         in

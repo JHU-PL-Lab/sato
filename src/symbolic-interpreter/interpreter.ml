@@ -143,6 +143,7 @@ type evaluation_result = {
   er_stack : Relative_stack.concrete_stack;
   er_solution : (symbol -> value option);
   er_aborts : abort_value Symbol_map.t;
+  er_visited : Ident_set.t;
 };;
 
 exception Invalid_query of string;;
@@ -890,11 +891,24 @@ struct
       (* print_endline @@ show_ident_hashtbl clause_visits_hashtbl; *)
       let solver = eval_result.M.er_solver in
       let errors = eval_result.M.er_abort_points in
+      let visited_clauses =
+        Symbol_map.fold
+          (fun k v accum -> 
+            let (Symbol (abort_ident, _)) = k in
+            let cond_ident = v.abort_conditional_ident in
+            accum
+            |> Ident_set.add abort_ident
+            |> Ident_set.add cond_ident
+          )
+          errors
+          Ident_set.empty
+      in
       Some {
         er_solver = solver;
         er_stack = stack;
         er_solution = get_value;
         er_aborts = errors;
+        er_visited = visited_clauses;
       }
     | None ->
       begin
