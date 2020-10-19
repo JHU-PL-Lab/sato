@@ -97,11 +97,12 @@ module Make(Answer : Answer) : Generator = struct
         (step_count : int)
         (ev : Interpreter.evaluation)
       : generation_result =
-      lazy_logger `trace (fun () -> Printf.sprintf
-                          "%d/%d completed in this pass" step_count max_steps);
+      lazy_logger `trace (fun () ->
+        Printf.sprintf "%d/%d completed in this pass" step_count max_steps);
+      (* Suspend computation if we reached the max number of steps *)
       if step_count = max_steps then begin
         lazy_logger `trace (fun () ->
-            "Pass reached max step count; returning suspended generator.");
+          "Pass reached max step count; returning suspended generator.");
         { gen_answers = [];
           gen_steps = step_count;
           gen_generator =
@@ -111,94 +112,69 @@ module Make(Answer : Answer) : Generator = struct
             };
         }
       end else begin
+        let (x, x_list') =
+          match x_list with
+          | [] ->
+            raise @@ Invalid_argument "cannot have empty list of start vars"
+          | x :: x_list' ->
+            (x, x_list')
+        in
         let results, ev'_opt = Interpreter.step ev in
-        if List.is_empty results then begin
-          lazy_logger `trace (fun () -> "No new results found in this step.");
-          match ev'_opt with
-          | Some ev' ->
-            (* No result and no termination.  Keep running. *)
+        let answers =
+          List.map (Answer.answer_from_result gen_ref.gen_program x) results
+        in
+        match answers, ev'_opt with
+        | [], Some ev' ->
+          (* No result and no termination.  Keep running the same loop. *)
+          lazy_logger `trace (fun () ->
+            "Interpreter evaluation not yet complete. Continuing.");
+          take_one_step (step_count + 1) ev'
+        | _, Some ev' ->
+          lazy_logger `trace (fun () ->
+            "New result found in this step. Continuing evaluation.");
+          { gen_answers = answers;
+            gen_steps = step_count + 1;
+            gen_generator =
+              { generator_reference = gen_ref;
+                gen_target = x_list;
+                generator_fn = Some(fun n -> take_steps gen_ref x_list n ev');
+              };
+          }
+        | _, None ->
+          (* Start a new evaluation if there's start vars left in the list. *)
+          if not @@ List.is_empty answers then begin
             lazy_logger `trace (fun () ->
-                "Interpreter evaluation not yet complete; continuing.");
-            take_one_step (step_count + 1) ev'
-          | None ->
-            begin
-              match List.tl x_list with
+              "New result found in this step. Current evaluation terminated.")
+          end;
+          begin
+            let gen_fn_opt =
+              match x_list' with
               | [] ->
-                (* No result and no remaining computation; we terminated!  Give
-                  back a result indicating as much. *)
                 lazy_logger `trace (fun () ->
-                    "Interpreter evaluation complete; stopping.");
-                { gen_answers = [];
-                  gen_steps = step_count + 1;
-                  gen_generator =
-                  { generator_reference = gen_ref;
-                    gen_target = x_list;
-                    generator_fn = None;
-                  };
-                }
-              | (x :: _)  as x_list' ->
+                  "No additional targets. Interpreter evaluation complete.");
+                None
+              | (x' :: _) ->
+                lazy_logger `trace (fun () ->
+                  Format.sprintf "Start new evaluation at new variable %s." (show_ident x'));
                 let ev' =
                   Interpreter.start
                     ~exploration_policy:gen_ref.gen_exploration_policy
                     gen_ref.gen_cfg
                     gen_ref.gen_program
-                    x
+                    x'
                 in
-                { gen_answers = [];
-                  gen_steps = step_count + 1;
-                  gen_generator =
-                  { generator_reference = gen_ref;
-                    gen_target = x_list';
-                    generator_fn = Some(fun n -> take_steps gen_ref x_list' n ev');
-                  };
-                }
-            end
-        end else begin
-          (* We have results! *)
-          lazy_logger `trace (fun () -> "New result found in this step.");
-          let e = gen_ref.gen_program in
-          let x = List.hd x_list in
-          let answers = List.map (Answer.answer_from_result e x) results in
-            match ev'_opt with
-            | None ->
-              begin
-                match List.tl x_list with
-                | [] ->
-                  { gen_answers = answers;
-                    gen_steps = step_count + 1;
-                    gen_generator =
-                      { generator_reference = gen_ref;
-                        gen_target = x_list;
-                        generator_fn = None;
-                      };
-                  }
-                | x_list' ->
-                  let ev' =
-                    Interpreter.start
-                      ~exploration_policy:gen_ref.gen_exploration_policy
-                      gen_ref.gen_cfg
-                      gen_ref.gen_program
-                      x
-                  in
-                  { gen_answers = answers;
-                    gen_steps = step_count + 1;
-                    gen_generator =
-                      { generator_reference = gen_ref;
-                        gen_target = x_list';
-                        generator_fn = Some(fun n -> take_steps gen_ref x_list' n ev');
-                      };
-                  }
-              end
-            | Some ev' ->
-              { gen_answers = answers;
-                gen_steps = step_count + 1;
-                gen_generator =
-                  { generator_reference = gen_ref;
-                    gen_target = x_list;
-                    generator_fn = Some(fun n -> take_steps gen_ref x_list n ev');
-                  };
+                Some(fun n -> take_steps gen_ref x_list' n ev')
+            in
+            {
+              gen_answers = answers;
+              gen_steps = step_count + 1;
+              gen_generator = {
+                generator_reference = gen_ref;
+                gen_target = x_list';
+                generator_fn = gen_fn_opt;
               }
-        end
+            }
+          end
       end
     in
     take_one_step 0 evaluation
