@@ -26,9 +26,17 @@ let lazy_logger = Logger_utils.make_lazy_logger "Generator";;
 module type Generator = sig
   module Answer : Answer;;
 
+  type generator_reference =
+    {      
+      gen_program : expr;
+      gen_cfg : Ddpa_graph.ddpa_graph;
+      gen_exploration_policy : Interpreter.exploration_policy;
+    }
+  ;;
+
   type generator =
     {
-      gen_program : expr;
+      generator_reference : generator_reference;
       gen_target : Ident.t list;
       generator_fn : (int -> generation_result) option
     }
@@ -56,9 +64,17 @@ end;;
 module Make(Answer : Answer) : Generator = struct
   module Answer = Answer;;
 
+  type generator_reference =
+    {      
+      gen_program : expr;
+      gen_cfg : Ddpa_graph.ddpa_graph;
+      gen_exploration_policy : Interpreter.exploration_policy;
+    }
+  ;;
+
   type generator =
     {
-      gen_program : expr;
+      generator_reference : generator_reference;
       gen_target : Ident.t list;
       generator_fn : (int -> generation_result) option
     }
@@ -72,7 +88,7 @@ module Make(Answer : Answer) : Generator = struct
   ;;
 
   let rec take_steps
-      (e : expr)
+      (gen_ref : generator_reference)
       (x_list : Ident.t list)
       (max_steps : int)
       (evaluation : Interpreter.evaluation)
@@ -89,9 +105,9 @@ module Make(Answer : Answer) : Generator = struct
         { gen_answers = [];
           gen_steps = step_count;
           gen_generator =
-            { gen_program = e;
+            { generator_reference = gen_ref;
               gen_target = x_list;
-              generator_fn = Some(fun n -> take_steps e x_list n ev)
+              generator_fn = Some(fun n -> take_steps gen_ref x_list n ev)
             };
         }
       end else begin
@@ -112,25 +128,26 @@ module Make(Answer : Answer) : Generator = struct
             { gen_answers = [];
               gen_steps = step_count + 1;
               gen_generator =
-                { gen_program = e;
-                  gen_target = x_list;
-                  generator_fn = None;
-                };
+              { generator_reference = gen_ref;
+                gen_target = x_list;
+                generator_fn = None;
+              };
             }
         end else begin
           (* We have results! *)
           lazy_logger `trace (fun () -> "New result found in this step.");
+          let e = gen_ref.gen_program in
           let x = List.hd x_list in
           let answers = List.map (Answer.answer_from_result e x) results in
           let generator_fn =
             match ev'_opt with
             | None -> None
-            | Some ev' -> Some(fun n -> take_steps e x_list n ev')
+            | Some ev' -> Some(fun n -> take_steps gen_ref x_list n ev')
           in
           { gen_answers = answers;
             gen_steps = step_count + 1;
             gen_generator =
-              { gen_program = e;
+              { generator_reference = gen_ref;
                 gen_target = x_list;
                 generator_fn = generator_fn;
               };
@@ -160,14 +177,18 @@ module Make(Answer : Answer) : Generator = struct
     in
     let _ = target_vars in
     let x = List.hd x_list in
-    let evaluation =
-      Interpreter.start
-      ~exploration_policy:exploration_policy
-      cfg e x
+    let evaluation = Interpreter.start ~exploration_policy cfg e x in
+    let gen_reference =
+      {
+        gen_program = e;
+        gen_cfg = cfg;
+        gen_exploration_policy = exploration_policy;
+      }
     in
-    { gen_program = e;
+    {
+      generator_reference = gen_reference;
       gen_target = x_list;
-      generator_fn = Some(fun n -> take_steps e x_list n evaluation)
+      generator_fn = Some(fun n -> take_steps gen_reference x_list n evaluation)
     }
   ;;
 
@@ -209,7 +230,7 @@ module Make(Answer : Answer) : Generator = struct
       (max_steps_opt : int option)
       (original_generator : generator)
     : (Answer.t list * int) list * generator option =
-    _log_trace_start_generating original_generator.gen_program;
+    _log_trace_start_generating original_generator.generator_reference.gen_program;
     let max_steps_per_loop = 100 in
     (* Keep running the generator until we run out of steps per loop *)
     let rec loop
