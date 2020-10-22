@@ -36,8 +36,6 @@ type evaluation_result = {
 
   er_visited : Ident_set.t;
   (** A set of visited clauses, represented by their identifiers *)
-  (* NOTE: For now this only includes identifiers for abort clauses and
-     instrumenting conditionals, as a slight optimization. *)
 };;
 
 (** Raised if a query is invalid (e.g. a variable is requested for an expression
