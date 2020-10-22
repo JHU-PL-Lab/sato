@@ -119,6 +119,9 @@ module type S = sig
   val record_abort_point :
     Interpreter_types.symbol -> Interpreter_types.abort_value -> unit m;;
 
+  (** Records a visited clause, represented by its binding symbol. *)
+  val record_visited_clause : ident -> unit m;;
+
   (** Checks that a monadic value's constraints are solvable.  For each
       non-deterministic path in the provided monadic value, a solution is
       attempted for the constraints.  Any paths with unsolvable constraints are
@@ -139,6 +142,7 @@ module type S = sig
     { er_value : 'a;
       er_solver : Solver.t;
       er_abort_points : abort_value Symbol_map.t;
+      er_visited_clauses : Ident_set.t;
       er_evaluation_steps : int;
       er_result_steps : int;
     };;

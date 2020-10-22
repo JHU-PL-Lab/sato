@@ -117,9 +117,9 @@ module Make(Answer : Answer) : Generator = struct
           match x_list with
           | [] ->
             raise @@ Invalid_argument "cannot have empty list of start vars"
-          | x :: x_list' ->
+          | x :: x_list_tl ->
             (* Eliminate already-visited vars from the list *)
-            let visited_clauses =
+            let visited =
               List.fold_left
                 (fun accum res ->
                   Ident_set.union accum res.Interpreter.er_visited
@@ -127,16 +127,16 @@ module Make(Answer : Answer) : Generator = struct
                 Ident_set.empty
                 results
             in
-            let x_list'' =
+            let x_list_filtered =
               List.filter
                 (fun cls_id ->
-                  match Ident_set.Exceptionless.find cls_id visited_clauses with
+                  match Ident_set.Exceptionless.find cls_id visited with
                   | None -> true
                   | Some _ -> false
                 )
-              x_list'
+              x_list_tl
             in
-            (x, x_list'')
+            (x, x_list_filtered)
         in
         let answers =
           List.map (Answer.answer_from_result gen_ref.gen_program x) results
@@ -173,7 +173,8 @@ module Make(Answer : Answer) : Generator = struct
                 None
               | (x' :: _) ->
                 lazy_logger `trace (fun () ->
-                  Format.sprintf "Start new evaluation at new variable %s." (show_ident x'));
+                  Format.sprintf
+                    "Start new evaluation at new variable %s." (show_ident x'));
                 let ev' =
                   Interpreter.start
                     ~exploration_policy:gen_ref.gen_exploration_policy

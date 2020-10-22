@@ -160,4 +160,5 @@ let list_instrument_conditionals (e : expr) : ident list =
   |> enum_all_aborts_in_expr
   |> Enum.map (fun (_, abort_val) -> abort_val.abort_conditional_ident)
   |> List.of_enum
+  |> List.rev
 ;;

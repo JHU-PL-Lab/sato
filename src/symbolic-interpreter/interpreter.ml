@@ -319,6 +319,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Value Discovery rule lookup *)
         trace_rule "Value Discovery" x;
+        let%bind () = record_visited_clause x in
         (* Get the value v assigned here. *)
         let%orzero (Clause (_, Value_body(v))) =
           Ident_map.find x env.le_clause_mapping
@@ -373,6 +374,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Input rule lookup *)
         trace_rule "Input" x;
+        let%bind () = record_visited_clause x in
         (* Induce the resulting formula *)
         let lookup_symbol = Symbol (lookup_var, relstack) in
         let%bind () = record_constraint @@
@@ -402,6 +404,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Binop rule lookup *)
         trace_rule "Binop" x;
+        let%bind () = record_visited_clause x in
         (* Look up operand variables *)
         let%bind symbol_list_1 = recurse [x'] acl1 relstack in
         let%bind symbol_list_2 = recurse [x''] acl1 relstack in
@@ -432,6 +435,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Pattern Match rule lookup *)
         trace_rule "Pattern Match" x;
+        let%bind () = record_visited_clause x in
         (* Look up the symbol that is being matched upon *)
         let%bind symbol_list = recurse (x' :: lookup_stack') acl1 relstack in
         let%orzero pat_symbol :: symbol_list' = symbol_list in
@@ -464,6 +468,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Value Discard rule lookup *)
         trace_rule "Value Discard" x;
+        let%bind () = record_visited_clause x in
         (* We found the variable, so toss it and keep going. *)
         let%bind symbol_list = recurse (query_element :: lookup_stack') acl1 relstack in
         let lookup_symbol = Symbol(lookup_var, relstack) in
@@ -485,6 +490,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Alias rule lookup *)
         trace_rule "Alias" x;
+        let%bind () = record_visited_clause x in
         (* Look for the alias now. *)
         let%bind symbol_list = recurse (x' :: lookup_stack') acl1 relstack in
         let%orzero alias_symbol :: symbol_list' = symbol_list in
@@ -512,6 +518,7 @@ struct
         trace_rule "Function Enter Parameter" x;
         (* Build the popped relative stack. *)
         let%orzero Abs_clause (Abs_var xr, Abs_appl_body (Abs_var xf,_)) = c in
+        let%bind () = record_visited_clause xr in
         let%orzero Some relstack' = Relative_stack.pop relstack xr in
         (* Record this wiring decision. *)
         let cc = Ident_map.find xr env.le_clause_mapping in
@@ -541,15 +548,16 @@ struct
       (* ### Function Enter Non-Local rule ### *)
       begin
         (* Grab variable from lookup stack *)
-        let%orzero x :: lookup_stack' = lookup_stack in
+        let%orzero lookup_var :: lookup_stack' = lookup_stack in
         (* This must be a binding enter clause which DOES NOT define our
             lookup variable. *)
         let%orzero Binding_enter_clause (Abs_var x'', Abs_var x', c) = acl1 in
-        [%guard not @@ equal_ident x x''];
+        [%guard not @@ equal_ident lookup_var x''];
         (* Report Function Enter Non-Local rule lookup *)
-        trace_rule "Function Enter Non-Local" x;
+        trace_rule "Function Enter Non-Local" lookup_var;
         (* Build the popped relative stack. *)
         let%orzero Abs_clause(Abs_var xr, Abs_appl_body (Abs_var xf, _)) = c in
+        let%bind () = record_visited_clause xr in
         let%orzero Some relstack' = Relative_stack.pop relstack xr in
         (* Record this wiring decision. *)
         let cc = Ident_map.find xr env.le_clause_mapping in
@@ -564,10 +572,10 @@ struct
         in
         (* Proceed to look up the variable in the context of the function's
             definition. *)
-        let%bind symbol_list = recurse (xf :: x :: lookup_stack') acl1 relstack' in
+        let%bind symbol_list = recurse (xf :: lookup_var :: lookup_stack') acl1 relstack' in
         let%orzero _ :: ret_symbol :: symbol_list' = symbol_list in
         (* Add alias constraints (as symbols have different relative stacks *)
-        let lookup_symbol = Symbol (x, relstack) in
+        let lookup_symbol = Symbol (lookup_var, relstack) in
         let%bind () = record_constraint @@
           Constraint.Constraint_alias (lookup_symbol, ret_symbol)
         in
@@ -591,6 +599,7 @@ struct
         trace_rule "Function Exit" x;
         (* Look up the definition point of the function. *)
         let%orzero Abs_clause (Abs_var xr, Abs_appl_body(Abs_var xf, _)) = c in
+        let%bind () = record_visited_clause xr in
         let%bind fun_symbol_list =
           recurse [xf] (Unannotated_clause(c)) relstack
         in
@@ -640,9 +649,12 @@ struct
         let%orzero lookup_var :: _ = lookup_stack in
         (* This must be a non-binding enter wiring node for a conditional. *)
         let%orzero Nonbinding_enter_clause (av, c) = acl1 in
-        let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, _, _)) = c in
+        let%orzero
+          Abs_clause(Abs_var xc, Abs_conditional_body(Abs_var x1, _, _)) = c
+        in
         (* Report Conditional Top rule lookup *)
         trace_rule "Conditional Top" lookup_var;
+        let%bind () = record_visited_clause xc in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
           recurse [x1] (Unannotated_clause c) relstack
@@ -671,11 +683,13 @@ struct
         let%orzero Binding_exit_clause (Abs_var x, Abs_var x', c) = acl1 in
         [%guard equal_ident x lookup_var];
         (* Ensure that we're considering the true branch *)
-        let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, e1, _)) = c in
+        let%orzero
+          Abs_clause(Abs_var xc, Abs_conditional_body(Abs_var x1, e1, _)) = c in
         let Abs_var e1ret = retv e1 in
         [%guard equal_ident x' e1ret];
         (* Report Conditional Bottom - True rule lookup *)
         trace_rule "Conditional Bottom - True" lookup_var;
+        let%bind () = record_visited_clause xc in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
           recurse [x1] (Unannotated_clause c) relstack
@@ -707,12 +721,15 @@ struct
             variable. *)
         let%orzero Binding_exit_clause (Abs_var x, Abs_var x', c) = acl1 in
         [%guard equal_ident x lookup_var];
-        (* Report Conditional Bottom - False rule lookup *)
-        trace_rule "Conditional Bottom - False" lookup_var;
         (* Ensure that we're considering the false branch *)
-        let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, _, e2)) = c in
+        let%orzero
+          Abs_clause(Abs_var xc, Abs_conditional_body(Abs_var x1, _, e2)) = c
+        in
         let Abs_var e2ret = retv e2 in
         [%guard equal_ident x' e2ret];
+        (* Report Conditional Bottom - False rule lookup *)
+        trace_rule "Conditional Bottom - False" lookup_var;
+        let%bind () = record_visited_clause xc in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
           recurse [x1] (Unannotated_clause c) relstack
@@ -750,6 +767,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Record Projection rule lookup *)
         trace_rule "Record Projection" lookup_var;
+        let%bind () = record_visited_clause x in
         (* Look up the record itself and identify the symbol it uses. *)
         (* We ignore the stacks here intentionally; see note 1 above. *)
         let%bind symbol_list = recurse (x' :: lookup_stack') acl1 relstack in
@@ -779,6 +797,7 @@ struct
         in
         (* Report Abort rule lookup *)
         trace_rule "Abort" x;
+        let%bind () = record_visited_clause x in
         let abort_symbol = Symbol(x, relstack) in
         (* Look up the first variable of the program *)
         let abort_value = Ident_map.find x env.le_abort_mapping in
@@ -891,6 +910,7 @@ struct
       (* print_endline @@ show_ident_hashtbl clause_visits_hashtbl; *)
       let solver = eval_result.M.er_solver in
       let errors = eval_result.M.er_abort_points in
+      (*
       let visited_clauses =
         Symbol_map.fold
           (fun k v accum -> 
@@ -903,6 +923,8 @@ struct
           errors
           Ident_set.empty
       in
+      *)
+      let visited_clauses = eval_result.M.er_visited_clauses in
       Some {
         er_solver = solver;
         er_stack = stack;
