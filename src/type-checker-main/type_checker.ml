@@ -85,7 +85,6 @@ let print_results
     print_endline "Further control flows may exist."
 ;;
 
-
 let get_target_vars
     (args: Type_checker_parser.type_checker_args)
     (expr : Ast.expr)

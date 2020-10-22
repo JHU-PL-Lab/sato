@@ -42,6 +42,8 @@ module type Answer = sig
       by the program.  The expected answer is the first argument while the
       actual answer is the second argument; test_expected returns a boolean. *)
   val test_expected : t -> t -> bool;;
+
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 (** An input sequence for a single program flow of symbolic evaluation. *)

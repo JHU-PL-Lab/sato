@@ -62,6 +62,7 @@ module type Error_ident = sig
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
   val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 module type Error_value = sig
@@ -70,6 +71,7 @@ module type Error_value = sig
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
   val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 module type Error_binop = sig
@@ -78,6 +80,7 @@ module type Error_binop = sig
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
   val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 module type Error_type = sig
@@ -87,6 +90,7 @@ module type Error_type = sig
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
   val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 module Ident : (Error_ident with type t = Ast.ident) = struct
@@ -95,6 +99,7 @@ module Ident : (Error_ident with type t = Ast.ident) = struct
   let pp = Ast_pp.pp_ident;;
   let show = Ast_pp.show_ident;;
   let parse str = Ast.Ident str;;
+  let to_yojson = Ast.Ident.to_yojson;;
 end;;
 
 module Value : (Error_value with type t = Ast.clause_body) = struct
@@ -103,12 +108,14 @@ module Value : (Error_value with type t = Ast.clause_body) = struct
   let pp = Ast_pp.pp_clause_body;;
   let show = Ast_pp.show_clause_body;;
   let parse = _parse_clause_body;;
+  let to_yojson = Ast.clause_body_to_yojson;;
 end;;
 
 module Binop : (Error_binop with type t =
     (Ast.clause_body * Ast.binary_operator * Ast.clause_body)) = struct
+
   type t = (Ast.clause_body * Ast.binary_operator * Ast.clause_body)
-  [@@ deriving eq];;
+  [@@ deriving eq, to_yojson];;
 
   let equal = equal;;
 
@@ -134,6 +141,7 @@ module Binop : (Error_binop with type t =
 
   let show binop = Pp_utils.pp_to_string pp binop;;
 
+  let to_yojson = to_yojson;;
 end;;
 
 module Type : (Error_type with type t = Ast.type_sig) = struct
@@ -143,6 +151,7 @@ module Type : (Error_type with type t = Ast.type_sig) = struct
   let pp = Ast_pp.pp_type_sig;;
   let show = Ast_pp.show_type_sig;;
   let parse = _parse_type;;
+  let to_yojson = Ast.type_sig_to_yojson;;
 end;;
 
 module type Error = sig
@@ -185,6 +194,7 @@ module type Error = sig
   val parse : string -> t;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 module Make
@@ -210,7 +220,7 @@ module Make
     err_binop_right_val : Value.t;
     err_binop_operation : Binop.t;
   }
-  [@@ deriving eq]
+  [@@ deriving eq, to_yojson]
 
   type error_match = {
     err_match_aliases : Ident.t list;
@@ -218,19 +228,19 @@ module Make
     err_match_expected : Type.t;
     err_match_actual : Type.t;
   }
-  [@@ deriving eq]
+  [@@ deriving eq, to_yojson]
 
   type error_value = {
     err_value_aliases : Ident.t list;
     err_value_val : Value.t;
   }
-  [@@ deriving eq]
+  [@@ deriving eq, to_yojson]
 
   type t =
     | Error_binop of error_binop
     | Error_match of error_match
     | Error_value of error_value
-  [@@ deriving eq]
+  [@@ deriving eq, to_yojson]
 
   let equal = equal;;
 

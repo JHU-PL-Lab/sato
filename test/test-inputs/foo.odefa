@@ -1,0 +1,7 @@
+i = input;
+f = fun x -> ( t = true; sum = x + t; );
+r = { fon = f };
+q = r ~ { fon };
+g = r.fon;
+res = g i;
+target = res;

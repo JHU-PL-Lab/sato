@@ -22,6 +22,7 @@ module type Answer = sig
   val count_list : t list -> int;;
   val generation_successful : t -> bool;;
   val test_expected : t -> t -> bool;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 (* **** String parsing utilities **** *)
@@ -67,7 +68,9 @@ let show_input_seq (input_seq : int list) =
 (* **** Input sequence **** *)
 
 module Input_sequence : Answer = struct
-  type t = int list option;;
+  type t = int list option
+  [@@ deriving to_yojson]
+  ;;
 
   let answer_from_result e x result =
     let (input_seq, error_opt) =
@@ -124,7 +127,9 @@ module Type_errors : Answer = struct
     err_errors : Error.Odefa_error.t list;
     err_input_seq : int list;
     err_location : Ast.clause option;
-  };;
+  }
+  [@@ deriving to_yojson]
+  ;;
 
   let odefa_on_maps_option_ref = ref None;;
 
@@ -240,7 +245,9 @@ module Natodefa_type_errors : Answer = struct
     err_errors : On_error.On_error.t list;
     err_input_seq : int list;
     err_location : On_ast.expr option;
-  };;
+  }
+  [@@ deriving to_yojson]
+  ;;
 
   let odefa_on_maps_option_ref = ref None;;
 

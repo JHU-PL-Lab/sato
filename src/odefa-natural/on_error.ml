@@ -47,6 +47,7 @@ module type Error_ident = sig
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
   val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 module type Error_value = sig
@@ -55,6 +56,7 @@ module type Error_value = sig
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
   val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 module type Error_binop = sig
@@ -63,6 +65,7 @@ module type Error_binop = sig
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
   val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 module type Error_type = sig
@@ -72,6 +75,7 @@ module type Error_type = sig
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
   val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 (* **** Natodefa modules **** *)
@@ -82,6 +86,7 @@ module Ident : (Error_ident with type t = On_ast.ident) = struct
   let pp = On_ast_pp.pp_ident;;
   let show = On_ast_pp.show_ident;;
   let parse s = On_ast.Ident s;;
+  let to_yojson = On_ast.ident_to_yojson;;
 end;;
 
 module Value : (Error_value with type t = On_ast.expr) = struct
@@ -90,6 +95,7 @@ module Value : (Error_value with type t = On_ast.expr) = struct
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
   let parse = On_parse.parse_single_expr_string;;
+  let to_yojson = On_ast.expr_to_yojson;;
 end;;
 
 module Binop : (Error_binop with type t = On_ast.expr) = struct
@@ -98,6 +104,7 @@ module Binop : (Error_binop with type t = On_ast.expr) = struct
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
   let parse = On_parse.parse_single_expr_string;;
+  let to_yojson = On_ast.expr_to_yojson;;
 end;;
 
 module Type : (Error_type with type t = On_ast.type_sig) = struct
@@ -107,6 +114,7 @@ module Type : (Error_type with type t = On_ast.type_sig) = struct
   let pp = On_ast_pp.pp_on_type;;
   let show = On_ast_pp.show_on_type;;
   let parse = _parse_type_sig;;
+  let to_yojson = On_ast.type_sig_to_yojson;;
 end;;
 
 module On_error = Error.Make(Ident)(Value)(Binop)(Type);;
