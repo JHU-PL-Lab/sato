@@ -200,7 +200,7 @@ module Type_errors : Answer = struct
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map Error.Odefa_error.show error.err_errors)
-    | None -> ""
+    | None -> "** No errors found on this run. **"
   ;;
 
   let count (errors : t) = List.length errors.err_errors;;

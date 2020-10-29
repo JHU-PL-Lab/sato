@@ -784,7 +784,7 @@ let test_ddse
       ?exploration_policy:(Some (Explore_least_relative_stack_repetition))
       configuration
       expr
-      (Ident x)
+      [(Ident x)]
     in
     (* let found_input_sequences = ref [] in *)
     let remaining_input_seq = ref inputs in
@@ -976,7 +976,7 @@ let test_sato
         ?exploration_policy:(Some (Explore_least_relative_stack_repetition))
         configuration
         expr
-        (Ident x)
+        [(Ident x)]
     in
     let callback
         (type_errors : Error.t)

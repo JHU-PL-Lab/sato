@@ -67,7 +67,7 @@ let () =
         ~exploration_policy:args.ga_exploration_policy
         args.ga_generator_configuration
         ast
-        args.ga_target_point
+        [args.ga_target_point]
     in
     let failed_generation_count = ref 0 in
     let generation_callback

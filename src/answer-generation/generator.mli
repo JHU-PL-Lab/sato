@@ -3,29 +3,41 @@
 *)
 
 open Odefa_ast;;
-open Ast;;
+open Odefa_ddpa;;
+open Odefa_symbolic_interpreter;;
 
 open Generator_answer;;
 open Generator_configuration;;
-
-open Odefa_symbolic_interpreter;;
-open Interpreter;;
 
 (** The interface of a generic answer generator. *)
 module type Generator = sig
   module Answer : Answer;;
 
+  (** A record of fields that stay constant across multiple generation attempts
+      on a single program.  These are stored for reference purposes (i.e. for
+      use by auxillary functions), but not updated by the generator itself. *)
+  type generator_reference =
+    {
+      (** The program being analyzed. *)
+      gen_program : Ast.expr;
+
+      (** The CFG of the program being analyzed. *)
+      gen_cfg : Ddpa_graph.ddpa_graph;
+
+      (** The exploration policy used by the symbolic interpreter. *)
+      gen_exploration_policy : Interpreter.exploration_policy;
+    }
+  ;;
+
   (** A generator is a tool which attempts to find an answer to lead to a
       particular point in a program. *)
   type generator =
     {
-      (** The program being analyzed.  This is stored for reference
-          purposes. *)
-      gen_program : expr;
+      (** A reference for information/properties about the program. *)
+      generator_reference : generator_reference;
 
-      (** The program point we are trying to reach.  This is stored for
-          reference purposes. *)
-      gen_target : Ident.t;
+      (** The list of program point we are trying to reach. *)
+      gen_target : Ast.Ident.t list;
 
       (** A function which, given a maximum number of steps to take, attempts
           to reach the point in question.  Here, "steps" are not of any fixed
@@ -68,8 +80,8 @@ module type Generator = sig
       expression), an exception is raised from the symbolic intepreter of type
       [Odefa_symbolic_interpreter.Interpreter.Invalid_query]. *)
   val create :
-    ?exploration_policy:exploration_policy ->
-    configuration -> expr -> ident -> generator;;
+    ?exploration_policy:Interpreter.exploration_policy ->
+    configuration -> Ast.expr -> Ast.ident list -> generator;;
   
   (** A convenience routine for running generation with a generator.  The
       given optional integer is the maximum number of steps to take.  This

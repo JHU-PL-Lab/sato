@@ -163,6 +163,7 @@ let rec evaluate
     env
     lastvar
     cls =
+  let recurse = evaluate ~input_source ~clause_callback ~abort_policy in
   lazy_logger `trace (fun () ->
       Format.asprintf
         "\nEnvironment: @[%a@]\nLast var:    @[%a@]\nClauses:     @[%a@]\n"
@@ -176,37 +177,34 @@ let rec evaluate
       match lastvar with
       | Some(x) -> (x, env)
       | None ->
-        (* TODO: different exception? *)
-        raise (Failure "evaluation of empty expression!")
+        raise (Invalid_argument "evaluation of empty expression!")
     end
-  | (Clause(x, b) as c):: t ->
+  | (Clause(x, b) as c) :: t ->
     begin
-      let recurse =
-        evaluate
-          ~input_source:input_source
-          ~clause_callback:clause_callback
-          ~abort_policy:abort_policy
-          env
-          (Some x)
-      in
-      clause_callback c;
       match b with
       | Value_body v ->
         Environment.add env x (Some v);
-        recurse t
+        clause_callback c;
+        recurse env (Some x) t
       | Var_body x' ->
         let v_opt = lookup env x' in
         Environment.add env x v_opt;
-        recurse t
+        clause_callback c;
+        recurse env (Some x) t
       | Input_body ->
         let v = input_source x in
         Environment.add env x (Some v);
-        recurse t
+        clause_callback c;
+        recurse env (Some x) t
       | Appl_body (x', x'') ->
         begin
           match lookup env x' with
           | Some (Value_function f) ->
-            recurse @@ fun_wire f x'' x @ t
+            let (call_site_x, env') =
+              recurse env (Some x) @@ fun_wire f x'' x
+            in
+            clause_callback c;
+            recurse env' (Some call_site_x) t
           | Some r ->
             raise @@ Evaluation_failure
               (Printf.sprintf
@@ -230,11 +228,16 @@ let rec evaluate
             raise @@ Evaluation_failure
               (Printf.sprintf "cannot condition on undefined value")
         in
-        recurse @@ cond_wire x e_target @ t
+        let (cond_site_x, env') =
+          recurse env (Some x) @@ cond_wire x e_target
+        in
+        clause_callback c;
+        recurse env' (Some cond_site_x) t
       | Match_body (x', p) ->
         let result = Value_bool (matches env x' p) in
         Environment.add env x (Some result);
-        recurse t
+        clause_callback c;
+        recurse env (Some x) t
       | Projection_body (x', l) ->
         begin
           match lookup env x' with
@@ -244,7 +247,8 @@ let rec evaluate
                 let x'' = Ident_map.find l els in
                 let v_opt = lookup env x'' in
                 Environment.add env x v_opt;
-                recurse t
+                clause_callback c;
+                recurse env (Some x) t
               with
               | Not_found ->
                 raise @@ Evaluation_failure(
@@ -308,7 +312,7 @@ let rec evaluate
                 | _, _, _ ->
                   raise @@ Evaluation_failure
                     (Printf.sprintf
-                      "Cannot complete binary operation: (%s) %s (%s)"
+                      "cannot complete binary operation: (%s) %s (%s)"
                       (show_value v1) (show_binary_operator op) (show_value v2))
               end
             | None, Some _ | Some _, None | None, None ->
@@ -318,12 +322,14 @@ let rec evaluate
           end
         in
         Environment.add env x (Some result);
-        recurse t
+        clause_callback c;
+        recurse env (Some x) t
       | Abort_body ->
         abort_policy c;
         (* Unreachable code with default abort policy *)
         Environment.add env x None;
-        recurse t
+        clause_callback c;
+        recurse env (Some x) t
     end
 ;;
 
