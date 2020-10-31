@@ -1,7 +1,9 @@
+(copy_files# unittest/*.{ml,mli})
+
 (alias
   (name runtest)
-  (deps test.exe (glob_files ../../test-sources/*))
-  (action (chdir ../.. (run ./test/unittest/test.exe)))
+  (deps test.exe (glob_files ../test-sources/*))
+  (action (chdir .. (run ./test/test.exe)))
 )
 
 (executable
