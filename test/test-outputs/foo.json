@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "err_input_seq": [ 0 ],
+    "err_location": [
+      "Clause",
+      [ "Var", [ "Ident", "sum" ], null ],
+      [
+        "Binary_operation_body",
+        [ "Var", [ "Ident", "x" ], null ], "+", [ "Var", [ "Ident", "t" ], null ]
+      ]
+    ],
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ [ "Ident", "t" ] ],
+          "err_match_val": [ "Value_body", [ "Value_bool", true ] ],
+          "err_match_expected": [ "Int_type" ],
+          "err_match_actual": [ "Bool_type" ]
+        }
+      ]
+    ] 
+  }
+]

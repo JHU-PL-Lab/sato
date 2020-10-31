@@ -1,0 +1,9 @@
+Type errors for:
+- Input sequence  : [0]
+- Found at clause : sum = x + t
+--------------------
+* Value    : t = true
+* Expected : int
+* Actual   : bool
+Found in 261 steps
+1 errors found. No further control flows exist.
