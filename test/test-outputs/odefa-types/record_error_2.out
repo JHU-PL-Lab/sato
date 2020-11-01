@@ -1,0 +1,8 @@
+Type errors for:
+- Input sequence  : []
+- Found at clause : s = r z
+--------------------
+* Value    : r = {one=o, zero=z}
+* Expected : fun
+* Actual   : {one, zero}
+1 errors found. No further control flows exist.

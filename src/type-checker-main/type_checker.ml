@@ -108,7 +108,6 @@ let run_error_check
     (on_odefa_maps : On_to_odefa_maps.t)
     (expr : Ast.expr)
   : unit =
-  let _ = show_steps in
   let module Ans = Error_generator.Answer in
   Ans.set_odefa_natodefa_map on_odefa_maps;
   try
@@ -126,7 +125,7 @@ let run_error_check
     let generation_callback
       (type_errors : Ans.t) (_: int) : unit =
       if Ans.generation_successful type_errors then
-        output_string output (Printf.sprintf "%s\n" (Ans.show type_errors));
+        output_string output (Printf.sprintf "%s\n" (Ans.show ~show_steps type_errors));
       (*
       if show_steps then
         output_string output (Printf.sprintf "Found in %d steps\n" steps);

@@ -1,0 +1,6 @@
+Type errors for:
+- Input sequence : []
+- Found at expr  : assert (not true)
+--------------------
+* Constraint : true <> true
+1 errors found. No further control flows exist.

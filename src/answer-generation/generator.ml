@@ -217,6 +217,8 @@ module Make(Answer : Answer) = struct
       |> Analysis.cfg_of_analysis
     in
     let x = List.hd x_list in
+    lazy_logger `trace
+      (fun () -> Format.sprintf "Starting evaluation at variable %s" (show_ident x));
     let evaluation = Interpreter.start ~exploration_policy cfg e x in
     let gen_reference =
       {

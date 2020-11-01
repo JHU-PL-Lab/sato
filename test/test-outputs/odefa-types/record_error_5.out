@@ -1,0 +1,8 @@
+Type errors for:
+- Input sequence  : []
+- Found at clause : ans = rec.z
+--------------------
+* Value    : rec = {x=zero, y=one}
+* Expected : {z}
+* Actual   : {x, y}
+1 errors found. No further control flows exist.

@@ -1,0 +1,15 @@
+Type errors for:
+- Input sequence  : [0, -1]
+- Found at clause : sum1 = a + b
+--------------------
+* Value    : b = false
+* Expected : int
+* Actual   : bool
+Type errors for:
+- Input sequence  : [0, 0]
+- Found at clause : sum1 = a + b
+--------------------
+* Value    : b = false
+* Expected : int
+* Actual   : bool
+2 errors found. No further control flows exist.

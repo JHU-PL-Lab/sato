@@ -3,7 +3,7 @@ open OUnit2;;
 
 exception File_test_creation_failure of string;;
 
-let input_root = "test/test-inputs";;
+let input_root = "test/test-sources";;
 let output_root = "test/test-outputs";;
 
 let parse_arguments filename : string list =
@@ -30,7 +30,7 @@ let make_test (in_file, out_file) =
   let args = parse_arguments in_file in
   let expected =
     let in_stream = File.open_in out_file in
-    let expected_str = String.rchop @@ BatIO.read_all in_stream in
+    let expected_str = BatIO.read_all in_stream in
     BatIO.close_in in_stream;
     expected_str
   in
@@ -66,7 +66,7 @@ let make_tests_from_dir dir_name =
     |> Sys.files_of
     |> Enum.filter_map
       (fun filename ->
-        let in_file = input_dir ^ filename in
+        let in_file = input_dir ^ Filename.dir_sep ^ filename in
         if Sys.is_directory in_file then None
         else if not @@ String.ends_with in_file ".odefa"
               && not @@ String.ends_with in_file ".natodefa" then begin
@@ -75,7 +75,7 @@ let make_tests_from_dir dir_name =
           let out_file =
             filename
             |> Filename.remove_extension
-            |> (fun f -> output_dir ^ f ^ ".out")
+            |> (fun f -> output_dir ^ Filename.dir_sep ^ f ^ ".out")
           in
           if not @@ Sys.file_exists out_file then
             raise @@ File_test_creation_failure
@@ -94,5 +94,9 @@ let make_tests_from_dir dir_name =
 let tests =
   "Test Files" >::: (
     make_tests_from_dir ""
+    (* @ make_tests_from_dir "odefa-basic" *)
+    @ make_tests_from_dir "odefa-types"
+    (* @ make_tests_from_dir "natodefa-basic" *)
+    (* @ make_tests_from_dir "natodefa-types" *)
   )
 ;;

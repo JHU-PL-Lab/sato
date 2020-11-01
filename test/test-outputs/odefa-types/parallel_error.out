@@ -1,0 +1,15 @@
+Type errors for:
+- Input sequence  : [0]
+- Found at clause : rf = a + b
+--------------------
+* Value    : a = true
+* Expected : int
+* Actual   : bool
+Type errors for:
+- Input sequence  : [1]
+- Found at clause : rg = a or b
+--------------------
+* Value    : b = 1
+* Expected : bool
+* Actual   : int
+2 errors found. No further control flows exist.

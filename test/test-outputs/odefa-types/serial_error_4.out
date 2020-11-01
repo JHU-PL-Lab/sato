@@ -1,0 +1,8 @@
+Type errors for:
+- Input sequence  : []
+- Found at clause : rx = x and tru
+--------------------
+* Value    : x = zero = 0
+* Expected : bool
+* Actual   : int
+1 errors found. No further control flows exist.

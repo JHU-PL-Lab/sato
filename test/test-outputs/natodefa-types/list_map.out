@@ -1,0 +1,8 @@
+Type errors for:
+- Input sequence : [0]
+- Found at expr  : n + 1
+--------------------
+* Value    : n = hd = true
+* Expected : Integer
+* Actual   : Boolean
+1 errors found. Further control flows may exist.

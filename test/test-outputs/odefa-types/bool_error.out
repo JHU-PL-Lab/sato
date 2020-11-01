@@ -1,0 +1,12 @@
+Type errors for:
+- Input sequence  : []
+- Found at clause : c = a and b
+--------------------
+* Value    : a = 0
+* Expected : bool
+* Actual   : int
+--------------------
+* Value    : b = 1
+* Expected : bool
+* Actual   : int
+2 errors found. No further control flows exist.

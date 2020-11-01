@@ -1,0 +1,15 @@
+Type errors for:
+- Input sequence : [1]
+- Found at expr  : n < false
+--------------------
+* Value    : false
+* Expected : Integer
+* Actual   : Boolean
+Type errors for:
+- Input sequence : [0]
+- Found at expr  : n < true
+--------------------
+* Value    : true
+* Expected : Integer
+* Actual   : Boolean
+2 errors found. No further control flows exist.

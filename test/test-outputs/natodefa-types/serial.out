@@ -1,0 +1,8 @@
+Type errors for:
+- Input sequence : []
+- Found at expr  : false - 0
+--------------------
+* Value    : false
+* Expected : Integer
+* Actual   : Boolean
+1 errors found. No further control flows exist.

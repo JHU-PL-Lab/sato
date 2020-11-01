@@ -1,0 +1,13 @@
+Type errors for:
+- Input sequence : []
+- Found at expr  : match {} with | hd :: tl -> tl | [] -> []
+end
+--------------------
+* Value    : {}
+* Expected : List
+* Actual   : Record {}
+--------------------
+* Value    : {}
+* Expected : List
+* Actual   : Record {}
+2 errors found. No further control flows exist.

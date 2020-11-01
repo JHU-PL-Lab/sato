@@ -1,0 +1,8 @@
+Type errors for:
+- Input sequence  : []
+- Found at clause : ans = zero zero
+--------------------
+* Value    : zero = 0
+* Expected : fun
+* Actual   : int
+1 errors found. No further control flows exist.

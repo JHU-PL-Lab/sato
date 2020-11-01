@@ -1,0 +1,8 @@
+Type errors for:
+- Input sequence  : []
+- Found at clause : ans = not_rec.label
+--------------------
+* Value    : not_rec = fun x -> ( ret = x)
+* Expected : {label}
+* Actual   : fun
+1 errors found. No further control flows exist.

@@ -1,0 +1,13 @@
+Type errors for:
+- Input sequence  : []
+- Found at clause : quot = t / z
+--------------------
+* Left Val   : z = 0
+* Constraint : 0 <> 0
+Type errors for:
+- Input sequence  : []
+- Found at clause : quot = t / z
+--------------------
+* Left Val   : z = 0
+* Constraint : 0 <> 0
+2 errors found. No further control flows exist.

@@ -1,0 +1,9 @@
+Type errors for:
+- Input sequence : [0, 0]
+- Found at expr  : if p then true
+else false
+--------------------
+* Value    : p = input + input
+* Expected : Boolean
+* Actual   : Integer
+1 errors found. No further control flows exist.

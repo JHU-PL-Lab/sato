@@ -1,0 +1,8 @@
+Type errors for:
+- Input sequence  : []
+- Found at clause : b = a <= tru
+--------------------
+* Value    : tru = true
+* Expected : int
+* Actual   : bool
+1 errors found. No further control flows exist.

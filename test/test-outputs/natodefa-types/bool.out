@@ -1,0 +1,12 @@
+Type errors for:
+- Input sequence : [0]
+- Found at expr  : a and b
+--------------------
+* Value    : a = 0
+* Expected : Boolean
+* Actual   : Integer
+--------------------
+* Value    : b = input
+* Expected : Boolean
+* Actual   : Integer
+2 errors found. No further control flows exist.

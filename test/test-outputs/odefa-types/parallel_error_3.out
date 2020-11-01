@@ -1,0 +1,8 @@
+Type errors for:
+- Input sequence  : []
+- Found at clause : sum = x + y
+--------------------
+* Value    : y = c = true
+* Expected : int
+* Actual   : bool
+1 errors found. No further control flows exist.

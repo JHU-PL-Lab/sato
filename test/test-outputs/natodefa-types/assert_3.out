@@ -1,0 +1,16 @@
+Type errors for:
+- Input sequence : []
+- Found at expr  : assert (0 == 1)
+--------------------
+* Constraint : 0 == 1
+Type errors for:
+- Input sequence : []
+- Found at expr  : assert (0 == 1)
+--------------------
+* Constraint : 0 == 1
+Type errors for:
+- Input sequence : []
+- Found at expr  : assert (0 == 1)
+--------------------
+* Constraint : 0 == 1
+3 errors found. No further control flows exist.
