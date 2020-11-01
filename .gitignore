@@ -10,6 +10,7 @@
 
 # Execution temp files
 /*.log
+/*.txt
 
 # Generated graph files
 /*.dot
