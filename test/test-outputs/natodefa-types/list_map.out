@@ -5,4 +5,11 @@ Type errors for:
 * Value    : n = hd = true
 * Expected : Integer
 * Actual   : Boolean
-1 errors found. Further control flows may exist.
+Type errors for:
+- Input sequence : [1]
+- Found at expr  : n + 1
+--------------------
+* Value    : n = hd = true
+* Expected : Integer
+* Actual   : Boolean
+2 errors found. No further control flows exist.

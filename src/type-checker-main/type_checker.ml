@@ -102,7 +102,7 @@ let get_target_vars
 
 let run_error_check
     ?output:(output=stdout)
-    ?show_steps:(show_steps=true)
+    ?show_steps:(show_steps=false)
     (module Error_generator : Generator.Generator)
     (args : Type_checker_parser.type_checker_args)
     (on_odefa_maps : On_to_odefa_maps.t)

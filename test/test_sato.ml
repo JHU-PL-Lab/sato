@@ -50,9 +50,9 @@ let make_test (in_file, out_file) =
           expected
           actual
       )
-    ~ctxt
-    "./type_checker"
-    (args @ [in_file])
+      ~ctxt
+      "./type_checker"
+      (in_file :: args)
   in
   in_file >:: test_thunk
 ;;
@@ -94,9 +94,9 @@ let make_tests_from_dir dir_name =
 let tests =
   "Test Files" >::: (
     make_tests_from_dir ""
-    (* @ make_tests_from_dir "odefa-basic" *)
+    @ make_tests_from_dir "odefa-basic"
     @ make_tests_from_dir "odefa-types"
-    (* @ make_tests_from_dir "natodefa-basic" *)
-    (* @ make_tests_from_dir "natodefa-types" *)
+    @ make_tests_from_dir "natodefa-basic"
+    @ make_tests_from_dir "natodefa-types"
   )
 ;;

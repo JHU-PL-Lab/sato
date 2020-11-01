@@ -646,14 +646,14 @@ struct
 
       (* ### Conditional Top rule ### *)
       begin
-        let%orzero lookup_var :: _ = lookup_stack in
+        (* let%orzero lookup_var :: _ = lookup_stack in *)
         (* This must be a non-binding enter wiring node for a conditional. *)
         let%orzero Nonbinding_enter_clause (av, c) = acl1 in
         let%orzero
           Abs_clause(Abs_var xc, Abs_conditional_body(Abs_var x1, _, _)) = c
         in
         (* Report Conditional Top rule lookup *)
-        trace_rule "Conditional Top" lookup_var;
+        trace_rule "Conditional Top" (* lookup_var *) xc;
         let%bind () = record_visited_clause xc in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
@@ -899,32 +899,22 @@ struct
       raise @@ Jhupllib.Utils.Invariant_failure
         "no stack constraint in solution!"
     | Some (get_value, Some stack) ->
+      let solver = eval_result.M.er_solver in
+      let errors = eval_result.M.er_abort_points in
+      let visited_clauses = eval_result.M.er_visited_clauses in
       begin
         lazy_logger `debug (fun () ->
             Printf.sprintf
               "Discovered answer of stack %s and formulae:\n%s"
               (Relative_stack.show_concrete_stack stack)
-              (Solver.show eval_result.M.er_solver)
-          )
+              (Solver.show solver)
+          );
+        lazy_logger `debug (fun () ->
+            Printf.sprintf
+              "Visited clauses:\n%s"
+              (Ident_set.show visited_clauses)
+        )
       end;
-      (* print_endline @@ show_ident_hashtbl clause_visits_hashtbl; *)
-      let solver = eval_result.M.er_solver in
-      let errors = eval_result.M.er_abort_points in
-      (*
-      let visited_clauses =
-        Symbol_map.fold
-          (fun k v accum -> 
-            let (Symbol (abort_ident, _)) = k in
-            let cond_ident = v.abort_conditional_ident in
-            accum
-            |> Ident_set.add abort_ident
-            |> Ident_set.add cond_ident
-          )
-          errors
-          Ident_set.empty
-      in
-      *)
-      let visited_clauses = eval_result.M.er_visited_clauses in
       Some {
         er_solver = solver;
         er_stack = stack;

@@ -119,6 +119,10 @@ module Make(Answer : Answer) = struct
             raise @@ Invalid_argument "cannot have empty list of start vars"
           | x :: x_list_tl ->
             (* Eliminate already-visited vars from the list *)
+            lazy_logger `trace (fun () ->
+              "Target vars pre-filter: " ^
+              "[" ^ (String.join ";" @@ List.map Ident.show x_list_tl) ^ "]"
+            );
             let visited =
               List.fold_left
                 (fun accum res ->
@@ -136,6 +140,10 @@ module Make(Answer : Answer) = struct
                 )
               x_list_tl
             in
+            lazy_logger `trace (fun () ->
+              "Target vars post-filter: " ^
+              "[" ^ (String.join ";" @@ List.map Ident.show x_list_filtered) ^ "]"
+            );
             (x, x_list_filtered)
         in
         let steps = step_count + 1 in
@@ -157,8 +165,8 @@ module Make(Answer : Answer) = struct
             gen_steps = steps;
             gen_generator =
               { generator_reference = gen_ref;
-                gen_target = x_list;
-                generator_fn = Some(fun n -> take_steps gen_ref x_list n ev');
+                gen_target = (x :: x_list');
+                generator_fn = Some(fun n -> take_steps gen_ref (x :: x_list') n ev');
               };
           }
         | _, None ->
