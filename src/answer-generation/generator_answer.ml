@@ -17,7 +17,7 @@ module type Answer = sig
   val answer_from_result : int -> expr -> ident -> evaluation_result -> t;;
   val answer_from_string : string -> t;;
   val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
-  val show : t -> string;;
+  val show : ?show_steps : bool -> t -> string;;
   val count : t -> int;;
   val count_list : t list -> int;;
   val generation_successful : t -> bool;;
@@ -90,7 +90,7 @@ module Input_sequence : Answer = struct
   (* Unused for input sequence generation. *)
   let set_odefa_natodefa_map (_ : On_to_odefa_maps.t) = ();;
 
-  let show inputs_opt =
+  let show ?show_steps:(_=false) inputs_opt =
     match inputs_opt with
     | Some inputs ->
       "[" ^ (String.join ", " @@ List.map string_of_int inputs) ^ "]"
@@ -263,13 +263,18 @@ module Type_errors : Answer = struct
 
   (* TODO: Pretty-print *)
 
-  let show (error : t) : string =
+  let show ?show_steps:(show_steps=false) (error : t) : string =
     match error.err_location with
     | Some error_loc ->
       "Type errors for:\n" ^
       "- Input sequence  : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
       "- Found at clause : " ^ (Ast_pp.show_clause error_loc) ^ "\n" ^
-      "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n" ^
+      begin
+        if show_steps then
+          "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n"
+        else
+          ""
+      end ^
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map Error.Odefa_error.show error.err_errors)
@@ -381,13 +386,18 @@ module Natodefa_type_errors : Answer = struct
     odefa_on_maps_option_ref := Some (odefa_on_maps)
   ;;
 
-  let show error =
+  let show ?show_steps:(show_steps=false) error =
     match error.err_location with
     | Some error_loc ->
       "Type errors for:\n" ^
       "- Input sequence : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
       "- Found at expr  : " ^ (On_ast_pp.show_expr error_loc) ^ "\n" ^
-      "- Found in steps : " ^ (string_of_int error.err_steps) ^ "\n" ^
+      begin
+        if show_steps then
+          "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n"
+        else
+          ""
+      end ^
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map On_error.On_error.show error.err_errors)

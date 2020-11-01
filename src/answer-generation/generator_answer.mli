@@ -26,7 +26,7 @@ module type Answer = sig
   val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
 
   (** Convert the answer into a string. *)
-  val show : t -> string;;
+  val show : ?show_steps:bool -> t -> string;;
 
   (** Count the number of answers in the data structure. *)
   val count : t -> int;;
