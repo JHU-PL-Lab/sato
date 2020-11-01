@@ -14,7 +14,7 @@ exception Parse_failure of string;;
 
 module type Answer = sig
   type t;;
-  val answer_from_result : expr -> ident -> evaluation_result -> t;;
+  val answer_from_result : int -> expr -> ident -> evaluation_result -> t;;
   val answer_from_string : string -> t;;
   val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
   val show : t -> string;;
@@ -72,7 +72,8 @@ module Input_sequence : Answer = struct
   [@@ deriving to_yojson]
   ;;
 
-  let answer_from_result e x result =
+  let answer_from_result steps e x result =
+    let _ = steps in
     let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
@@ -127,13 +128,15 @@ module Type_errors : Answer = struct
     err_errors : Error.Odefa_error.t list;
     err_input_seq : int list;
     err_location : Ast.clause option;
+    err_steps : int;
   }
   [@@ deriving to_yojson]
   ;;
 
   let odefa_on_maps_option_ref = ref None;;
 
-  let answer_from_result e x result : t =
+  let answer_from_result steps e x result : t =
+    let _ = steps in
     let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
@@ -152,16 +155,77 @@ module Type_errors : Answer = struct
             err_input_seq = input_seq;
             err_location = Some (trans_inst_fn error_loc);
             err_errors = List.map rm_inst_fn error_list;
+            err_steps = steps;
           }
         | None ->
           {
             err_input_seq = input_seq;
             err_location = None;
             err_errors = [];
+            err_steps = steps;
           }
       end
     | None -> failwith "Odefa/natodefa maps were not set!"
   ;;
+
+  (*
+  type binop_json_rep = {
+    left_aliases : string;
+    right_aliases : string;
+    operation : string;
+  }
+  [@@ deriving yojson]
+  ;;
+
+  type match_json_rep = {
+    aliases : string;
+    value : string;
+    expected_type : string;
+    actual_type : string;
+  }
+  [@@ deriving yojson]
+  ;;
+
+  type value_json_rep = {
+    aliases : string;
+    value : string;
+  }
+  [@@ deriving yojson]
+  ;;
+
+  type error_json_rep =
+  | Binop of binop_json_rep
+  | Match of match_json_rep
+  | Value of value_json_rep
+  [@@ deriving yojson]
+  ;;
+
+  type json_error_rep = {
+    
+  }
+  [@@ deriving yojson]
+  ;;
+  type json_rep = {
+    input_sequence : int list;
+    location : string;
+    error_list : error_json_rep list;
+  }
+  [@@ deriving yojson]
+  ;;
+  *)
+
+  (*
+  let answer_from_string arg_str : t =
+    match Yojson.Safe.from_string arg_str with
+    | `Assoc assoc ->
+      begin
+        let (`Int input_seq) =
+          List.assoc "input_sequence" assoc
+        in
+      end
+    | _ -> raise @@ Invalid_argument "Cannot parse JSON"
+  ;;
+  *)
 
   (* Ex: [0, 1] "sum = a or z" "a = b" "c = 2" "int" "bool" *)
   let answer_from_string arg_str : t =
@@ -189,6 +253,7 @@ module Type_errors : Answer = struct
       err_input_seq = inputs;
       err_location = Some location;
       err_errors = [error];
+      err_steps = 0;
     }
   ;;
 
@@ -196,12 +261,15 @@ module Type_errors : Answer = struct
     odefa_on_maps_option_ref := Some (odefa_on_maps)
   ;;
 
+  (* TODO: Pretty-print *)
+
   let show (error : t) : string =
     match error.err_location with
     | Some error_loc ->
       "Type errors for:\n" ^
       "- Input sequence  : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
       "- Found at clause : " ^ (Ast_pp.show_clause error_loc) ^ "\n" ^
+      "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n" ^
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map Error.Odefa_error.show error.err_errors)
@@ -245,13 +313,15 @@ module Natodefa_type_errors : Answer = struct
     err_errors : On_error.On_error.t list;
     err_input_seq : int list;
     err_location : On_ast.expr option;
+    err_steps : int;
   }
   [@@ deriving to_yojson]
   ;;
 
   let odefa_on_maps_option_ref = ref None;;
 
-  let answer_from_result e x result =
+  let answer_from_result steps e x result =
+    let _ = steps in
     let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
@@ -270,12 +340,14 @@ module Natodefa_type_errors : Answer = struct
               err_input_seq = input_seq;
               err_location = Some on_err_loc;
               err_errors = on_err_list;
+              err_steps = steps;
             }
           | None ->
             {
               err_input_seq = input_seq;
               err_location = None;
               err_errors = [];
+              err_steps = steps;
             }
         end
       | None -> failwith "Odefa/natodefa maps were not set!"
@@ -301,6 +373,7 @@ module Natodefa_type_errors : Answer = struct
       err_input_seq = inputs;
       err_location = Some location;
       err_errors = [error];
+      err_steps = 0;
     }
   ;;
 
@@ -314,6 +387,7 @@ module Natodefa_type_errors : Answer = struct
       "Type errors for:\n" ^
       "- Input sequence : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
       "- Found at expr  : " ^ (On_ast_pp.show_expr error_loc) ^ "\n" ^
+      "- Found in steps : " ^ (string_of_int error.err_steps) ^ "\n" ^
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map On_error.On_error.show error.err_errors)

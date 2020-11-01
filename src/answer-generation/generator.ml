@@ -61,11 +61,11 @@ module type Generator = sig
   ;;
 end;;
 
-module Make(Answer : Answer) : Generator = struct
+module Make(Answer : Answer) = struct
   module Answer = Answer;;
 
   type generator_reference =
-    {      
+    {
       gen_program : expr;
       gen_cfg : Ddpa_graph.ddpa_graph;
       gen_exploration_policy : Interpreter.exploration_policy;
@@ -138,20 +138,23 @@ module Make(Answer : Answer) : Generator = struct
             in
             (x, x_list_filtered)
         in
+        let steps = step_count + 1 in
         let answers =
-          List.map (Answer.answer_from_result gen_ref.gen_program x) results
+          List.map
+            (Answer.answer_from_result steps gen_ref.gen_program x)
+            results
         in
         match answers, ev'_opt with
         | [], Some ev' ->
           (* No result and no termination.  Keep running the same loop. *)
           lazy_logger `trace (fun () ->
             "Interpreter evaluation not yet complete. Continuing.");
-          take_one_step (step_count + 1) ev'
+          take_one_step steps ev'
         | _, Some ev' ->
           lazy_logger `trace (fun () ->
             "New result found in this step. Continuing evaluation.");
           { gen_answers = answers;
-            gen_steps = step_count + 1;
+            gen_steps = steps;
             gen_generator =
               { generator_reference = gen_ref;
                 gen_target = x_list;
@@ -186,7 +189,7 @@ module Make(Answer : Answer) : Generator = struct
             in
             {
               gen_answers = answers;
-              gen_steps = step_count + 1;
+              gen_steps = steps;
               gen_generator = {
                 generator_reference = gen_ref;
                 gen_target = x_list';
@@ -213,10 +216,6 @@ module Make(Answer : Answer) : Generator = struct
       |> Analysis.perform_full_closure
       |> Analysis.cfg_of_analysis
     in
-    let target_vars =
-      Interpreter_environment.list_instrument_conditionals e
-    in
-    let _ = target_vars in
     let x = List.hd x_list in
     let evaluation = Interpreter.start ~exploration_policy cfg e x in
     let gen_reference =

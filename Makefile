@@ -36,8 +36,8 @@ repl:
 	dune utop src -- -require pdr-programming
 
 test:
-	dune build test/unittest/test.exe
-	_build/default/test/unittest/test.exe
+	dune build test/test.exe
+	_build/default/test/test.exe
 
 clean:
 	dune clean

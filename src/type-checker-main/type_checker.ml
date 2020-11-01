@@ -70,19 +70,20 @@ let parse_program
 ;;
 
 let print_results
+    ~(output : unit BatIO.output)
     (is_completed : bool)
     (total_errors : int)
   : unit =
   (* Display number of type errors. *)
   if total_errors = 0 then
-    print_endline "No errors found."
+    output_string output "No errors found. "
   else
-    print_endline @@ (string_of_int total_errors) ^ " errors found.";
+    output_string output (Printf.sprintf "%d errors found. " total_errors);
   (* Display if control flows have been exhausted or not. *)
   if is_completed then
-    print_endline "No further control flows exist."
+    output_string output "No further control flows exist.\n"
   else
-    print_endline "Further control flows may exist."
+    output_string output "Further control flows may exist.\n"
 ;;
 
 let get_target_vars
@@ -100,11 +101,14 @@ let get_target_vars
 ;;
 
 let run_error_check
+    ?output:(output=stdout)
+    ?show_steps:(show_steps=true)
     (module Error_generator : Generator.Generator)
     (args : Type_checker_parser.type_checker_args)
     (on_odefa_maps : On_to_odefa_maps.t)
     (expr : Ast.expr)
   : unit =
+  let _ = show_steps in
   let module Ans = Error_generator.Answer in
   Ans.set_odefa_natodefa_map on_odefa_maps;
   try
@@ -120,12 +124,19 @@ let run_error_check
         target_vars
     in
     let generation_callback
-      (type_errors : Ans.t) (steps: int) : unit =
-      let _ = steps in (* Temp *)
+      (type_errors : Ans.t) (_: int) : unit =
+      if Ans.generation_successful type_errors then
+        output_string output (Printf.sprintf "%s\n" (Ans.show type_errors));
+      (*
+      if show_steps then
+        output_string output (Printf.sprintf "Found in %d steps\n" steps);
+      *)
+      (*
       print_endline (Ans.show type_errors);
       print_endline (Printf.sprintf "Found in %d steps" steps);
       print_endline "";
       flush stdout;
+      *)
       total_errors := !total_errors + Ans.count type_errors;
       results_remaining := (Option.map (fun n -> n - 1) !results_remaining);
       if !results_remaining = Some 0 then begin
@@ -140,9 +151,11 @@ let run_error_check
           args.tc_maximum_steps
           generator
       in
-      print_results (Option.is_none generator_opt) (!total_errors);
+      print_results ~output (Option.is_none generator_opt) (!total_errors);
     with GenerationComplete ->
-      print_endline "Errors found; terminating";
+      output_string output "Errors found; terminating";
+    (* Close - we are finished *)
+    close_out output
   (* Exception for when the user inputs a target var not in the program *)
   with
   | NoOperationsInProgram ->

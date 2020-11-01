@@ -15,7 +15,7 @@ module type Answer = sig
   (** A function to extract an answer from the result of a symbolic interpreter
       evaluation, given an expression and a particular stop variable. *)
   val answer_from_result :
-    Ast.expr -> Ast.ident -> Interpreter.evaluation_result -> t;;
+    int -> Ast.expr -> Ast.ident -> Interpreter.evaluation_result -> t;;
 
   (** A function to parse an answer from a string. Mostly used for testing. *)
   val answer_from_string : string -> t;;
