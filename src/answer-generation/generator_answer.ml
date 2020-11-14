@@ -35,52 +35,66 @@ let show_input_seq (input_seq : int list) =
 
 module Input_sequence : Answer = struct
   (* TODO: Add steps *)
-  type t = int list option
+  type t = {
+    input_seq : int list option;
+    input_steps : int;
+  }
   [@@ deriving to_yojson]
   ;;
 
   let description = "input";;
 
   let answer_from_result steps e x result =
-    let _ = steps in
     let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
     match error_opt with
-    | None -> Some input_seq
-    | Some _ -> None
+    | None -> { 
+        input_seq = Some input_seq;
+        input_steps = steps;
+      }
+    | Some _ -> {
+        input_seq = None;
+        input_steps = steps;
+    }
   ;;
 
   (* Unused for input sequence generation. *)
   let set_odefa_natodefa_map (_ : On_to_odefa_maps.t) = ();;
 
-  let show ?show_steps:(show_steps=false) ?is_compact:(is_compact=false) inputs_opt =
-    let _ = show_steps in
+  let show ?show_steps:(show_steps=false) ?is_compact:(is_compact=false) inputs =
+    let inputs_opt = inputs.input_seq in
     match inputs_opt with
-    | Some inputs ->
+    | Some iseq ->
       let input_str =
-        "[" ^ (String.join ", " @@ List.map string_of_int inputs) ^ "]"
+        "[" ^ (String.join ", " @@ List.map string_of_int iseq) ^ "]"
       in
       if is_compact then
         Printf.sprintf "* %s \n" input_str
       else
-        (Printf.sprintf "* Input sequence: %s\n" input_str)
+        (Printf.sprintf "* Input sequence: %s\n" input_str) ^
+        if show_steps then
+          (Printf.sprintf "* Found in %d steps\n" inputs.input_steps)
+        else
+          ""
     | None -> "???"
   ;;
 
-  let count inputs_opt =
+  let count inputs =
+    let inputs_opt = inputs.input_seq in
     match inputs_opt with
     | Some _ -> 1
     | None -> 0 (* Fail silently *)
   ;;
 
-  let count_list (inputs_opt_lst : t list) =
-    inputs_opt_lst
-    |> List.filter_map identity
+  let count_list (inputs_list : t list) =
+    inputs_list
+    |> List.filter_map (fun i -> i.input_seq)
     |> List.length
   ;;
 
-  let generation_successful inputs_opt =
+  let generation_successful inputs =
+    let inputs_opt = inputs.input_seq in
     match inputs_opt with
     | Some _ -> true
     | None -> false
