@@ -17,11 +17,10 @@ module type Answer = sig
   val description : string;;
   val answer_from_result : int -> expr -> ident -> evaluation_result -> t;;
   val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
-  val show : ?show_steps:bool -> ?is_compact:bool -> t -> string;;
+  val show : ?show_steps:bool -> t -> string;;
+  val show_compact : ?show_steps:bool -> t -> string;;
   val count : t -> int;;
-  val count_list : t list -> int;;
   val generation_successful : t -> bool;;
-  val test_expected : t -> t -> bool;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
@@ -34,7 +33,6 @@ let show_input_seq (input_seq : int list) =
 (* **** Input sequence **** *)
 
 module Input_sequence : Answer = struct
-  (* TODO: Add steps *)
   type t = {
     input_seq : int list option;
     input_steps : int;
@@ -62,22 +60,40 @@ module Input_sequence : Answer = struct
   (* Unused for input sequence generation. *)
   let set_odefa_natodefa_map (_ : On_to_odefa_maps.t) = ();;
 
-  let show ?show_steps:(show_steps=false) ?is_compact:(is_compact=false) inputs =
+  let show ?show_steps:(show_steps=false) inputs =
     let inputs_opt = inputs.input_seq in
     match inputs_opt with
     | Some iseq ->
       let input_str =
-        "[" ^ (String.join ", " @@ List.map string_of_int iseq) ^ "]"
+        Printf.sprintf
+          "* Input sequence: [%s]\n"
+          (String.join ", " @@ List.map string_of_int iseq)
       in
-      if is_compact then
-        Printf.sprintf "* %s \n" input_str
-      else
-        (Printf.sprintf "* Input sequence: %s\n" input_str) ^
+      let steps_str =
         if show_steps then
-          (Printf.sprintf "* Found in %d steps\n" inputs.input_steps)
+          Printf.sprintf
+            "* Found in %d step%s\n"
+            inputs.input_steps
+            (if inputs.input_steps = 1 then "" else "s")
         else
           ""
-    | None -> "???"
+      in
+      Printf.sprintf "%s%s" input_str steps_str
+    | None -> ""
+  ;;
+
+  let show_compact ?show_steps:(show_steps=false) inputs =
+    let inputs_opt = inputs.input_seq in
+    match inputs_opt with
+    | Some iseq ->
+      let input_str =
+        Printf.sprintf "* [%s]" (String.join ", " @@ List.map string_of_int iseq)
+      in
+      let steps_str =
+        if show_steps then Printf.sprintf "(%d stp.)" inputs.input_steps else ""
+      in
+      Printf.sprintf "%s %s" input_str steps_str
+    | None -> ""
   ;;
 
   let count inputs =
@@ -87,21 +103,11 @@ module Input_sequence : Answer = struct
     | None -> 0 (* Fail silently *)
   ;;
 
-  let count_list (inputs_list : t list) =
-    inputs_list
-    |> List.filter_map (fun i -> i.input_seq)
-    |> List.length
-  ;;
-
   let generation_successful inputs =
     let inputs_opt = inputs.input_seq in
     match inputs_opt with
     | Some _ -> true
     | None -> false
-  ;;
-
-  let test_expected expected_inputs actual_inputs =
-    expected_inputs = actual_inputs
   ;;
 end;;
 
@@ -162,60 +168,38 @@ module Type_errors : Answer = struct
 
   (* TODO: Pretty-print *)
 
-  let show ?show_steps:(show_steps=false) ?is_compact:(is_compact=false) (error : t) : string =
-    if is_compact then begin
-      match error.err_location with
-      | Some error_loc ->
-        "- err at: " ^ (Ast_pp.show_clause error_loc) ^ "\n"
-      | None ->
-        "- no errs\n"
-    end else begin
-      match error.err_location with
-      | Some error_loc ->
-        "Type errors for:\n" ^
-        "- Input sequence  : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
-        "- Found at clause : " ^ (Ast_pp.show_clause error_loc) ^ "\n" ^
-        begin
-          if show_steps then
-            "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n"
-          else
-            ""
-        end ^
-        "--------------------\n" ^
-        (String.join "\n--------------------\n"
-          @@ List.map Error.Odefa_error.show error.err_errors)
-      | None -> "** No errors found on this run. **"
-    end
+  let show ?show_steps:(show_steps=false) (error : t) : string =
+    match error.err_location with
+    | Some error_loc ->
+      "Type errors for:\n" ^
+      "- Input sequence  : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
+      "- Found at clause : " ^ (Ast_pp.show_clause error_loc) ^ "\n" ^
+      begin
+        if show_steps then
+          "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n"
+        else
+          ""
+      end ^
+      "--------------------\n" ^
+      (String.join "\n--------------------\n"
+        @@ List.map Error.Odefa_error.show error.err_errors)
+    | None -> ""
+  ;;
+
+  let show_compact ?show_steps:(_=false) (error : t) : string =
+    match error.err_location with
+    | Some error_loc ->
+      "- err at: " ^ (Ast_pp.show_clause error_loc)
+    | None ->
+      "- no errs"
   ;;
 
   let count (errors : t) = List.length errors.err_errors;;
-
-  let count_list error_list =
-    error_list
-    |> List.map count
-    |> List.sum
-  ;;
 
   let generation_successful error =
     match error.err_location with
     | Some _ -> true
     | None -> false
-  ;;
-
-  let test_expected (expect_errs : t) (actual_errs : t) =
-    let exp_inputs = expect_errs.err_input_seq in
-    let act_inputs = actual_errs.err_input_seq in
-    let exp_loc = expect_errs.err_location in
-    let act_loc = actual_errs.err_location in
-    let exp_errors = expect_errs.err_errors in
-    let act_errors = expect_errs.err_errors in
-    if (exp_inputs <> act_inputs) || (exp_loc <> act_loc) then false else
-      begin
-        let is_mem err =
-          List.exists (Error.Odefa_error.equal err) act_errors
-        in
-        not @@ List.is_empty (List.filter is_mem exp_errors)
-      end
   ;;
 end;;
 
@@ -271,59 +255,37 @@ module Natodefa_type_errors : Answer = struct
     odefa_on_maps_option_ref := Some (odefa_on_maps)
   ;;
 
-  let show ?show_steps:(show_steps=false) ?is_compact:(is_compact=false) error =
-    if is_compact then begin
-      match error.err_location with
-      | Some error_loc ->
-        "- err at: " ^ (On_ast_pp.show_expr error_loc) ^ "\n"
-      | None ->
-        "- no errs\n"
-    end else begin
-      match error.err_location with
-      | Some error_loc ->
-        "Type errors for:\n" ^
-        "- Input sequence : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
-        "- Found at expr  : " ^ (On_ast_pp.show_expr error_loc) ^ "\n" ^
-        begin
-          if show_steps then
-            "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n"
-          else
-            ""
-        end ^
-        "--------------------\n" ^
-        (String.join "\n--------------------\n"
-          @@ List.map On_error.On_error.show error.err_errors)
-      | None -> ""
-    end
+  let show ?show_steps:(show_steps=false) error =
+    match error.err_location with
+    | Some error_loc ->
+      "Type errors for:\n" ^
+      "- Input sequence : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
+      "- Found at expr  : " ^ (On_ast_pp.show_expr error_loc) ^ "\n" ^
+      begin
+        if show_steps then
+          "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n"
+        else
+          ""
+      end ^
+      "--------------------\n" ^
+      (String.join "\n--------------------\n"
+        @@ List.map On_error.On_error.show error.err_errors)
+    | None -> ""
+  ;;
+
+  let show_compact ?show_steps:(_=false) error =
+    match error.err_location with
+    | Some error_loc ->
+      "- err at: " ^ (On_ast_pp.show_expr error_loc) 
+    | None ->
+      "- no errs"
   ;;
 
   let count error = List.length error.err_errors;;
-
-  let count_list error_list =
-    error_list
-    |> List.map count
-    |> List.sum
-  ;;
 
   let generation_successful error =
     match error.err_location with
     | Some _ -> true
     | None -> false
-  ;;
-
-  let test_expected (expect_errs : t) (actual_errs : t) =
-    let exp_inputs = expect_errs.err_input_seq in
-    let act_inputs = actual_errs.err_input_seq in
-    let exp_loc = expect_errs.err_location in
-    let act_loc = actual_errs.err_location in
-    let exp_errors = expect_errs.err_errors in
-    let act_errors = expect_errs.err_errors in
-    if (exp_inputs <> act_inputs) || (exp_loc <> act_loc) then false else
-      begin
-        let is_mem err =
-          List.exists (On_error.On_error.equal err) act_errors
-        in
-        not @@ List.is_empty (List.filter is_mem exp_errors)
-      end
   ;;
 end;;

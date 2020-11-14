@@ -134,7 +134,10 @@ let run_error_check
       (type_errors : Ans.t) (_: int) : unit =
       if Ans.generation_successful type_errors then begin
         let str =
-          Ans.show ~show_steps ~is_compact:args.tc_compact_output type_errors
+          if args.tc_compact_output then
+            Ans.show_compact ~show_steps type_errors
+          else
+            Ans.show ~show_steps type_errors
         in
         output_string output @@ Printf.sprintf "%s\n" str
       end;
