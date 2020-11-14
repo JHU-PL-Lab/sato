@@ -132,14 +132,12 @@ let run_error_check
     in
     let generation_callback
       (type_errors : Ans.t) (_: int) : unit =
-      if Ans.generation_successful type_errors then
+      if Ans.generation_successful type_errors then begin
         let str =
           Ans.show ~show_steps ~is_compact:args.tc_compact_output type_errors
         in
         output_string output @@ Printf.sprintf "%s\n" str
-      else
-        (* FIXME: Better solution to this *)
-        output_string output "Foo\n"
+      end;
     in
     (* Run generator *)
     let gen_answers =

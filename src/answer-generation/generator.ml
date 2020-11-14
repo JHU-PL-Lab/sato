@@ -171,9 +171,9 @@ module Make(Answer : Answer) = struct
         let results, ev'_opt = Interpreter.step ev in
         let (x, x_list') = update_target_vars results x_list in
         let answers' =
-          List.map
-            (Answer.answer_from_result steps gen_ref.gen_program x)
-            results
+          results
+          |> List.map (Answer.answer_from_result steps gen_ref.gen_program x)
+          |> List.filter (Answer.generation_successful)
         in
         let steps' = steps + 1 in
         begin
