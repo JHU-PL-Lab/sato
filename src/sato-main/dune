@@ -1,5 +1,5 @@
 (executable
-  (name type_checker)
+  (name sato)
   (libraries
     batteries
     jhupllib

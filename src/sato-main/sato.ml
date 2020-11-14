@@ -18,7 +18,7 @@ exception TypeCheckComplete;;
 exception GenerationComplete;;
 
 let parse_program
-    (args: Type_checker_parser.type_checker_args) 
+    (args: Sato_parser.type_checker_args) 
   : (Ast.expr * On_to_odefa_maps.t) =
   let filename = args.tc_filename in
   try
@@ -45,28 +45,23 @@ let parse_program
       raise @@ Invalid_argument
         (Printf.sprintf "Filetype %s not supported" filename)
   with
-  | Sys_error err ->
-    begin
-      Stdlib.prerr_endline err;
-      Stdlib.exit 1
-    end
+  | Sys_error err | Invalid_argument err ->
+    Stdlib.prerr_endline err;
+    Stdlib.exit 1
   | On_parse.Parse_error (_, line, col, token)->
-    begin
-      Stdlib.prerr_endline
-        @@ Printf.sprintf "Invalid token \"%s\" at line %d, column %d" token line col;
-      Stdlib.exit 1
-    end
+    let err_msg =
+      Printf.sprintf "Invalid token \"%s\" at line %d, column %d" token line col
+    in
+    Stdlib.prerr_endline err_msg;
+    Stdlib.exit 1
   | Ast_wellformedness.Illformedness_found ills ->
-    begin
-      print_endline "Program is ill-formed.";
-      List.iter
-        (fun ill ->
-            Stdlib.print_string "* ";
-            Stdlib.print_endline @@ Ast_wellformedness.show_illformedness ill;
-        )
-        ills;
-      Stdlib.exit 1
-    end
+    print_endline "Program is ill-formed.";
+    List.iter
+      (fun ill ->
+        let msg = "* " ^ Ast_wellformedness.show_illformedness ill in
+        Stdlib.print_endline msg;)
+      ills;
+    Stdlib.exit 1
 ;;
 
 let print_results
@@ -102,7 +97,7 @@ let print_results_compact
 ;;
 
 let get_target_vars
-    (args: Type_checker_parser.type_checker_args)
+    (args: Sato_parser.type_checker_args)
     (expr : Ast.expr)
   : Ast.ident list =
   match args.tc_target_var with
@@ -119,7 +114,7 @@ let run_error_check
     ?output:(output=stdout)
     ?show_steps:(show_steps=false)
     (module Error_generator : Generator.Generator)
-    (args : Type_checker_parser.type_checker_args)
+    (args : Sato_parser.type_checker_args)
     (on_odefa_maps : On_to_odefa_maps.t)
     (expr : Ast.expr)
   : unit =
@@ -177,7 +172,7 @@ let run_error_check
 
 (* TODO: Add variable of operation where type error occured *)
 let () =
-  let args = Type_checker_parser.parse_args () in
+  let args = Sato_parser.parse_args () in
   let (odefa_expr, on_odefa_maps) = parse_program args in
   match args.tc_mode with
   | Type_checking ->

@@ -144,7 +144,7 @@ module Type_errors : Answer = struct
   [@@ deriving to_yojson]
   ;;
 
-  let description = "input";;
+  let description = "error";;
 
   let odefa_on_maps_option_ref = ref None;;
 
@@ -344,7 +344,7 @@ module Natodefa_type_errors : Answer = struct
   [@@ deriving to_yojson]
   ;;
 
-  let description = "input";;
+  let description = "error";;
 
   let odefa_on_maps_option_ref = ref None;;
 

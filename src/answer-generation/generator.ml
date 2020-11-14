@@ -186,14 +186,15 @@ module Make(Answer : Answer) = struct
           recurse (answers' @ answers) steps' (x :: x_list') ev'
         | _, None ->
           (* Start a new evaluation if there's start vars left in the list. *)
-          if not @@ List.is_empty answers then begin
+          if not @@ List.is_empty answers' then begin
             lazy_logger `trace (fun () ->
               "New result found in this step. Current evaluation terminated.")
           end;
+          let answers'' = answers' @ answers in
           match x_list' with
           | [] -> {
-              gen_answers = answers;
-              gen_num_answers = List.length answers;
+              gen_answers = answers'';
+              gen_num_answers = List.length answers'';
               gen_is_complete = true;
             }
           | (x' :: _) ->
@@ -204,7 +205,7 @@ module Make(Answer : Answer) = struct
                 gen_ref.gen_program
                 x'
             in
-            recurse (answers' @ answers) 0 x_list' ev'
+            recurse answers'' 0 x_list' ev'
     end
   ;;
 
