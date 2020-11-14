@@ -16,7 +16,6 @@ module type Answer = sig
   type t;;
   val description : string;;
   val answer_from_result : int -> expr -> ident -> evaluation_result -> t;;
-  val answer_from_string : string -> t;;
   val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
   val show : ?show_steps:bool -> ?is_compact:bool -> t -> string;;
   val count : t -> int;;
@@ -25,40 +24,6 @@ module type Answer = sig
   val test_expected : t -> t -> bool;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
-
-(* **** String parsing utilities **** *)
-
-(* Utility to parse int sequences separated by commas. *)
-let parse_comma_separated_ints (lst_str : string) : int list =
-  let lst_str' =
-    if (String.starts_with lst_str "[") &&
-         (String.ends_with lst_str "]") then
-      lst_str
-      |> String.lchop
-      |> String.rchop
-    else
-      lst_str
-  in
-  let str_lst =
-    lst_str'
-    |> Str.global_replace (Str.regexp "[ ]*") ""
-    |> Str.split (Str.regexp ",")
-  in
-  try
-    List.map int_of_string str_lst
-  with Failure _ ->
-    raise @@ Parse_failure "Unable to parse int list"
-;;
-
-let split_with_regexp (re : Str.regexp) (str : string) : (string * string) =
-  if Str.string_match re str 0 then
-    let split_pos = Str.match_end () in
-    let prefix = String.trim @@ Str.string_before str split_pos in
-    let suffix = String.trim @@ Str.string_after str split_pos in
-    (prefix, suffix)
-  else
-    raise @@ Parse_failure "string does not match on regexp"
-;;
 
 (* **** String showing utilities **** *)
 
@@ -84,11 +49,6 @@ module Input_sequence : Answer = struct
     match error_opt with
     | None -> Some input_seq
     | Some _ -> None
-  ;;
-
-  (* String "[ 1, 2, 3 ]" or "1, 2, 3" to input sequence *)
-  let answer_from_string arg_str =
-    Some (parse_comma_separated_ints arg_str)
   ;;
 
   (* Unused for input sequence generation. *)
@@ -181,94 +141,6 @@ module Type_errors : Answer = struct
     | None -> failwith "Odefa/natodefa maps were not set!"
   ;;
 
-  (*
-  type binop_json_rep = {
-    left_aliases : string;
-    right_aliases : string;
-    operation : string;
-  }
-  [@@ deriving yojson]
-  ;;
-
-  type match_json_rep = {
-    aliases : string;
-    value : string;
-    expected_type : string;
-    actual_type : string;
-  }
-  [@@ deriving yojson]
-  ;;
-
-  type value_json_rep = {
-    aliases : string;
-    value : string;
-  }
-  [@@ deriving yojson]
-  ;;
-
-  type error_json_rep =
-  | Binop of binop_json_rep
-  | Match of match_json_rep
-  | Value of value_json_rep
-  [@@ deriving yojson]
-  ;;
-
-  type json_error_rep = {
-    
-  }
-  [@@ deriving yojson]
-  ;;
-  type json_rep = {
-    input_sequence : int list;
-    location : string;
-    error_list : error_json_rep list;
-  }
-  [@@ deriving yojson]
-  ;;
-  *)
-
-  (*
-  let answer_from_string arg_str : t =
-    match Yojson.Safe.from_string arg_str with
-    | `Assoc assoc ->
-      begin
-        let (`Int input_seq) =
-          List.assoc "input_sequence" assoc
-        in
-      end
-    | _ -> raise @@ Invalid_argument "Cannot parse JSON"
-  ;;
-  *)
-
-  (* Ex: [0, 1] "sum = a or z" "a = b" "c = 2" "int" "bool" *)
-  let answer_from_string arg_str : t =
-    let (input_str, loc_err_str) =
-      split_with_regexp (Str.regexp "\\[[^][]*\\]") arg_str
-    in
-    let (loc_str, error_str) =
-      split_with_regexp (Str.regexp "\"[^\"]*\"") loc_err_str
-    in
-    let loc_str =
-      (* Remove quotes *)
-      loc_str
-      |> String.lchop
-      |> String.rchop
-    in
-    let inputs = parse_comma_separated_ints input_str in
-    let location =
-      try
-        Odefa_parser.Parser.parse_clause_string loc_str
-      with Odefa_parser.Parser.Parse_error _ ->
-        failwith (Printf.sprintf "Cannot parse clause %s" loc_str)
-    in
-    let error = Error.Odefa_error.parse error_str in
-    {
-      err_input_seq = inputs;
-      err_location = Some location;
-      err_errors = [error];
-      err_steps = 0;
-    }
-  ;;
 
   let set_odefa_natodefa_map odefa_on_maps : unit =
     odefa_on_maps_option_ref := Some (odefa_on_maps)
@@ -379,30 +251,6 @@ module Natodefa_type_errors : Answer = struct
             }
         end
       | None -> failwith "Odefa/natodefa maps were not set!"
-  ;;
-
-  let answer_from_string arg_str =
-    let (input_str, loc_err_str) =
-      split_with_regexp (Str.regexp "\\[[^][]*\\]") arg_str
-    in
-    let (loc_str, error_str) =
-      split_with_regexp (Str.regexp "\"[^\"]*\"") loc_err_str
-    in
-    let loc_str =
-      (* Remove quotes *)
-      loc_str
-      |> String.lchop
-      |> String.rchop
-    in
-    let inputs = parse_comma_separated_ints input_str in
-    let location = Odefa_natural.On_parse.parse_single_expr_string loc_str in
-    let error = On_error.On_error.parse error_str in
-    {
-      err_input_seq = inputs;
-      err_location = Some location;
-      err_errors = [error];
-      err_steps = 0;
-    }
   ;;
 
   let set_odefa_natodefa_map odefa_on_maps =

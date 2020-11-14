@@ -20,9 +20,6 @@ module type Answer = sig
   val answer_from_result :
     int -> Ast.expr -> Ast.ident -> Interpreter.evaluation_result -> t;;
 
-  (** A function to parse an answer from a string. Mostly used for testing. *)
-  val answer_from_string : string -> t;;
-
   (** Set the odefa/natodefa mappings as a global, which will be needed to
       remove any variables added during instrumentation, convert from odefa
       back to natodefa, etc. *)

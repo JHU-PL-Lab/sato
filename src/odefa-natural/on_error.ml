@@ -4,41 +4,6 @@ open Jhupllib;;
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
-(* **** String parsing helper functions **** *)
-
-let _parse_type_sig type_str =
-  let open On_ast in
-  match type_str with
-  | "int" | "integer" | "Integer" -> IntType
-  | "bool" | "boolean" | "Boolean" -> BoolType
-  | "fun" | "function" | "Function" -> FunType
-  | "rec" | "record" | "Record" -> RecType (Ident_set.empty)
-  | "list" | "List" -> ListType
-  | _ ->
-    let is_rec_str =
-      Str.string_match (Str.regexp "{.*}") type_str 0
-    in
-    let is_variant_str =
-      Str.string_match (Str.regexp "`.*") type_str 0
-    in
-    if is_rec_str then begin
-      let lbl_set =
-        type_str
-        |> String.lchop
-        |> String.rchop
-        |> Str.split (Str.regexp ",")
-        |> List.map String.trim
-        |> List.map (fun lbl -> Ident lbl)
-        |> Ident_set.of_list
-      in
-      RecType lbl_set
-    end else if is_variant_str then begin
-      VariantType (Variant_label (String.lchop type_str))
-    end else begin
-      raise @@ Error.Parse_failure (Printf.sprintf "Cannot parse type %s" type_str)
-    end
-;;
-
 (* **** Natodefa module signatures **** *)
 
 module type Error_ident = sig
@@ -46,7 +11,6 @@ module type Error_ident = sig
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
@@ -55,7 +19,6 @@ module type Error_value = sig
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
@@ -64,7 +27,6 @@ module type Error_binop = sig
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
@@ -74,7 +36,6 @@ module type Error_type = sig
   val subtype : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
@@ -85,7 +46,6 @@ module Ident : (Error_ident with type t = On_ast.ident) = struct
   let equal = On_ast.equal_ident;;
   let pp = On_ast_pp.pp_ident;;
   let show = On_ast_pp.show_ident;;
-  let parse s = On_ast.Ident s;;
   let to_yojson = On_ast.ident_to_yojson;;
 end;;
 
@@ -94,7 +54,6 @@ module Value : (Error_value with type t = On_ast.expr) = struct
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
-  let parse = On_parse.parse_single_expr_string;;
   let to_yojson = On_ast.expr_to_yojson;;
 end;;
 
@@ -103,7 +62,6 @@ module Binop : (Error_binop with type t = On_ast.expr) = struct
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
-  let parse = On_parse.parse_single_expr_string;;
   let to_yojson = On_ast.expr_to_yojson;;
 end;;
 
@@ -113,7 +71,6 @@ module Type : (Error_type with type t = On_ast.type_sig) = struct
   let subtype _ _ = false;;
   let pp = On_ast_pp.pp_on_type;;
   let show = On_ast_pp.show_on_type;;
-  let parse = _parse_type_sig;;
   let to_yojson = On_ast.type_sig_to_yojson;;
 end;;
 

@@ -5,63 +5,11 @@ open Odefa_ast;;
 
 exception Parse_failure of string;;
 
-let _parse_type type_str =
-  match type_str with
-  | "int" | "integer" -> Ast.Int_type
-  | "bool" | "boolean" -> Ast.Bool_type
-  | "fun" | "function" -> Ast.Fun_type
-  | _ ->
-    let is_rec_str =
-      Str.string_match (Str.regexp "{.*}") type_str 0 in
-    if is_rec_str then begin
-      let lbl_set =
-        type_str
-        |> String.lchop
-        |> String.rchop
-        |> Str.split (Str.regexp ",")
-        |> List.map String.trim
-        |> List.map (fun lbl -> Ast.Ident lbl)
-        |> Ast.Ident_set.of_list
-      in
-      Rec_type lbl_set
-    end else begin
-      raise @@ Parse_failure "cannot parse type"
-    end
-;;
-
-let _parse_clause_body clause_body_str =
-  let (Ast.Clause (_, body)) =
-    let clause_str = "dummy = " ^ clause_body_str in
-    Odefa_parser.Parser.parse_clause_string clause_str
-  in
-  body
-;;
-
-let _parse_op op_str =
-  let open Ast in
-  match op_str with
-  | "+" -> Binary_operator_plus
-  | "-" -> Binary_operator_minus
-  | "*" -> Binary_operator_times
-  | "/" -> Binary_operator_divide
-  | "%" -> Binary_operator_modulus
-  | "==" -> Binary_operator_equal_to
-  | "<>" -> Binary_operator_not_equal_to
-  | "<" -> Binary_operator_less_than
-  | "<=" -> Binary_operator_less_than_or_equal_to
-  | "and" -> Binary_operator_and
-  | "or" -> Binary_operator_or
-  | "xor" -> Binary_operator_xor
-  | _ ->
-    raise @@ Parse_failure "cannot parse operation"
-;;
-
 module type Error_ident = sig
   type t;;
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
@@ -70,7 +18,6 @@ module type Error_value = sig
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
@@ -79,7 +26,6 @@ module type Error_binop = sig
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
@@ -89,7 +35,6 @@ module type Error_type = sig
   val subtype : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
@@ -98,7 +43,6 @@ module Ident : (Error_ident with type t = Ast.ident) = struct
   let equal = Ast.equal_ident;;
   let pp = Ast_pp.pp_ident;;
   let show = Ast_pp.show_ident;;
-  let parse str = Ast.Ident str;;
   let to_yojson = Ast.Ident.to_yojson;;
 end;;
 
@@ -107,7 +51,6 @@ module Value : (Error_value with type t = Ast.clause_body) = struct
   let equal = Ast.equal_clause_body;;
   let pp = Ast_pp.pp_clause_body;;
   let show = Ast_pp.show_clause_body;;
-  let parse = _parse_clause_body;;
   let to_yojson = Ast.clause_body_to_yojson;;
 end;;
 
@@ -118,18 +61,6 @@ module Binop : (Error_binop with type t =
   [@@ deriving eq, to_yojson];;
 
   let equal = equal;;
-
-  let parse str : t =
-    let str_lst = Str.split (Str.regexp "[ ]") str in
-    match str_lst with
-    | [l_str; op_str; r_str] ->
-      let l_cls = _parse_clause_body l_str in
-      let r_cls = _parse_clause_body r_str in
-      let op = _parse_op op_str in
-      (l_cls, op, r_cls)
-    | _ ->
-      raise @@ Parse_failure "Missing or spurious arguments"
-  ;;
 
   let pp formatter (binop : t) =
     let (left, op, right) = binop in
@@ -150,7 +81,6 @@ module Type : (Error_type with type t = Ast.type_sig) = struct
   let subtype = Ast.Type_signature.subtype;;
   let pp = Ast_pp.pp_type_sig;;
   let show = Ast_pp.show_type_sig;;
-  let parse = _parse_type;;
   let to_yojson = Ast.type_sig_to_yojson;;
 end;;
 
@@ -191,7 +121,6 @@ module type Error = sig
     | Error_value of error_value
 
   val equal : t -> t -> bool;;
-  val parse : string -> t;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
   val to_yojson : t -> Yojson.Safe.t;;
@@ -243,50 +172,6 @@ module Make
   [@@ deriving eq, to_yojson]
 
   let equal = equal;;
-
-  let _parse_aliases alias_str =
-    alias_str
-    |> Str.split (Str.regexp "[ ]+=[ ]+") 
-    |> List.map Error_ident.parse
-  ;;
-
-  let parse error_str =
-    let args_list =
-      error_str
-      |> String.trim
-      |> String.lchop
-      |> String.rchop
-      |> Str.split_delim (Str.regexp "\"[ ]*\"")
-    in
-    match args_list with
-    | [l_alias_str; l_val_str; r_alias_str; r_val_str; op_str] ->
-      begin
-        Error_binop {
-          err_binop_left_val = Value.parse l_val_str;
-          err_binop_right_val = Value.parse r_val_str;
-          err_binop_left_aliases = _parse_aliases l_alias_str;
-          err_binop_right_aliases = _parse_aliases r_alias_str;
-          err_binop_operation = Binop.parse op_str;
-        }
-      end
-    | [alias_str; val_str; expected_str; actual_str] ->
-      begin
-        Error_match {
-          err_match_aliases = _parse_aliases alias_str;
-          err_match_val = Value.parse val_str;
-          err_match_expected = Type.parse expected_str;
-          err_match_actual = Type.parse actual_str;
-        }
-      end
-    | [alias_str; val_str] ->
-      begin
-        Error_value {
-          err_value_aliases = _parse_aliases alias_str;
-          err_value_val = Value.parse val_str;
-        }
-      end
-    | _ -> raise @@ Parse_failure "Missing or spurious arguments"
-  ;;
 
   let pp_alias_list formatter aliases =
     Pp_utils.pp_concat_sep
