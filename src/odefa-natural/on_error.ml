@@ -46,7 +46,7 @@ module Ident : (Error_ident with type t = On_ast.ident) = struct
   let equal = On_ast.equal_ident;;
   let pp = On_ast_pp.pp_ident;;
   let show = On_ast_pp.show_ident;;
-  let to_yojson = On_ast.ident_to_yojson;;
+  let to_yojson ident = `String (On_ast_pp.show_ident ident);;
 end;;
 
 module Value : (Error_value with type t = On_ast.expr) = struct
@@ -54,7 +54,7 @@ module Value : (Error_value with type t = On_ast.expr) = struct
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
-  let to_yojson = On_ast.expr_to_yojson;;
+  let to_yojson value = `String (On_ast_pp.show_expr value);;
 end;;
 
 module Binop : (Error_binop with type t = On_ast.expr) = struct
@@ -62,7 +62,7 @@ module Binop : (Error_binop with type t = On_ast.expr) = struct
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
-  let to_yojson = On_ast.expr_to_yojson;;
+  let to_yojson binop = `String (On_ast_pp.show_expr binop);;
 end;;
 
 module Type : (Error_type with type t = On_ast.type_sig) = struct
@@ -71,7 +71,7 @@ module Type : (Error_type with type t = On_ast.type_sig) = struct
   let subtype _ _ = false;;
   let pp = On_ast_pp.pp_on_type;;
   let show = On_ast_pp.show_on_type;;
-  let to_yojson = On_ast.type_sig_to_yojson;;
+  let to_yojson typ = `String (On_ast_pp.show_on_type typ);;
 end;;
 
 module On_error = Error.Make(Ident)(Value)(Binop)(Type);;

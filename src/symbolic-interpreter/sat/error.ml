@@ -43,7 +43,7 @@ module Ident : (Error_ident with type t = Ast.ident) = struct
   let equal = Ast.equal_ident;;
   let pp = Ast_pp.pp_ident;;
   let show = Ast_pp.show_ident;;
-  let to_yojson = Ast.Ident.to_yojson;;
+  let to_yojson ident = `String (Ast_pp.show_ident ident);;
 end;;
 
 module Value : (Error_value with type t = Ast.clause_body) = struct
@@ -51,7 +51,7 @@ module Value : (Error_value with type t = Ast.clause_body) = struct
   let equal = Ast.equal_clause_body;;
   let pp = Ast_pp.pp_clause_body;;
   let show = Ast_pp.show_clause_body;;
-  let to_yojson = Ast.clause_body_to_yojson;;
+  let to_yojson value = `String (Ast_pp.show_clause_body value);;
 end;;
 
 module Binop : (Error_binop with type t =
@@ -72,7 +72,10 @@ module Binop : (Error_binop with type t =
 
   let show binop = Pp_utils.pp_to_string pp binop;;
 
-  let to_yojson = to_yojson;;
+  let to_yojson (c1, op, c2) =
+    `String ((Ast_pp.show_clause_body c1) ^ " "
+              ^ (Ast_pp.show_binary_operator op) ^ " " 
+              ^ (Ast_pp.show_clause_body c2));;
 end;;
 
 module Type : (Error_type with type t = Ast.type_sig) = struct
@@ -81,7 +84,7 @@ module Type : (Error_type with type t = Ast.type_sig) = struct
   let subtype = Ast.Type_signature.subtype;;
   let pp = Ast_pp.pp_type_sig;;
   let show = Ast_pp.show_type_sig;;
-  let to_yojson = Ast.type_sig_to_yojson;;
+  let to_yojson typ = `String (Ast_pp.show_type_sig typ);;
 end;;
 
 module type Error = sig
