@@ -9,13 +9,18 @@ open Odefa_symbolic_interpreter;;
 open Generator_answer;;
 open Generator_configuration;;
 
-(** The interface of a generic answer generator. *)
+(** The interface of a generic answer generator.  The generator attempts to
+    perform demand-driven symbolic interpretation, starting from an inital
+    set of parameters, in order to derive answers to a question about the
+    program (e.g. Does it have type errors? What input sequences can reach
+    a particular variable?). *)
 module type Generator = sig
   module Answer : Answer;;
 
   (** A record of fields that stay constant across multiple generation attempts
       on a single program.  These are stored for reference purposes (i.e. for
-      use by auxillary functions), but not updated by the generator itself. *)
+      use by auxillary functions), but not updated by the generator itself
+      after initialization. *)
   type generator_reference =
     {
       (** The program being analyzed. *)
@@ -26,79 +31,75 @@ module type Generator = sig
 
       (** The exploration policy used by the symbolic interpreter. *)
       gen_exploration_policy : Interpreter.exploration_policy;
+
+      (** The maximum number of steps taken by a particular evaluation. *)
+      gen_max_steps : int option;
     }
   ;;
 
-  (** A generator is a tool which attempts to find an answer to lead to a
-      particular point in a program. *)
-  type generator =
-    {
-      (** A reference for information/properties about the program. *)
-      generator_reference : generator_reference;
+  (** Parameters to initialize answer generation. *)
+  type generation_parameters = {
+    (** Reference information about the program. *)
+    gen_reference : generator_reference;
 
-      (** The list of program point we are trying to reach. *)
-      gen_target : Ast.Ident.t list;
+    (** The initial state of the evaluation. *)
+    gen_evaluation : Interpreter.evaluation;
 
-      (** A function which, given a maximum number of steps to take, attempts
-          to reach the point in question.  Here, "steps" are not of any fixed
-          amount of effort; however, some maximum step count is required as
-          test generation is not decidable.
-
-          If this function is None, then it is known that no additional paths
-          will reach the program point in question.  Note that this field is
-          not guaranteed to take on the value None regardless of how many
-          steps of computation are performed, as test generation is
-          undecidable. *)
-      generator_fn : (int -> generation_result) option
-    }
-
-  and generation_result =
-    {
-      (** Answers which will lead to the point in question.  These are
-          sequences which have been recently discovered.  If empty, then no
-          answers were discovered in the provided number of steps. *)
-      gen_answers : Answer.t list;
-
-      (** The number of steps which were taken from the called generator to
-          reach this result. *)
-      gen_steps : int;
-
-      (** An answer generator which will only produce results for paths not
-          previously discovered in this result's ancestry.  If it is known that
-          no such paths exists, this value is None.  Note that this value may
-          be Some even if no such paths exist as test generation is
-          undecidable. *)
-      gen_generator : generator;
-    }
+    (** The list of target variables (the name comes from the fact that these variables
+        are the targets of program flow given a particular input sequence). *)
+    gen_target_vars : Ast.ident list;
+  }
   ;;
 
-  (** Creates a n answer generator.  Given a configuration, this generator will
-      look for paths in the provided expression for reaching the variable with
-      the provided identifier.
+  (** The final result of generation. *)
+  type generation_result = {
+    (** The list of answers that were discovered during generation. *)
+    gen_answers : Answer.t list;
+
+    (** The number of answers discovered during generation (which must always
+        be equal to the gen_answers list. *)
+    gen_num_answers : int;
+
+    (** Whether all possible evaluations have been exhausted, or if some
+        evaluations could have continued if the maximum number of steps was
+        not reached. *)
+    gen_is_complete : bool;
+  }
+  ;;
+
+  (** Creates the parameters for answer generation, which the generator will use in
+      order to perform DDSE and generate answers.  The given optional integer is
+      the maximum number of steps for an evaluation to take, starting from a
+      particular variable in the var list (if none is given, generation may run
+      forever, as it is non-deterministic).
 
       If the query is invalid (e.g. the target variable does not appear in the
-      expression), an exception is raised from the symbolic intepreter of type
+      expression, or if no target variables are given, an exception is raised
+      from the symbolic intepreter of type
       [Odefa_symbolic_interpreter.Interpreter.Invalid_query]. *)
   val create :
     ?exploration_policy:Interpreter.exploration_policy ->
-    configuration -> Ast.expr -> Ast.ident list -> generator;;
+    ?max_steps:(int option) ->
+    configuration -> Ast.expr -> Ast.ident list -> 
+    generation_parameters
+  ;;
   
-  (** A convenience routine for running generation with a generator.  The
-      given optional integer is the maximum number of steps to take.  This
+  (** A convenience interface for running answer generation.   This
       routine will use the generator to produce results until either results
       have been provably exhausted or the maximum number of steps has been
-      reached. If the latter occurs, the returned test_generator will be a Some
-      value.  In any case, each result in the provided list is a sequence of
-      answers together with the number of steps required to reach it.
+      reached for all possible start variables.  In any case, the result will
+      provide the total list and number of answers, along with an indication of
+      whether more answers can, in theory, be found or not.
 
       The generation_callback optional parameter provides results in the form
       of this function's returned values but is called as each new result is
       generated. *)
   val generate_answers :
     ?generation_callback:(Answer.t -> int -> unit) ->
-    int option -> generator ->
-    (Answer.t list * int) list * generator option;;
-end;;
+    generation_parameters ->
+    generation_result
+  ;;
+  end;;
 
 (** A functor to create an answer generator with the Generator interface. *)
 module Make(Answer : Answer) : Generator;;

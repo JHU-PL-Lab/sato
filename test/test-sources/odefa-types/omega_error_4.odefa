@@ -1,0 +1,8 @@
+## MAXIMUM-STEPS 10000
+
+a = 1;
+b = false;
+c = a + b; # Type error detected
+o = fun x -> ( r = x x );
+oo = o o; # => SPINS FOREVER
+d = a + b # Type error not detected

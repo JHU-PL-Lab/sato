@@ -115,9 +115,10 @@ let run_error_check
     let target_vars = get_target_vars args expr in
     let results_remaining = ref args.tc_maximum_results in
     let total_errors = ref 0 in
-    let generator =
+    let gen_params =
       Error_generator.create
         ~exploration_policy:args.tc_exploration_policy
+        ~max_steps:args.tc_maximum_steps
         args.tc_generator_configuration
         expr
         target_vars
@@ -126,16 +127,6 @@ let run_error_check
       (type_errors : Ans.t) (_: int) : unit =
       if Ans.generation_successful type_errors then
         output_string output (Printf.sprintf "%s\n" (Ans.show ~show_steps type_errors));
-      (*
-      if show_steps then
-        output_string output (Printf.sprintf "Found in %d steps\n" steps);
-      *)
-      (*
-      print_endline (Ans.show type_errors);
-      print_endline (Printf.sprintf "Found in %d steps" steps);
-      print_endline "";
-      flush stdout;
-      *)
       total_errors := !total_errors + Ans.count type_errors;
       results_remaining := (Option.map (fun n -> n - 1) !results_remaining);
       if !results_remaining = Some 0 then begin
@@ -144,13 +135,13 @@ let run_error_check
     in
     (* Run generator *)
     try
-      let _, generator_opt =
+      let gen_answers =
         Error_generator.generate_answers
           ~generation_callback:generation_callback
-          args.tc_maximum_steps
-          generator
+          gen_params
       in
-      print_results ~output (Option.is_none generator_opt) (!total_errors);
+      let is_complete = gen_answers.gen_is_complete in
+      print_results ~output is_complete (!total_errors);
     with GenerationComplete ->
       output_string output "Errors found; terminating";
     (* Close - we are finished *)

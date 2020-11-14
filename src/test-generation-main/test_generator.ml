@@ -63,8 +63,9 @@ let () =
   (* Generate tests *)
   try
     let results_remaining = ref args.ga_maximum_results in
-    let generator = Input_generator.create
+    let gen_params = Input_generator.create
         ~exploration_policy:args.ga_exploration_policy
+        ~max_steps:args.ga_maximum_steps
         args.ga_generator_configuration
         ast
         [args.ga_target_point]
@@ -91,22 +92,17 @@ let () =
     in
     begin
       try
-        let answers, generator_opt =
+        let gen_results =
           Input_generator.generate_answers
             ~generation_callback:generation_callback
-            args.ga_maximum_steps
-            generator
+            gen_params
         in
-        let answer_count =
-          answers
-          |> List.map (fun (ans, _) ->  ans)
-          |> List.flatten
-          |> Input_sequence.count_list
-        in
+        let is_complete = gen_results.gen_is_complete in
+        let answer_count = gen_results.gen_num_answers in
         if args.ga_compact_output then (
           Printf.printf "seq #: %d\n" answer_count;
           Printf.printf "err #: %d\n" !failed_generation_count;
-          if Option.is_none generator_opt then
+          if is_complete then
             print_endline "more: no"
           else
             print_endline "more: yes"
@@ -116,7 +112,7 @@ let () =
           Printf.printf "%d input sequence%s failed due to errors\n"
             !failed_generation_count
             (if answer_count = 1 then "" else "s");
-          if Option.is_none generator_opt then
+          if is_complete then
             print_endline "No further control flows exist."
           else
             print_endline "Further control flows may exist."
