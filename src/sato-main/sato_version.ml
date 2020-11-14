@@ -1,6 +1,6 @@
 let major_version = 0;;
 
-let minor_version = 3;;
+let minor_version = 5;;
 
 let patch_version = 0;;
 

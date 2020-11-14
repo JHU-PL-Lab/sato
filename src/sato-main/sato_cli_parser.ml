@@ -1,16 +1,11 @@
 open Batteries;;
 
 open Odefa_ddpa;;
-open Ddpa_context_stack;;
 
-open Cli_parser_utils;;
+open Sato_cli_parser_utils;;
+open Sato_types;;
 
 open Odefa_symbolic_interpreter.Interpreter;;
-
-type sato_mode =
-| Type_checking
-| Test_generation
-;;
 
 let named_exploration_policies =
   [
@@ -22,8 +17,8 @@ let named_exploration_policies =
 
 type parsers =
   { 
-    parse_mode : sato_mode BatOptParse.Opt.t;
-    parse_context_stack : (module Context_stack) BatOptParse.Opt.t;
+    parse_mode : Sato_types.sato_mode BatOptParse.Opt.t;
+    parse_context_stack : (module Ddpa_context_stack.Context_stack) BatOptParse.Opt.t;
     parse_target_point : string BatOptParse.Opt.t;
     parse_max_steps : int BatOptParse.Opt.t;
     parse_max_results : int BatOptParse.Opt.t;
@@ -40,7 +35,7 @@ let make_parsers () : parsers =
           (fun _ str ->
             "Could not understand mode: " ^ str ^ "\n" ^
             "Valid modes are:\n" ^
-            "* error" ^
+            "* error\n" ^
             "* input")
         "MODE"
         (Some "Specifies the mode of the executable")

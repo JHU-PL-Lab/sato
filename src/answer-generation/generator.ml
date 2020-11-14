@@ -58,7 +58,7 @@ module type Generator = sig
   ;;
 
   val generate_answers :
-    ?generation_callback:(Answer.t -> int -> unit) ->
+    ?generation_callback:(Answer.t -> unit) ->
     generation_parameters ->
     generation_result
 end;;
@@ -123,7 +123,7 @@ module Make(Answer : Answer) = struct
   ;;
 
   let rec take_steps
-      ?generation_callback:(generation_callback=fun _ _ -> ())
+      ?generation_callback:(generation_callback=fun _ -> ())
       (gen_ref : generator_reference)
       (prev_complete : bool)
       (answers : Answer.t list)
@@ -184,7 +184,7 @@ module Make(Answer : Answer) = struct
             List.iter
               (fun ans ->
                 lazy_logger `trace (fun () -> "Found answer on iteration.");
-                generation_callback ans steps')
+                generation_callback ans)
               answers'
         end;
         let answers'' = answers' @ answers in
@@ -219,7 +219,7 @@ module Make(Answer : Answer) = struct
   ;;
 
   let generate_answers
-      ?generation_callback:(generation_callback=(fun _ _ -> ()))
+      ?generation_callback:(generation_callback=(fun _ -> ()))
       (gen_params : generation_parameters)
     : generation_result =
     take_steps

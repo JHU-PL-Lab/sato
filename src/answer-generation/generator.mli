@@ -101,7 +101,7 @@ module type Generator = sig
       of this function's returned values but is called as each new result is
       generated. *)
   val generate_answers :
-    ?generation_callback:(Answer.t -> int -> unit) ->
+    ?generation_callback:(Answer.t -> unit) ->
     generation_parameters ->
     generation_result
   ;;

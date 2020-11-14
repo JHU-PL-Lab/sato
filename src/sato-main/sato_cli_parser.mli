@@ -1,21 +1,16 @@
 open Odefa_ddpa;;
-open Ddpa_context_stack;;
+open Odefa_symbolic_interpreter;;
 
-open Odefa_symbolic_interpreter.Interpreter;;
-
-type sato_mode =
-  | Type_checking
-  | Test_generation
-;;
+open Sato_types;;
 
 type parsers =
   { 
     parse_mode : sato_mode BatOptParse.Opt.t;
-    parse_context_stack : (module Context_stack) BatOptParse.Opt.t;
+    parse_context_stack : (module Ddpa_context_stack.Context_stack) BatOptParse.Opt.t;
     parse_target_point : string BatOptParse.Opt.t;
     parse_max_steps : int BatOptParse.Opt.t;
     parse_max_results : int BatOptParse.Opt.t;
-    parse_exploration_policy : exploration_policy BatOptParse.Opt.t;
+    parse_exploration_policy : Interpreter.exploration_policy BatOptParse.Opt.t;
     parse_logging : unit BatOptParse.Opt.t;
     parse_compact_output : bool BatOptParse.Opt.t;
   }

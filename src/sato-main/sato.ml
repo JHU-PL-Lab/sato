@@ -16,9 +16,9 @@ exception NoOperationsInProgram;;
 exception TypeCheckComplete;;
 
 let parse_program
-    (args: Sato_parser.type_checker_args) 
+    (args: Sato_args.type_checker_args) 
   : (Ast.expr * On_to_odefa_maps.t) =
-  let filename = args.tc_filename in
+  let filename = args.args_filename in
   try
     match Filename.extension filename with
     | ".natodefa" ->
@@ -95,10 +95,10 @@ let print_results_compact
 ;;
 
 let get_target_vars
-    (args: Sato_parser.type_checker_args)
+    (args: Sato_args.type_checker_args)
     (expr : Ast.expr)
   : Ast.ident list =
-  match args.tc_target_var with
+  match args.args_target_var with
   | Some v -> [v]
   | None ->
     begin
@@ -112,7 +112,7 @@ let run_error_check
     ?output:(output=stdout)
     ?show_steps:(show_steps=false)
     (module Error_generator : Generator.Generator)
-    (args : Sato_parser.type_checker_args)
+    (args : Sato_args.type_checker_args)
     (on_odefa_maps : On_to_odefa_maps.t)
     (expr : Ast.expr)
   : unit =
@@ -123,18 +123,18 @@ let run_error_check
     let target_vars = get_target_vars args expr in
     let gen_params =
       Error_generator.create
-        ~exploration_policy:args.tc_exploration_policy
-        ~max_steps:args.tc_maximum_steps
-        ~max_results:args.tc_maximum_results
-        args.tc_generator_configuration
+        ~exploration_policy:args.args_exploration_policy
+        ~max_steps:args.args_maximum_steps
+        ~max_results:args.args_maximum_results
+        args.args_generator_configuration
         expr
         target_vars
     in
     let generation_callback
-      (type_errors : Ans.t) (_: int) : unit =
+      (type_errors : Ans.t) : unit =
       if Ans.generation_successful type_errors then begin
         let str =
-          if args.tc_compact_output then
+          if args.args_compact_output then
             Ans.show_compact ~show_steps type_errors
           else
             Ans.show ~show_steps type_errors
@@ -151,7 +151,7 @@ let run_error_check
     (* Finish generation *)
     let is_complete = gen_answers.gen_is_complete in
     begin
-      if args.tc_compact_output then
+      if args.args_compact_output then
         print_results_compact ~output is_complete gen_answers.gen_num_answers
       else
         print_results ~output (Ans.description) is_complete gen_answers.gen_num_answers
@@ -166,11 +166,10 @@ let run_error_check
     Stdlib.exit 1
 ;;
 
-(* TODO: Add variable of operation where type error occured *)
 let () =
-  let args = Sato_parser.parse_args () in
+  let args = Sato_args.parse_args () in
   let (odefa_expr, on_odefa_maps) = parse_program args in
-  match args.tc_mode with
+  match args.args_mode with
   | Type_checking ->
     begin
       let error_generator =
@@ -185,7 +184,7 @@ let () =
     end
   | Test_generation ->
     begin
-      match args.tc_target_var with
+      match args.args_target_var with
       | None ->
         Stdlib.prerr_endline "This mode requires a target variable; exiting.";
         Stdlib.exit 1

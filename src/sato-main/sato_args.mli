@@ -3,16 +3,18 @@ open Odefa_ast;;
 
 open Ast;;
 
+open Sato_types;;
+
 type type_checker_args = {
-  tc_filename : string;
-  tc_mode : Cli_parser.sato_mode;
-  tc_target_var : Ident.t option;
-  tc_generator_configuration : Generator_configuration.configuration;
-  tc_maximum_steps : int option;
-  tc_maximum_results : int option;
-  tc_exploration_policy :
+  args_filename : string;
+  args_mode : sato_mode;
+  args_target_var : Ident.t option;
+  args_generator_configuration : Generator_configuration.configuration;
+  args_maximum_steps : int option;
+  args_maximum_results : int option;
+  args_exploration_policy :
     Odefa_symbolic_interpreter.Interpreter.exploration_policy;
-  tc_compact_output : bool;
+  args_compact_output : bool;
 }
 ;;
 
