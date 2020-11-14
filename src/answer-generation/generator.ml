@@ -32,6 +32,7 @@ module type Generator = sig
       gen_cfg : Ddpa_graph.ddpa_graph;
       gen_exploration_policy : Interpreter.exploration_policy;
       gen_max_steps : int option;
+      gen_max_results : int option;
     }
   ;;
 
@@ -51,6 +52,7 @@ module type Generator = sig
   val create :
     ?exploration_policy:Interpreter.exploration_policy ->
     ?max_steps:(int option) ->
+    ?max_results:(int option) ->
     configuration -> expr -> ident list ->
     generation_parameters
   ;;
@@ -69,6 +71,7 @@ module Make(Answer : Answer) = struct
     gen_cfg : Ddpa_graph.ddpa_graph;
     gen_exploration_policy : Interpreter.exploration_policy;
     gen_max_steps : int option;
+    gen_max_results : int option;
   }
   ;;
 
@@ -78,7 +81,6 @@ module Make(Answer : Answer) = struct
     gen_target_vars : Ast.ident list;
   }
   ;;
-
 
   type generation_result = {
     gen_answers : Answer.t list;
@@ -123,19 +125,30 @@ module Make(Answer : Answer) = struct
   let rec take_steps
       ?generation_callback:(generation_callback=fun _ _ -> ())
       (gen_ref : generator_reference)
+      (prev_complete : bool)
       (answers : Answer.t list)
       (steps : int)
       (x_list : Ident.t list)
       (ev : Interpreter.evaluation)
     : generation_result =
     let recurse = take_steps ~generation_callback gen_ref in
-    match gen_ref.gen_max_steps with
-    | Some max_steps when steps >= max_steps ->
+    match gen_ref.gen_max_results, gen_ref.gen_max_steps with
+    | (Some max_res, _) when List.length answers >= max_res ->
+      begin
+        lazy_logger `trace (fun () ->
+          "Pass reached max number of results; terminating generation.");
+        {
+          gen_answers = answers;
+          gen_num_answers = List.length answers;
+          gen_is_complete = false;
+        }
+      end
+    | (_, Some max_steps) when steps >= max_steps ->
       begin
         match x_list with
         | [] | _ :: [] ->
           lazy_logger `trace (fun () ->
-            "Pass reached max step count; returning suspended generator.");
+            "Pass reached max step count; terminating generation.");
           {
             gen_answers = answers;
             gen_num_answers = List.length answers;
@@ -151,9 +164,9 @@ module Make(Answer : Answer) = struct
               gen_ref.gen_program
               x'
           in
-          recurse answers 0 (x' :: x_list') ev'
+          recurse false answers 0 (x' :: x_list') ev'
       end
-    | _ ->
+    | _, _ ->
       begin
         let results, ev'_opt = Interpreter.step ev in
         let (x, x_list') = update_target_vars results x_list in
@@ -167,37 +180,33 @@ module Make(Answer : Answer) = struct
           match answers' with
           | [] ->
             lazy_logger `trace (fun () -> "No answer found on iteration.");
-          | _ ->
+          | _ :: _ ->
             List.iter
               (fun ans ->
                 lazy_logger `trace (fun () -> "Found answer on iteration.");
                 generation_callback ans steps')
               answers'
         end;
-        match answers', ev'_opt with
-        | [], Some ev' ->
-          (* No result and no termination.  Keep running the same loop. *)
+        let answers'' = answers' @ answers in
+        match ev'_opt with
+        | Some ev' ->
           lazy_logger `trace (fun () ->
-            "Interpreter evaluation not yet complete. Continuing.");
-          recurse answers steps' (x :: x_list') ev'
-        | _, Some ev' ->
-          lazy_logger `trace (fun () ->
-            "New result found in this step. Continuing evaluation.");
-          recurse (answers' @ answers) steps' (x :: x_list') ev'
-        | _, None ->
+            "Continue current evaluation.");
+          recurse prev_complete answers'' steps' (x :: x_list') ev'
+        | None ->
           (* Start a new evaluation if there's start vars left in the list. *)
-          if not @@ List.is_empty answers' then begin
-            lazy_logger `trace (fun () ->
-              "New result found in this step. Current evaluation terminated.")
-          end;
-          let answers'' = answers' @ answers in
           match x_list' with
-          | [] -> {
+          | [] ->
+            lazy_logger `trace (fun () ->
+              "Evaluation complete and no more variables left; stop.");
+            {
               gen_answers = answers'';
               gen_num_answers = List.length answers'';
-              gen_is_complete = true;
+              gen_is_complete = prev_complete;
             }
           | (x' :: _) ->
+            lazy_logger `trace (fun () ->
+              "Evaluation complete with target variables left; restart evaluation.");
             let ev' =
               Interpreter.start
                 ~exploration_policy:gen_ref.gen_exploration_policy
@@ -205,7 +214,7 @@ module Make(Answer : Answer) = struct
                 gen_ref.gen_program
                 x'
             in
-            recurse answers'' 0 x_list' ev'
+            recurse prev_complete answers'' 0 x_list' ev'
     end
   ;;
 
@@ -216,6 +225,7 @@ module Make(Answer : Answer) = struct
     take_steps
       ~generation_callback
       gen_params.gen_reference
+      true
       []
       0
       gen_params.gen_target_vars
@@ -225,6 +235,7 @@ module Make(Answer : Answer) = struct
   let create
       ?exploration_policy:(exploration_policy=Interpreter.Explore_breadth_first)
       ?max_steps:(max_steps=None)
+      ?max_results:(max_results=None)
       (conf : configuration)
       (e : expr)
       (x_list : ident list)
@@ -246,7 +257,8 @@ module Make(Answer : Answer) = struct
         gen_program = e;
         gen_cfg = cfg;
         gen_exploration_policy = exploration_policy;
-        gen_max_steps = max_steps
+        gen_max_steps = max_steps;
+        gen_max_results = max_results
       }
     in
     { 

@@ -8,14 +8,12 @@ open Odefa_parser;;
 open Odefa_answer_generation;;
 open Odefa_symbolic_interpreter;;
 
-let logger = Logger_utils.make_logger "Type_checker";;
-let lazy_logger = Logger_utils.make_lazy_logger "Type_checker";;
+let logger = Logger_utils.make_logger "Sato";;
+let lazy_logger = Logger_utils.make_lazy_logger "Sato";;
 
 exception CommandLineParseFailure of string;;
 exception NoOperationsInProgram;;
 exception TypeCheckComplete;;
-
-exception GenerationComplete;;
 
 let parse_program
     (args: Sato_parser.type_checker_args) 
@@ -123,13 +121,11 @@ let run_error_check
   try
     (* Prepare and create generator *)
     let target_vars = get_target_vars args expr in
-    (* TODO: reinstate results_remaining in a functional manner *)
-    (* let results_remaining = ref args.tc_maximum_results in *)
-    (* let total_errors = ref 0 in *)
     let gen_params =
       Error_generator.create
         ~exploration_policy:args.tc_exploration_policy
         ~max_steps:args.tc_maximum_steps
+        ~max_results:args.tc_maximum_results
         args.tc_generator_configuration
         expr
         target_vars
@@ -137,37 +133,36 @@ let run_error_check
     let generation_callback
       (type_errors : Ans.t) (_: int) : unit =
       if Ans.generation_successful type_errors then
-        output_string output (Printf.sprintf "%s\n" (Ans.show ~show_steps ~is_compact:args.tc_compact_output type_errors));
-      (* total_errors := !total_errors + Ans.count type_errors; *)
-      (* results_remaining := (Option.map (fun n -> n - 1) !results_remaining);
-      if !results_remaining = Some 0 then begin
-        raise GenerationComplete
-      end; *)
+        let str =
+          Ans.show ~show_steps ~is_compact:args.tc_compact_output type_errors
+        in
+        output_string output @@ Printf.sprintf "%s\n" str
+      else
+        (* FIXME: Better solution to this *)
+        output_string output "Foo\n"
     in
     (* Run generator *)
-    try
-      let gen_answers =
-        Error_generator.generate_answers
-          ~generation_callback:generation_callback
-          gen_params
-      in
-      let is_complete = gen_answers.gen_is_complete in
-      begin
-        if args.tc_compact_output then
-          print_results_compact ~output is_complete gen_answers.gen_num_answers
-        else
-          print_results ~output (Ans.description) is_complete gen_answers.gen_num_answers
-      end;
-    with GenerationComplete ->
-      output_string output "Errors found; terminating";
-    (* Close - we are finished *)
+    let gen_answers =
+      Error_generator.generate_answers
+        ~generation_callback:generation_callback
+        gen_params
+    in
+    (* Finish generation *)
+    let is_complete = gen_answers.gen_is_complete in
+    begin
+      if args.tc_compact_output then
+        print_results_compact ~output is_complete gen_answers.gen_num_answers
+      else
+        print_results ~output (Ans.description) is_complete gen_answers.gen_num_answers
+    end;
     close_out output
   (* Exception for when the user inputs a target var not in the program *)
   with
   | NoOperationsInProgram ->
     print_endline "No error-able operations found; terminating."
   | Interpreter.Invalid_query msg ->
-    prerr_endline msg
+    prerr_endline msg;
+    Stdlib.exit 1
 ;;
 
 (* TODO: Add variable of operation where type error occured *)

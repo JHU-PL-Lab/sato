@@ -32,8 +32,13 @@ module type Generator = sig
       (** The exploration policy used by the symbolic interpreter. *)
       gen_exploration_policy : Interpreter.exploration_policy;
 
-      (** The maximum number of steps taken by a particular evaluation. *)
+      (** The maximum number of steps taken by a particular evaluation.
+          (A None value means an infinite number of steps can be taken.) *)
       gen_max_steps : int option;
+
+      (** The maximum number of results that can be generated.
+          (A None value means an infinite number of results can be generated.) *)
+      gen_max_results : int option;
     }
   ;;
 
@@ -80,6 +85,7 @@ module type Generator = sig
   val create :
     ?exploration_policy:Interpreter.exploration_policy ->
     ?max_steps:(int option) ->
+    ?max_results:(int option) ->
     configuration -> Ast.expr -> Ast.ident list -> 
     generation_parameters
   ;;
