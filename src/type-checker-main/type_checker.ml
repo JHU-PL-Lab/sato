@@ -71,19 +71,34 @@ let parse_program
 
 let print_results
     ~(output : unit BatIO.output)
+    (answer_name : string)
     (is_completed : bool)
     (total_errors : int)
   : unit =
   (* Display number of type errors. *)
   if total_errors = 0 then
-    output_string output "No errors found. "
+    output_string output
+      (Printf.sprintf "No %ss found.\n" answer_name)
   else
-    output_string output (Printf.sprintf "%d errors found. " total_errors);
+    output_string output
+      (Printf.sprintf "%d %s%s found.\n"
+        total_errors
+        answer_name
+        (if total_errors = 1 then "" else "s"));
   (* Display if control flows have been exhausted or not. *)
   if is_completed then
     output_string output "No further control flows exist.\n"
   else
     output_string output "Further control flows may exist.\n"
+;;
+
+let print_results_compact
+    ~(output : unit BatIO.output)
+    (is_completed : bool)
+    (total_errors : int)
+  : unit =
+  output_string output (Printf.sprintf "num  : %d\n" total_errors);
+  output_string output (Printf.sprintf "more : %b\n" (not is_completed));
 ;;
 
 let get_target_vars
@@ -113,8 +128,9 @@ let run_error_check
   try
     (* Prepare and create generator *)
     let target_vars = get_target_vars args expr in
-    let results_remaining = ref args.tc_maximum_results in
-    let total_errors = ref 0 in
+    (* TODO: reinstate results_remaining in a functional manner *)
+    (* let results_remaining = ref args.tc_maximum_results in *)
+    (* let total_errors = ref 0 in *)
     let gen_params =
       Error_generator.create
         ~exploration_policy:args.tc_exploration_policy
@@ -126,12 +142,12 @@ let run_error_check
     let generation_callback
       (type_errors : Ans.t) (_: int) : unit =
       if Ans.generation_successful type_errors then
-        output_string output (Printf.sprintf "%s\n" (Ans.show ~show_steps type_errors));
-      total_errors := !total_errors + Ans.count type_errors;
-      results_remaining := (Option.map (fun n -> n - 1) !results_remaining);
+        output_string output (Printf.sprintf "%s\n" (Ans.show ~show_steps ~is_compact:args.tc_compact_output type_errors));
+      (* total_errors := !total_errors + Ans.count type_errors; *)
+      (* results_remaining := (Option.map (fun n -> n - 1) !results_remaining);
       if !results_remaining = Some 0 then begin
         raise GenerationComplete
-      end;
+      end; *)
     in
     (* Run generator *)
     try
@@ -141,7 +157,12 @@ let run_error_check
           gen_params
       in
       let is_complete = gen_answers.gen_is_complete in
-      print_results ~output is_complete (!total_errors);
+      begin
+        if args.tc_compact_output then
+          print_results_compact ~output is_complete gen_answers.gen_num_answers
+        else
+          print_results ~output (Ans.description) is_complete gen_answers.gen_num_answers
+      end;
     with GenerationComplete ->
       output_string output "Errors found; terminating";
     (* Close - we are finished *)
@@ -158,13 +179,29 @@ let run_error_check
 let () =
   let args = Type_checker_parser.parse_args () in
   let (odefa_expr, on_odefa_maps) = parse_program args in
-  let error_generator =
-    if On_to_odefa_maps.is_natodefa on_odefa_maps then
-      (module Generator.Make(Generator_answer.Natodefa_type_errors)
-        : Generator.Generator)
-    else
-      (module Generator.Make(Generator_answer.Type_errors)
-        : Generator.Generator)
-  in
-  run_error_check error_generator args on_odefa_maps odefa_expr
+  match args.tc_mode with
+  | Type_checking ->
+    begin
+      let error_generator =
+        if On_to_odefa_maps.is_natodefa on_odefa_maps then
+          (module Generator.Make(Generator_answer.Natodefa_type_errors)
+            : Generator.Generator)
+        else
+          (module Generator.Make(Generator_answer.Type_errors)
+            : Generator.Generator)
+      in
+      run_error_check error_generator args on_odefa_maps odefa_expr
+    end
+  | Test_generation ->
+    begin
+      match args.tc_target_var with
+      | None ->
+        Stdlib.prerr_endline "This mode requires a target variable; exiting.";
+        Stdlib.exit 1
+      | Some _ ->
+        let input_generator =
+          (module Generator.Make(Generator_answer.Input_sequence) : Generator.Generator)
+        in
+        run_error_check input_generator args on_odefa_maps odefa_expr
+    end
 ;;

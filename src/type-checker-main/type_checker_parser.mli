@@ -5,6 +5,7 @@ open Ast;;
 
 type type_checker_args = {
   tc_filename : string;
+  tc_mode : Cli_parser.sato_mode;
   tc_target_var : Ident.t option;
   tc_generator_configuration : Generator_configuration.configuration;
   tc_maximum_steps : int option;

@@ -7,15 +7,23 @@ open Cli_parser_utils;;
 
 open Odefa_symbolic_interpreter.Interpreter;;
 
+type sato_mode =
+| Type_checking
+| Test_generation
+;;
+
 let named_exploration_policies =
-  [ (Explore_breadth_first, "bfs");
+  [
+    (Explore_breadth_first, "bfs");
     (Explore_smallest_relative_stack_length, "relstack-len");
     (Explore_least_relative_stack_repetition, "relstack-rep");
   ]
 ;;
 
 type parsers =
-  { parse_context_stack : (module Context_stack) BatOptParse.Opt.t;
+  { 
+    parse_mode : sato_mode BatOptParse.Opt.t;
+    parse_context_stack : (module Context_stack) BatOptParse.Opt.t;
     parse_target_point : string BatOptParse.Opt.t;
     parse_max_steps : int BatOptParse.Opt.t;
     parse_max_results : int BatOptParse.Opt.t;
@@ -26,7 +34,23 @@ type parsers =
 ;;
 
 let make_parsers () : parsers =
-  { parse_context_stack =
+  { parse_mode =
+      single_value_parser
+        ~invalid_value_err_msg:
+          (fun _ str ->
+            "Could not understand mode: " ^ str ^ "\n" ^
+            "Valid modes are:\n" ^
+            "* error" ^
+            "* input")
+        "MODE"
+        (Some "Specifies the mode of the executable")
+        (Some Type_checking)
+        (fun s -> match s with
+          | "error" -> Some Type_checking
+          | "input" -> Some Test_generation
+          | _ -> None
+        );
+    parse_context_stack =
       select_context_stack_parser ();
     parse_target_point =
       single_value_parser
@@ -93,6 +117,11 @@ let make_cli_parser version_str =
   (* **** Add options **** *)
   BatOptParse.OptParser.add
     cli_parser
+    ~short_name:'m'
+    ~long_name:"mode"
+    parsers.parse_mode;
+  BatOptParse.OptParser.add
+    cli_parser
     ~short_name:'c'
     ~long_name:"context-stack"
     parsers.parse_context_stack;
@@ -103,7 +132,7 @@ let make_cli_parser version_str =
     parsers.parse_target_point;
   BatOptParse.OptParser.add
     cli_parser
-    ~short_name:'m'
+    ~short_name:'s'
     ~long_name:"maximum-steps"
     parsers.parse_max_steps;
   BatOptParse.OptParser.add
@@ -123,7 +152,7 @@ let make_cli_parser version_str =
     parsers.parse_exploration_policy;
   BatOptParse.OptParser.add
     cli_parser
-    ~short_name:'b'
+    ~short_name:'k'
     ~long_name:"compact-output"
     parsers.parse_compact_output;
   (parsers, cli_parser)

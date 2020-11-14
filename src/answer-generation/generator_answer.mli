@@ -12,6 +12,9 @@ module type Answer = sig
   (** The type of the answer *)
   type t;;
 
+  (** A one word description of the answer (e.g. "input" or "error"). *)
+  val description : string;;
+
   (** A function to extract an answer from the result of a symbolic interpreter
       evaluation, given an expression and a particular stop variable. *)
   val answer_from_result :
@@ -26,7 +29,7 @@ module type Answer = sig
   val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
 
   (** Convert the answer into a string. *)
-  val show : ?show_steps:bool -> t -> string;;
+  val show : ?show_steps:bool -> ?is_compact:bool -> t -> string;;
 
   (** Count the number of answers in the data structure. *)
   val count : t -> int;;

@@ -3,8 +3,15 @@ open Ddpa_context_stack;;
 
 open Odefa_symbolic_interpreter.Interpreter;;
 
+type sato_mode =
+  | Type_checking
+  | Test_generation
+;;
+
 type parsers =
-  { parse_context_stack : (module Context_stack) BatOptParse.Opt.t;
+  { 
+    parse_mode : sato_mode BatOptParse.Opt.t;
+    parse_context_stack : (module Context_stack) BatOptParse.Opt.t;
     parse_target_point : string BatOptParse.Opt.t;
     parse_max_steps : int BatOptParse.Opt.t;
     parse_max_results : int BatOptParse.Opt.t;
