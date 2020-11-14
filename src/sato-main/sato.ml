@@ -43,14 +43,14 @@ let parse_program
       raise @@ Invalid_argument
         (Printf.sprintf "Filetype %s not supported" filename)
   with
-  | Sys_error err | Invalid_argument err ->
-    Stdlib.prerr_endline err;
+  | Sys_error msg | Invalid_argument msg ->
+    Stdlib.prerr_endline msg;
     Stdlib.exit 1
   | On_parse.Parse_error (_, line, col, token)->
-    let err_msg =
+    let msg =
       Printf.sprintf "Invalid token \"%s\" at line %d, column %d" token line col
     in
-    Stdlib.prerr_endline err_msg;
+    Stdlib.prerr_endline msg;
     Stdlib.exit 1
   | Ast_wellformedness.Illformedness_found ills ->
     print_endline "Program is ill-formed.";
@@ -188,7 +188,8 @@ let () =
         Stdlib.exit 1
       | Some _ ->
         let input_generator =
-          (module Generator.Make(Generator_answer.Input_sequence) : Generator.Generator)
+          (module Generator.Make(Generator_answer.Input_sequence)
+            : Generator.Generator)
         in
         run_error_check input_generator args on_odefa_maps odefa_expr
     end

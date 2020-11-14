@@ -27,24 +27,12 @@
 
    - EXPECT-ANALYSIS-NO-INCONSISTENCIES: We expect to not encounter any
       inconsistency in DDPA.
+*)
 
-   - EXPECT-INPUT-SEQUENCES-REACH <var> <list of inputs> <complete?>: We
-      expect, looking up from the variable <var>, to generate the list of
-      inputs <list of inputs> using DDSE. <complete?> deontes if we expect
-      all control flow paths to have been explored.
-
-   - EXPECT-REQUIRED-INPUT-SEQUENCE-GENERATION-STEPS <steps>: We expect that
-      test generation should complete within a max of <steps> steps.
-
-   - EXPECT-NO-TYPE-ERRORS: We expect not to find any type errors using Sato.
-
-   - EXPECT-TYPE-ERROR-COUNT <num>: We expect to find <num> type errors using
-      Sato.
-    
-   - EXPECT-TYPE-ERROR <var> <input seq> : <type errors>: We expect that,
-      looking up from <var>, to encounter all the type errors in <type errors>
-      associated with the input sequence <input seq>. Type erro syntax has
-      the form ["<operation>" "<definition>" "<expected>" "<actual>"].
+(* NOTE: This test harness was originally designed to test DDPA and DDSE, and
+   was at one point modified to test type checking.  However, due to it
+   complexity, we moved to a different test harness in test_sato.ml, and this
+   is left as a legacy tester for DDPA.
 *)
 
 (* FIXME: purge the term "inconsistency" *)
@@ -61,13 +49,10 @@ open Odefa_toploop;;
 
 open Odefa_natural;;
 
-open Odefa_symbolic_interpreter.Interpreter;;
-
 open Ast;;
 open Ast_pp;;
 open Ast_wellformedness;;
 open Generator_answer;;
-open Generator_configuration;;
 open Toploop_options;;
 open Toploop_types;;
 open Ddpa_abstract_ast;;
@@ -113,21 +98,6 @@ type test_expectation =
   (* Is there an inconsistency? *)
   | Expect_analysis_inconsistency_at of ident
   | Expect_analysis_no_inconsistencies
-  (* What input sequences reach what variables? *)
-  | Expect_input_sequences_reach of
-      string * (* the variable *)
-      Input_generator.Answer.t list * (* the expected input sequences *)
-      bool (* true if we should be certain that generation is complete *)
-  (* Set the number of input gen steps required. *)
-  | Expect_required_input_sequence_generation_steps of int
-  (* Are there type errors? *)
-  | Expect_no_type_errors
-  (* How many type errors? *)
-  | Expect_type_error_count of int
-  (* Which type errors? *)
-  | Expect_type_error of
-    string * (* variable to look up from *)
-    string (* the sequence of type errors *)
 ;;
 
 (* **** Expectation utility functions **** *)
@@ -152,19 +122,6 @@ let pp_test_expectation formatter expectation =
       pp_ident x
   | Expect_analysis_no_inconsistencies ->
     Format.pp_print_string formatter "Expect_analysis_no_inconsistencies"
-  | Expect_input_sequences_reach(x,inputs,complete) ->
-    Format.fprintf formatter "Expect input sequences reach %s: %s%s"
-      x
-      (string_of_input_sequences inputs)
-      (if complete then " (and no others)" else "")
-  | Expect_required_input_sequence_generation_steps n ->
-    Format.fprintf formatter "Expect input sequence generation steps = %d" n
-  | Expect_no_type_errors ->
-    Format.pp_print_string formatter "Expect_no_type_errors"
-  | Expect_type_error_count n ->
-    Format.fprintf formatter "Expect %d type errors" n
-  | Expect_type_error (_, errors) ->
-    Format.fprintf formatter "Expect_type_error %s" errors
 ;;
 
 let name_of_expectation expectation =
@@ -192,18 +149,6 @@ let name_of_expectation expectation =
     "should be inconsistent at " ^ show_ident ident
   | Expect_analysis_no_inconsistencies ->
     "should be consistent"
-  | Expect_input_sequences_reach(var,sequences,complete) ->
-    Printf.sprintf "should reach variable %s with inputs %s%s"
-      var
-      (string_of_input_sequences sequences)
-      (if complete then " (and no others)" else "")
-  | Expect_required_input_sequence_generation_steps(n) ->
-    Printf.sprintf "should only require %d steps to discover inputs" n
-  | Expect_no_type_errors -> "should have no type errors"
-  | Expect_type_error_count n ->
-    Printf.sprintf "should have %d type errors" n
-  | Expect_type_error (x, _) ->
-    Printf.sprintf "should have type error when looking up %s" x
 ;;
 
 (* **** Expectation parsing **** *)
@@ -280,104 +225,6 @@ let _parse_input args_lst =
     raise @@ Expectation_parse_failure "Spurious arguments"
 ;;
 
-let _parse_input_seq_reach args_lst =
-  let args_lst' =
-    String_utils.whitespace_split ~max:2 (String.join "" args_lst)
-  in
-  match args_lst' with
-  | [] ->
-    raise @@ Expectation_parse_failure
-      "Missing input sequence variable name"
-  | variable_name :: rest_args ->
-    begin
-      let (input_sequences, complete) =
-        match rest_args with
-        | [rest_args_str] ->
-          let rest_args_lst : string list =
-            rest_args_str
-            |> Str.split (Str.regexp "[][]")
-            |> List.map (Str.global_replace (Str.regexp "[ ]*") "")
-            |> List.filter (fun str -> not (String.equal "" str))
-          in
-          let complete : bool =
-            String.equal "!" (List.last rest_args_lst)
-          in
-          let input_sequences =
-            if complete then begin
-              let rest_args_lst' =
-                (* Remove final '!' element from list *)
-                rest_args_lst
-                |> List.rev
-                |> List.tl
-                |> List.rev
-              in
-              List.map
-                Input_generator.Answer.answer_from_string
-                rest_args_lst'
-            end else begin
-              List.map
-                Input_generator.Answer.answer_from_string
-                rest_args_lst
-            end
-          in
-          (input_sequences, complete)
-        | [] -> raise @@ Expectation_parse_failure
-                  "Missing input sequence arguments"
-        | _ -> raise @@ Expectation_parse_failure
-                  "Spurious input sequence arguments"
-      in
-      Expect_input_sequences_reach(
-        variable_name, input_sequences, complete)
-    end
-;;
-
-let _parse_gen_steps args =
-  let nstr = assert_one_arg args in
-  begin
-    try
-      Expect_required_input_sequence_generation_steps(int_of_string nstr)
-    with
-    | Failure _ ->
-      raise @@ Expectation_parse_failure
-        (Printf.sprintf
-            "Could not parse number of expected input generation steps: %s"
-            nstr)
-  end
-;;
-
-let _parse_error_count arg_str =
-  let count_str = assert_one_arg arg_str in
-  begin
-    try
-      Expect_type_error_count (int_of_string count_str)
-    with Failure _ ->
-      raise @@
-        Expectation_parse_failure ("Cannot parse string " ^ count_str)
-  end
-;;
-
-let _parse_type_errors args_lst =
-  let args_lst' =
-    String_utils.whitespace_split ~max:2 (String.join "" args_lst)
-  in
-  match args_lst' with
-  | [] ->
-    begin
-      raise @@ Expectation_parse_failure
-        "Missing variable name in type error report"
-    end
-  | var_name :: rest_args ->
-    begin
-      match rest_args with
-      | [type_errs] ->
-        Expect_type_error (var_name, type_errs)
-      | [] ->
-        raise @@ Expectation_parse_failure "No type errors listed"
-      | _ ->
-        raise @@ Expectation_parse_failure "Spurious arguments"
-    end
-;;
-
 let parse_expectation str =
   try
     let expectation =
@@ -413,17 +260,6 @@ let parse_expectation str =
       | "EXPECT-ANALYSIS-NO-INCONSISTENCIES" :: args_part ->
         assert_no_args args_part;
         Expect_analysis_no_inconsistencies
-      | "EXPECT-INPUT-SEQUENCES-REACH" :: args_part ->
-        _parse_input_seq_reach args_part
-      | "EXPECT-REQUIRED-INPUT-SEQUENCE-GENERATION-STEPS" :: args ->
-        _parse_gen_steps args
-      | "EXPECT-NO-TYPE-ERRORS" :: args_part ->
-        assert_no_args args_part;
-        Expect_no_type_errors
-      | "EXPECT-TYPE-ERROR-COUNT" :: args_part ->
-        _parse_error_count args_part;
-      | "EXPECT-TYPE-ERROR" :: args_part ->
-        _parse_type_errors args_part
       | _ ->
         raise @@ Expectation_not_found
     in
@@ -506,22 +342,6 @@ let observe_input_selection input_ref expectation =
   | _ -> Some expectation
 ;;
 
-let observe_input_generation_steps input_ref expectation =
-  match expectation with
-  | Expect_required_input_sequence_generation_steps inputs ->
-    begin
-      input_ref :=
-        begin
-          match !input_ref with
-          | None -> Some inputs
-          | Some _ ->
-            assert_failure @@
-            "multiple expectations of input generation step count"
-        end;
-      None
-    end
-  | _ -> Some expectation
-;;
 
 let observe_analysis_variable_lookup_from_end ident repr expectation =
   match expectation with
@@ -559,22 +379,6 @@ let observe_inconsistency inconsistency expectation =
 let observe_no_inconsistency expectation =
   match expectation with
   | Expect_analysis_no_inconsistencies -> None
-  | _ -> Some expectation
-;;
-
-let observe_no_type_errors_found expect_present expectation =
-  match expectation with
-  | Expect_no_type_errors ->
-    expect_present := true;
-    None
-  | _ -> Some expectation
-;;
-
-let observe_n_errors_found expect_present expectation =
-  match expectation with
-  | Expect_type_error_count n ->
-    expect_present := Some n;
-    None
   | _ -> Some expectation
 ;;
 
@@ -729,343 +533,6 @@ let test_ddpa
   end;
 ;;
 
-(** Test demand-driven symbolic analysis, specifically the expected input
-    sequence generation. *)
-let test_ddse
-    (filename : string)
-    (expect_left : test_expectation list ref)
-    (stack_module_choice : expectation_stack_decision)
-    (input_generation_steps : int)
-    (expr: Ast.expr)
-  : unit =
-  let _ = filename in
-  (* Check ill-formedness *)
-  Ast_wellformedness.check_wellformed_expr expr;
-  (* Configure DDSE options. *)
-  (* Select the appropriate context stack for DDPA. *)
-  let chosen_module_option =
-    match stack_module_choice with
-    | Default_stack ->
-      Some (module Ddpa_single_element_stack.Stack :
-              Ddpa_context_stack.Context_stack)
-    | Chosen_stack value -> value
-  in
-  (* Set context model *)
-  let configuration =
-    match chosen_module_option with
-    | Some context_model ->
-      { conf_context_model = context_model; }
-    | None ->
-      assert_failure
-        "Test specified input sequence requirement without context model."
-  in
-  (* Retrieve input sequence expectations. *)
-  let input_generation_expectations =
-    (* Separate out input sequence expectations from the other expectations *)
-    let (input_expectations, remaining_expectations) =
-      List.fold_left
-        (fun (input_expects, remaining_expects) expectation ->
-          match expectation with
-          | Expect_input_sequences_reach (x, inputs, complete) ->
-            ((x, inputs, complete) :: input_expects, remaining_expects)
-          | _ -> (input_expects, expectation :: remaining_expects))
-        ([],[])
-        !expect_left
-    in
-    expect_left := List.rev remaining_expectations;
-    List.rev input_expectations
-  in
-  (* Run test generations given a target variable [x], an expected input
-     sequence [inputs], and the expected completness result [complete]. *)
-  let run_test_generation (x, inputs, complete) =
-    (* Create input sequence generator *)
-    let generator =
-      Input_generator.create
-      ?exploration_policy:(Some (Explore_least_relative_stack_repetition))
-      configuration
-      expr
-      [(Ident x)]
-    in
-    (* let found_input_sequences = ref [] in *)
-    let remaining_input_seq = ref inputs in
-    let callback
-        (sequence : Input_generator.Answer.t)
-        (_steps : int)
-      : unit =
-      (* found_input_sequences := sequence :: (!found_input_sequences); *)
-      if List.mem sequence !remaining_input_seq then begin
-        (* An input sequence was generated that was expected. *)
-        remaining_input_seq := List.remove !remaining_input_seq sequence;
-        if List.is_empty !remaining_input_seq && not complete then
-          (* We're not looking for a complete input generation and we've
-            found everything we wanted to find.  We're finished! *)
-          raise Input_generation_complete;
-      end else begin
-        (* An input sequence was generated which we didn't expect. *)
-        if complete then
-          (* If the input sequences in the test are expected to be
-            complete, this one represents a problem. *)
-          assert_failure
-            (Printf.sprintf
-              "Unexpected input sequence generated: %s"
-              (string_of_input_sequence sequence))
-        else
-          (* If the input sequences in the test are not expected to be
-            complete, maybe this is just one which we didn't explicitly
-            call out. *)
-          ()
-      end
-    in
-    (* Run generator *)
-    let (_, generator') =
-      try
-        Input_generator.generate_answers
-          ~generation_callback:callback
-          (Some input_generation_steps)
-          generator
-      with
-      | Input_generation_complete ->
-        ([], Some generator)
-    in
-    (* Report any complaints *)
-    (* First, verify that all input sequences were discovered. *)
-    let ungenerated_input_complaints =
-      List.map
-        (fun input_sequence ->
-          Printf.sprintf
-            "Did not generate input sequence %s for variable %s."
-            (string_of_input_sequence input_sequence) x
-        )
-        !remaining_input_seq
-    in
-    (* If we expected a complete input sequence and didn't get that
-       guarantee, complain. *)
-    let uncomplete_input_complaints =
-      if complete && Option.is_some generator' then
-        [Printf.sprintf
-          "Test generation did not complete in %d steps."
-          input_generation_steps
-        ]
-      else
-        []
-    in
-    let complaints =
-      ungenerated_input_complaints @ uncomplete_input_complaints
-    in
-    complaints
-  in
-  let input_generation_complaints =
-    input_generation_expectations
-    |> List.map run_test_generation
-    |> List.concat
-  in
-  (* If there are any expectations of errors left, they're a problem. *)
-  List.iter
-    (function
-      | Expect_analysis_inconsistency_at ident ->
-        assert_failure @@ "Expected error at " ^
-                          show_ident ident ^ " which did not occur"
-      | _ -> ()
-    )
-    !expect_left;
-  (* If there are any complaints about input generation, announce them
-      now. *)
-  if not @@ List.is_empty input_generation_complaints then
-    assert_failure (
-      input_generation_complaints
-      |> List.map (fun s -> "* " ^ s)
-      |> String.join "\n"
-      |> (fun s ->
-          "Input generation test failed to meet expectations:\n" ^ s)
-    )
-;;
-
-(** Test symbolic analysis typechecking. *)
-let test_sato
-    (filename : string)
-    (expect_left : test_expectation list ref)
-    (stack_module_choice : expectation_stack_decision)
-    (generation_steps : int)
-    (odefa_on_map : On_to_odefa_maps.t)
-    (expr : expr)
-  : unit =
-  let observation = _observation filename in
-  (* Check ill-formedness *)
-  Ast_wellformedness.check_wellformed_expr expr;
-  (* Set modules depending on filetype *)
-  let is_natodefa = On_to_odefa_maps.is_natodefa odefa_on_map in
-  let error_generator =
-    if is_natodefa then
-      (module Generator.Make(Natodefa_type_errors) : Generator.Generator)
-    else
-      (module Generator.Make(Type_errors) : Generator.Generator)
-  in
-  let module Error_generator = (val error_generator) in
-  let module Error = Error_generator.Answer in
-  (* Configure Sato options. *)
-  (* Select the appropriate context stack for DDPA. *)
-  let chosen_module_option =
-    match stack_module_choice with
-    | Default_stack ->
-      Some (module Ddpa_single_element_stack.Stack :
-              Ddpa_context_stack.Context_stack)
-    | Chosen_stack value -> value
-  in
-  (* Configure the context model *)
-  let configuration =
-    match chosen_module_option with
-    | Some context_model ->
-      { conf_context_model = context_model; }
-    | None ->
-      assert_failure
-        "Test specified input sequence requirement without context model."
-  in
-  (* Retrieve and parse type error expectations *)
-  let parse_error err_str =
-    (* We need to parse the error string here because we don't know if the
-       program is odefa or natodefa in advance. *)
-    try
-      Error.answer_from_string err_str
-    with
-    | Not_found -> (* TODO: Catch Not_found in answer_from_string *)
-      raise @@ Expectation_parse_failure "Cannot parse type error string"
-    | Generator_answer.Parse_failure s ->
-      raise @@ Expectation_parse_failure s
-    | Odefa_symbolic_interpreter.Error.Parse_failure s ->
-      raise @@ Expectation_parse_failure s
-  in
-  let type_err_expectations =
-    (* Separate out input sequence expectations from the other expectations *)
-    let (type_err_expectations, remaining_expectations) =
-      List.fold_left
-        (fun (type_err_expects, remaining_expects) expectation ->
-          match expectation with
-          | Expect_type_error (x, type_errs) ->
-            ((x, parse_error type_errs) :: type_err_expects, remaining_expects)
-          | _ ->
-            (type_err_expects, expectation :: remaining_expects))
-        ([],[])
-        !expect_left
-    in
-    expect_left := List.rev remaining_expectations;
-    List.rev type_err_expectations
-  in
-  let target_list =
-    type_err_expectations
-    |> List.map (fun (x, _) -> x)
-    |> List.unique
-  in
-  (* We always want to include a test from the last variable, especially if we
-     are expecting no type errors.  Add the last variable if it hasn't been
-     included yet.  This is important to test if there are no errors. *)
-  let Var (Ident (last_ident), _) = Ast_tools.retv expr in
-  let target_var_list =
-    if List.mem last_ident target_list then
-      target_list
-    else
-      last_ident :: target_list
-  in
-  let total_err_lst = ref [] in
-  let total_err_num = ref 0 in
-  (* Set the odefa/natodefa mappings *)
-  Error.set_odefa_natodefa_map odefa_on_map;
-  (* Run tests *)
-  let run_type_checker x =
-    let generator =
-      Error_generator.create
-        ?exploration_policy:(Some (Explore_least_relative_stack_repetition))
-        configuration
-        expr
-        [(Ident x)]
-    in
-    let callback
-        (type_errors : Error.t)
-        (steps : int)
-      : unit =
-      let _ = steps in
-      total_err_lst := (x, type_errors) :: (!total_err_lst);
-      total_err_num :=
-        !total_err_num + Error.count type_errors;
-    in
-    let _ =
-      Error_generator.generate_answers
-        ~generation_callback:callback
-        (Some generation_steps)
-        generator
-    in
-    ()
-  in
-  let _ = List.map run_type_checker target_var_list in
-  (* Report failed expectations *)
-  let no_err_expect = ref false in
-  let n_err_expect = ref None in
-  expect_left :=
-    observation !expect_left (observe_no_type_errors_found no_err_expect);
-  expect_left :=
-    observation !expect_left (observe_n_errors_found n_err_expect);
-  let violate_no_expected_err_msg =
-    if !no_err_expect && !total_err_num > 0 then
-        ["expected no type errors, but type errors found"]
-      else
-        []
-  in
-  let violate_n_expected_err_msg =
-    match !n_err_expect with
-    | Some n ->
-      begin
-        if !total_err_num <> n then
-          [
-            "expected " ^ (string_of_int n) ^
-            " errors, but " ^ (string_of_int @@ !total_err_num) ^
-            " errors found"
-          ]
-        else
-          []
-      end
-    | None -> []
-  in
-  let total_err_multimap =
-    List.fold_left
-      (fun map (expected_x, expected_err) ->
-        let err_list = String_map.find_default [] expected_x map in
-        let err_list' = expected_err :: err_list in
-        String_map.add expected_x err_list' map
-      )
-      String_map.empty
-      !total_err_lst
-  in
-  let unfound_expected_errs =
-    List.filter_map
-      (fun type_err_expect ->
-        let (expected_x, expected_err) = type_err_expect in
-        try
-          let errors = String_map.find expected_x total_err_multimap in
-          let not_found =
-            errors
-            |> List.filter (Error.test_expected expected_err)
-            |> List.is_empty
-          in
-          if not_found then Some expected_err else None
-        with Not_found -> None
-      )
-      type_err_expectations
-  in
-  let unfound_expected_errs_msg =
-    List.map
-      (fun e -> "error not found:\n" ^ (Error.show e))
-      unfound_expected_errs
-  in
-  let err_msgs =
-    violate_no_expected_err_msg @
-    violate_n_expected_err_msg @
-    unfound_expected_errs_msg
-  in
-  if List.is_empty err_msgs then
-    ()
-  else
-    assert_failure @@ String.join "\n" err_msgs
-;;
-
 let make_test filename expectations =
   let test_name =
     filename ^ ": (" ^ string_of_list name_of_expectation expectations ^ ")"
@@ -1082,7 +549,7 @@ let make_test filename expectations =
     let expectations_left = ref expectations in
     (* Translate code if it's natodefa *)
     let is_natodefa = String.ends_with filename "natodefa" in
-    let (i_expr, i_map) =
+    let (i_expr, _) =
       if is_natodefa then begin
         On_to_odefa.translate
           @@ File.with_file_in filename On_parse.parse_program
@@ -1096,18 +563,9 @@ let make_test filename expectations =
     let obs = _observation filename in
     expectations_left :=
       obs !expectations_left (observe_analysis_stack_selection module_choice);
-    (* Configure the max number of input generation steps. *)
-    let gen_steps_ref = ref None in
-    expectations_left := obs !expectations_left
-      (observe_input_generation_steps gen_steps_ref);
-    let gen_steps =
-      Option.default 10000 !gen_steps_ref (* TODO: Increase from 10000 *)
-    in
     (* Perform tests *)
     try
       test_ddpa filename expectations_left !module_choice i_expr;
-      test_ddse filename expectations_left !module_choice gen_steps i_expr;
-      test_sato filename expectations_left !module_choice gen_steps i_map i_expr;
     with Ast_wellformedness.Illformedness_found _ -> ();
     (* Now assert that every expectation has been addressed. *)
     match !expectations_left with
@@ -1208,14 +666,14 @@ let make_tests_from_dir pathname =
 
 let tests =
   "Test_source_files" >::: (
-    make_tests_from_dir "test-sources"
-    @ make_tests_from_dir "test-sources/odefa-basic"
-    @ make_tests_from_dir "test-sources/odefa-fails"
-    @ make_tests_from_dir "test-sources/odefa-input"
-    @ make_tests_from_dir "test-sources/odefa-stack"
-    @ make_tests_from_dir "test-sources/odefa-types"
-    @ make_tests_from_dir "test-sources/natodefa-basic"
-    @ make_tests_from_dir "test-sources/natodefa-types"
+    make_tests_from_dir "test/test-sources"
+    @ make_tests_from_dir "test/test-sources/odefa-basic"
+    (* @ make_tests_from_dir "test/test-sources/odefa-fails" *)
+    (* @ make_tests_from_dir "test/test-sources/odefa-input" *)
+    (* @ make_tests_from_dir "test/test-sources/odefa-stack" *)
+    @ make_tests_from_dir "test/test-sources/odefa-types"
+    @ make_tests_from_dir "test/test-sources/natodefa-basic"
+    @ make_tests_from_dir "test/test-sources/natodefa-types"
     (* @ make_tests_from_dir "test-sources/natodefa-input" *)
   )
 ;;
