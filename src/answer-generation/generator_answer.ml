@@ -169,10 +169,10 @@ module Type_errors : Answer = struct
 
   let show : t -> string = function
     | Some error ->
-      "Type errors for:\n" ^
-      "- Input sequence  : " ^ (show_input_sequence error.err_input_seq) ^ "\n" ^
-      "- Found at clause : " ^ (Odefa_error_location.show error.err_location) ^ "\n" ^
-      "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n" ^
+      "** Type Errors **\n" ^
+      (Printf.sprintf "- Input sequence  : %s\n" (show_input_sequence error.err_input_seq)) ^
+      (Printf.sprintf "- Found at clause : %s\n" (Odefa_error_location.show error.err_location)) ^
+      (Printf.sprintf "- Found in steps  : %s\n" (string_of_int error.err_steps)) ^
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map Error.Odefa_error.show error.err_errors)
@@ -247,10 +247,10 @@ module Natodefa_type_errors : Answer = struct
 
   let show : t -> string = function
     | Some error ->
-      "Type errors for:\n" ^
-      "- Input sequence : " ^ (show_input_sequence error.err_input_seq) ^ "\n" ^
-      "- Found at expr  : " ^ (Natodefa_error_location.show error.err_location) ^ "\n" ^
-      "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n" ^
+      "** Type Errors **\n" ^
+      (Printf.sprintf "- Input sequence  : %s\n" (show_input_sequence error.err_input_seq)) ^
+      (Printf.sprintf "- Found at clause : %s\n" (Natodefa_error_location.show error.err_location)) ^
+      (Printf.sprintf "- Found in steps  : %s\n" (string_of_int error.err_steps)) ^
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map On_error.On_error.show error.err_errors)
