@@ -19,7 +19,7 @@ type type_checker_args = {
   args_maximum_steps : int option;
   args_maximum_results : int option;
   args_exploration_policy : Interpreter.exploration_policy;
-  args_compact_output : bool;
+  args_output_format : output_format;
 }
 ;;
 
@@ -49,10 +49,8 @@ let parse_args () : type_checker_args =
         parsers.parse_max_results.BatOptParse.Opt.option_get ();
       args_exploration_policy =
         insist "Exploration policy" parsers.parse_exploration_policy;
-      args_compact_output =
-        match (parsers.parse_compact_output.BatOptParse.Opt.option_get ()) with
-        | Some b -> b
-        | None -> false
+      args_output_format =
+        insist "Output format" parsers.parse_output_format;
     }
   with
   | ParseFailure msg ->

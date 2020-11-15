@@ -14,7 +14,7 @@ type type_checker_args = {
   args_maximum_results : int option;
   args_exploration_policy :
     Odefa_symbolic_interpreter.Interpreter.exploration_policy;
-  args_compact_output : bool;
+  args_output_format : output_format;
 }
 ;;
 

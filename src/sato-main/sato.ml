@@ -108,21 +108,21 @@ let get_target_vars
     end
 ;;
 
-let run_error_check
+let run_generation
     ?output:(output=stdout)
     ?show_steps:(show_steps=false)
-    (module Error_generator : Generator.Generator)
+    (module Generator : Generator.Generator)
     (args : Sato_args.type_checker_args)
     (on_odefa_maps : On_to_odefa_maps.t)
     (expr : Ast.expr)
   : unit =
-  let module Ans = Error_generator.Answer in
+  let module Ans = Generator.Answer in
   Ans.set_odefa_natodefa_map on_odefa_maps;
   try
     (* Prepare and create generator *)
     let target_vars = get_target_vars args expr in
     let gen_params =
-      Error_generator.create
+      Generator.create
         ~exploration_policy:args.args_exploration_policy
         ~max_steps:args.args_maximum_steps
         ~max_results:args.args_maximum_results
@@ -130,31 +130,42 @@ let run_error_check
         expr
         target_vars
     in
+    (* Mutable list to store JSON output.  Will remain empty if output
+       format is "default" or "compact" (i.e. not JSON).*)
+    let json_list = ref [] in
     let generation_callback
       (type_errors : Ans.t) : unit =
       if Ans.generation_successful type_errors then begin
-        let str =
-          if args.args_compact_output then
-            Ans.show_compact ~show_steps type_errors
-          else
-            Ans.show ~show_steps type_errors
-        in
-        output_string output @@ Printf.sprintf "%s\n" str
+        match args.args_output_format with
+        | Standard ->
+          let str = Ans.show ~show_steps type_errors in
+          output_string output @@ Printf.sprintf "%s\n" str
+        | Compact ->
+          let str = Ans.show_compact ~show_steps type_errors in
+          output_string output @@ Printf.sprintf "%s\n" str
+        | JSON ->
+          json_list := (Ans.to_yojson type_errors) :: !json_list        
       end;
     in
     (* Run generator *)
     let gen_answers =
-      Error_generator.generate_answers
+      Generator.generate_answers
         ~generation_callback:generation_callback
         gen_params
     in
     (* Finish generation *)
     let is_complete = gen_answers.gen_is_complete in
     begin
-      if args.args_compact_output then
-        print_results_compact ~output is_complete gen_answers.gen_num_answers
-      else
+      match args.args_output_format with
+      | Standard ->
         print_results ~output (Ans.description) is_complete gen_answers.gen_num_answers
+      | Compact ->
+        print_results_compact ~output is_complete gen_answers.gen_num_answers
+      | JSON ->
+        (`List !json_list)
+        |> Yojson.Safe.to_string
+        |> Yojson.Safe.prettify
+        |> output_string output
     end;
     close_out output
   (* Exception for when the user inputs a target var not in the program *)
@@ -180,7 +191,7 @@ let () =
           (module Generator.Make(Generator_answer.Type_errors)
             : Generator.Generator)
       in
-      run_error_check error_generator args on_odefa_maps odefa_expr
+      run_generation error_generator args on_odefa_maps odefa_expr
     end
   | Test_generation ->
     begin
@@ -193,6 +204,6 @@ let () =
           (module Generator.Make(Generator_answer.Input_sequence)
             : Generator.Generator)
         in
-        run_error_check input_generator args on_odefa_maps odefa_expr
+        run_generation input_generator args on_odefa_maps odefa_expr
     end
 ;;

@@ -17,14 +17,14 @@ let named_exploration_policies =
 
 type parsers =
   { 
-    parse_mode : Sato_types.sato_mode BatOptParse.Opt.t;
+    parse_mode : sato_mode BatOptParse.Opt.t;
     parse_context_stack : (module Ddpa_context_stack.Context_stack) BatOptParse.Opt.t;
     parse_target_point : string BatOptParse.Opt.t;
     parse_max_steps : int BatOptParse.Opt.t;
     parse_max_results : int BatOptParse.Opt.t;
     parse_exploration_policy : exploration_policy BatOptParse.Opt.t;
     parse_logging : unit BatOptParse.Opt.t;
-    parse_compact_output : bool BatOptParse.Opt.t;
+    parse_output_format : output_format BatOptParse.Opt.t;
   }
 ;;
 
@@ -33,10 +33,8 @@ let make_parsers () : parsers =
       single_value_parser
         ~invalid_value_err_msg:
           (fun _ str ->
-            "Could not understand mode: " ^ str ^ "\n" ^
-            "Valid modes are:\n" ^
-            "* error\n" ^
-            "* input")
+            "Could not understand mode: " ^ str ^ ".\n" ^
+            "Valid modes are \"error\" and \"input\".")
         "MODE"
         (Some "Specifies the mode of the executable")
         (Some Type_checking)
@@ -85,8 +83,8 @@ let make_parsers () : parsers =
               named_exploration_policies_str
             )
           "EXPLORATION_POLICY"
-          (Some ("Specifies the exploration policy of the evaluation queue."))
-          (Some (Explore_breadth_first))
+          (Some "Specifies the exploration policy of the evaluation queue.")
+          (Some Explore_breadth_first)
           (fun s ->
             try
               Some(List.assoc_inv s named_exploration_policies)
@@ -94,12 +92,20 @@ let make_parsers () : parsers =
             | Not_found -> None 
           )
         end;
-    parse_compact_output =
+    parse_output_format =
       single_value_parser
         "COMPACT_OUTPUT"
-        (Some ("Specifies whether the output is compact or descriptive\n"))
-        None
-        (fun x -> try Some (bool_of_string x) with | Failure _ -> None);
+        ~invalid_value_err_msg:(fun _ str ->
+          "Cannot understand output format " ^ str ^ ".\n" ^
+          "Valid formats are \"default\", \"compact\", and \"json\"")
+        (Some "Specifies the output format: descriptive (default), compact, or JSON\n")
+        (Some Standard)
+        (function
+          | "default" -> Some Standard
+          | "compact" -> Some Compact
+          | "json" -> Some JSON
+          | _ -> None
+        );
     parse_logging = logging_option_parser ();
   }
 ;;
@@ -147,8 +153,8 @@ let make_cli_parser version_str =
     parsers.parse_exploration_policy;
   BatOptParse.OptParser.add
     cli_parser
-    ~short_name:'k'
+    ~short_name:'o'
     ~long_name:"compact-output"
-    parsers.parse_compact_output;
+    parsers.parse_output_format;
   (parsers, cli_parser)
 ;;

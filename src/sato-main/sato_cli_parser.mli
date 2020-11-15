@@ -12,7 +12,7 @@ type parsers =
     parse_max_results : int BatOptParse.Opt.t;
     parse_exploration_policy : Interpreter.exploration_policy BatOptParse.Opt.t;
     parse_logging : unit BatOptParse.Opt.t;
-    parse_compact_output : bool BatOptParse.Opt.t;
+    parse_output_format : output_format BatOptParse.Opt.t;
   }
 ;;
 

@@ -24,6 +24,26 @@ module type Answer = sig
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
+module type Error_location = sig
+  type t;;
+  val show : t -> string;;
+  val to_yojson : t -> Yojson.Safe.t;;
+end;;
+
+module Odefa_error_location
+  : Error_location with type t = Ast.clause = struct
+  type t = Ast.clause;;
+  let show = Ast_pp.show_clause;;
+  let to_yojson clause = `String (Ast_pp.show_clause clause);;
+end;;
+
+module Natodefa_error_location
+  : Error_location with type t = On_ast.expr = struct
+  type t = On_ast.expr;;
+  let show = On_ast_pp.show_expr;;
+  let to_yojson expr = `String (On_ast_pp.show_expr expr);;
+end;;
+
 (* **** String showing utilities **** *)
 
 let show_input_seq (input_seq : int list) =
@@ -63,9 +83,7 @@ module Input_sequence : Answer = struct
   let show ?show_steps:(show_steps=false) : t -> string = function
     | Some { input_sequence; input_steps } ->
       let input_str =
-        Printf.sprintf
-          "* Input sequence: [%s]\n"
-          (String.join ", " @@ List.map string_of_int input_sequence)
+        Printf.sprintf "* Input sequence: %s\n" (show_input_seq input_sequence)
       in
       let steps_str =
         if show_steps then
@@ -83,7 +101,7 @@ module Input_sequence : Answer = struct
   let show_compact ?show_steps:(show_steps=false) : t -> string = function
     | Some { input_sequence; input_steps } ->
       let input_str =
-        Printf.sprintf "* [%s]" (String.join ", " @@ List.map string_of_int input_sequence)
+        Printf.sprintf "* %s" (show_input_seq input_sequence)
       in
       let steps_str =
         if show_steps then Printf.sprintf "(%d stp.)" input_steps else ""
@@ -109,7 +127,7 @@ module Type_errors : Answer = struct
   type error_record = {
     err_errors : Error.Odefa_error.t list;
     err_input_seq : int list;
-    err_location : Ast.clause;
+    err_location : Odefa_error_location.t;
     err_steps : int;
   }
   [@@ deriving to_yojson]
@@ -159,7 +177,7 @@ module Type_errors : Answer = struct
     | Some error ->
       "Type errors for:\n" ^
       "- Input sequence  : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
-      "- Found at clause : " ^ (Ast_pp.show_clause error.err_location) ^ "\n" ^
+      "- Found at clause : " ^ (Odefa_error_location.show error.err_location) ^ "\n" ^
       begin
         if show_steps then
           "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n"
@@ -174,7 +192,7 @@ module Type_errors : Answer = struct
 
   let show_compact ?show_steps:(_=false) : t -> string = function
     | Some error ->
-      "- err at: " ^ (Ast_pp.show_clause error.err_location)
+      "- err at: " ^ (Odefa_error_location.show error.err_location)
     | None ->
       "- no errs"
   ;;
@@ -196,7 +214,7 @@ module Natodefa_type_errors : Answer = struct
   type error_record = {
     err_errors : On_error.On_error.t list;
     err_input_seq : int list;
-    err_location : On_ast.expr;
+    err_location : Natodefa_error_location.t;
     err_steps : int;
   }
   [@@ deriving to_yojson]
@@ -242,7 +260,7 @@ module Natodefa_type_errors : Answer = struct
     | Some error ->
       "Type errors for:\n" ^
       "- Input sequence : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
-      "- Found at expr  : " ^ (On_ast_pp.show_expr error.err_location) ^ "\n" ^
+      "- Found at expr  : " ^ (Natodefa_error_location.show error.err_location) ^ "\n" ^
       begin
         if show_steps then
           "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n"
@@ -257,7 +275,7 @@ module Natodefa_type_errors : Answer = struct
 
   let show_compact ?show_steps:(_=false) : t -> string = function
     | Some error ->
-      "- err at: " ^ (On_ast_pp.show_expr error.err_location) 
+      "- err at: " ^ (Natodefa_error_location.show error.err_location) 
     | None ->
       "- no errs"
   ;;
