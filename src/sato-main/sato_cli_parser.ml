@@ -94,7 +94,7 @@ let make_parsers () : parsers =
         end;
     parse_output_format =
       single_value_parser
-        "COMPACT_OUTPUT"
+        "OUTPUT_FORMAT"
         ~invalid_value_err_msg:(fun _ str ->
           "Cannot understand output format " ^ str ^ ".\n" ^
           "Valid formats are \"default\", \"compact\", and \"json\"")
@@ -153,8 +153,8 @@ let make_cli_parser version_str =
     parsers.parse_exploration_policy;
   BatOptParse.OptParser.add
     cli_parser
-    ~short_name:'o'
-    ~long_name:"compact-output"
+    ~short_name:'f'
+    ~long_name:"output-format"
     parsers.parse_output_format;
   (parsers, cli_parser)
 ;;

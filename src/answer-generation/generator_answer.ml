@@ -1,5 +1,5 @@
 open Batteries;;
-(* open Jhupllib;; *)
+open Jhupllib;;
 
 open Odefa_ast;;
 open Ast;;
@@ -17,8 +17,8 @@ module type Answer = sig
   val description : string;;
   val answer_from_result : int -> expr -> ident -> evaluation_result -> t;;
   val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
-  val show : ?show_steps:bool -> t -> string;;
-  val show_compact : ?show_steps:bool -> t -> string;;
+  val show : t -> string;;
+  val show_compact : t -> string;;
   val count : t -> int;;
   val generation_successful : t -> bool;;
   val to_yojson : t -> Yojson.Safe.t;;
@@ -27,6 +27,7 @@ end;;
 module type Error_location = sig
   type t;;
   val show : t -> string;;
+  val show_brief : t -> string;;
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
@@ -34,6 +35,7 @@ module Odefa_error_location
   : Error_location with type t = Ast.clause = struct
   type t = Ast.clause;;
   let show = Ast_pp.show_clause;;
+  let show_brief = Ast_pp_brief.show_clause;;
   let to_yojson clause = `String (Ast_pp.show_clause clause);;
 end;;
 
@@ -41,13 +43,18 @@ module Natodefa_error_location
   : Error_location with type t = On_ast.expr = struct
   type t = On_ast.expr;;
   let show = On_ast_pp.show_expr;;
+  let show_brief = On_ast_pp.show_expr;;
   let to_yojson expr = `String (On_ast_pp.show_expr expr);;
 end;;
 
 (* **** String showing utilities **** *)
 
-let show_input_seq (input_seq : int list) =
-  "[" ^ (String.join ", " @@ List.map string_of_int input_seq) ^ "]"
+let pp_input_sequence formatter (input_seq : int list) =
+  Pp_utils.pp_list Format.pp_print_int formatter input_seq
+;;
+
+let show_input_sequence : int list -> string =
+  Pp_utils.pp_to_string pp_input_sequence
 ;;
 
 (* **** Input sequence **** *)
@@ -80,33 +87,20 @@ module Input_sequence : Answer = struct
   (* Unused for input sequence generation. *)
   let set_odefa_natodefa_map (_ : On_to_odefa_maps.t) = ();;
 
-  let show ?show_steps:(show_steps=false) : t -> string = function
+  let show : t -> string = function
     | Some { input_sequence; input_steps } ->
-      let input_str =
-        Printf.sprintf "* Input sequence: %s\n" (show_input_seq input_sequence)
-      in
-      let steps_str =
-        if show_steps then
-          Printf.sprintf
-            "* Found in %d step%s\n"
-            input_steps
-            (if input_steps = 1 then "" else "s")
-        else
-          ""
-      in
-      Printf.sprintf "%s%s" input_str steps_str
+      (Printf.sprintf "* Input sequence: %s\n" (show_input_sequence input_sequence)) ^
+      (Printf.sprintf "* Found in %d step%s\n" input_steps (if input_steps = 1 then "" else "s")) ^
+      "--------------------"
     | None -> ""
   ;;
 
-  let show_compact ?show_steps:(show_steps=false) : t -> string = function
+  let show_compact : t -> string = function
     | Some { input_sequence; input_steps } ->
-      let input_str =
-        Printf.sprintf "* %s" (show_input_seq input_sequence)
-      in
-      let steps_str =
-        if show_steps then Printf.sprintf "(%d stp.)" input_steps else ""
-      in
-      Printf.sprintf "%s %s" input_str steps_str
+      Printf.sprintf
+        "- %s (%d stp.)"
+        (show_input_sequence input_sequence)
+        input_steps
     | None -> ""
   ;;
 
@@ -173,26 +167,21 @@ module Type_errors : Answer = struct
 
   (* TODO: Pretty-print *)
 
-  let show ?show_steps:(show_steps=false) : t -> string = function
+  let show : t -> string = function
     | Some error ->
       "Type errors for:\n" ^
-      "- Input sequence  : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
+      "- Input sequence  : " ^ (show_input_sequence error.err_input_seq) ^ "\n" ^
       "- Found at clause : " ^ (Odefa_error_location.show error.err_location) ^ "\n" ^
-      begin
-        if show_steps then
-          "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n"
-        else
-          ""
-      end ^
+      "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n" ^
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map Error.Odefa_error.show error.err_errors)
     | None -> ""
   ;;
 
-  let show_compact ?show_steps:(_=false) : t -> string = function
+  let show_compact : t -> string = function
     | Some error ->
-      "- err at: " ^ (Odefa_error_location.show error.err_location)
+      "- err at: " ^ (Odefa_error_location.show_brief error.err_location)
     | None ->
       "- no errs"
   ;;
@@ -256,26 +245,21 @@ module Natodefa_type_errors : Answer = struct
     odefa_on_maps_option_ref := Some (odefa_on_maps)
   ;;
 
-  let show ?show_steps:(show_steps=false) : t -> string = function
+  let show : t -> string = function
     | Some error ->
       "Type errors for:\n" ^
-      "- Input sequence : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
+      "- Input sequence : " ^ (show_input_sequence error.err_input_seq) ^ "\n" ^
       "- Found at expr  : " ^ (Natodefa_error_location.show error.err_location) ^ "\n" ^
-      begin
-        if show_steps then
-          "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n"
-        else
-          ""
-      end ^
+      "- Found in steps  : " ^ (string_of_int error.err_steps) ^ "\n" ^
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map On_error.On_error.show error.err_errors)
     | None -> ""
   ;;
 
-  let show_compact ?show_steps:(_=false) : t -> string = function
+  let show_compact : t -> string = function
     | Some error ->
-      "- err at: " ^ (Natodefa_error_location.show error.err_location) 
+      "- err at: " ^ (Natodefa_error_location.show_brief error.err_location) 
     | None ->
       "- no errs"
   ;;

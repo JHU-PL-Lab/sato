@@ -110,7 +110,6 @@ let get_target_vars
 
 let run_generation
     ?output:(output=stdout)
-    ?show_steps:(show_steps=false)
     (module Generator : Generator.Generator)
     (args : Sato_args.type_checker_args)
     (on_odefa_maps : On_to_odefa_maps.t)
@@ -138,10 +137,10 @@ let run_generation
       if Ans.generation_successful type_errors then begin
         match args.args_output_format with
         | Standard ->
-          let str = Ans.show ~show_steps type_errors in
+          let str = Ans.show type_errors in
           output_string output @@ Printf.sprintf "%s\n" str
         | Compact ->
-          let str = Ans.show_compact ~show_steps type_errors in
+          let str = Ans.show_compact type_errors in
           output_string output @@ Printf.sprintf "%s\n" str
         | JSON ->
           json_list := (Ans.to_yojson type_errors) :: !json_list        
