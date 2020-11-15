@@ -4,8 +4,8 @@ open OUnit2;;
 
 let all_tests =
   [ 
-    Test_sato.tests;
-    (* Test_ddpa.tests; *)
+    (* Test_sato.tests; *)
+    Test_ddpa.tests;
     (* Test_solver.tests; *)
     (* Test_symbolic_monad.tests; *)
     (* Test_utils.tests; *)
