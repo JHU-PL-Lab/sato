@@ -1,0 +1,27 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "`A 2",
+          "err_match_expected": "Variant `C",
+          "err_match_actual": "Variant `A"
+        }
+      ],
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "`A 2",
+          "err_match_expected": "Variant `B",
+          "err_match_actual": "Variant `A"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "match `A 2 with | `B b -> b | `C c -> c\nend",
+    "err_steps": 144
+  }
+]

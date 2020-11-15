@@ -1,8 +1,0 @@
-Type errors for:
-- Input sequence  : []
-- Found at clause : c = a + b
---------------------
-* Value    : b = tru and fls
-* Expected : int
-* Actual   : bool
-1 errors found. No further control flows exist.

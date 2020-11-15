@@ -1,7 +1,0 @@
-Type errors for:
-- Input sequence : []
-- Found at expr  : assert (let a = false in
-a)
---------------------
-* Value : a = false
-1 errors found. No further control flows exist.

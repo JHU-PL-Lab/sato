@@ -1,6 +1,0 @@
-Type errors for:
-- Input sequence  : []
-- Found at clause : res = b ? (ret = 0) : (ab = abort)
---------------------
-* Value : b = a = false
-1 errors found. No further control flows exist.

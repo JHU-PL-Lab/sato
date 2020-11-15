@@ -1,8 +1,0 @@
-Type errors for:
-- Input sequence  : [0]
-- Found at clause : ret = x and tru
---------------------
-* Value    : x = i = input
-* Expected : bool
-* Actual   : int
-1 errors found. No further control flows exist.

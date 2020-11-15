@@ -1,0 +1,19 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_binop",
+        {
+          "err_binop_left_aliases": [ "c", "b" ],
+          "err_binop_right_aliases": [],
+          "err_binop_left_val": "0",
+          "err_binop_right_val": "0",
+          "err_binop_operation": "0 <> 0"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "d = a / c",
+    "err_steps": 149
+  }
+]

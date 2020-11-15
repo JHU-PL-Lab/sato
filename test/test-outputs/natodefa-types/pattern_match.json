@@ -1,0 +1,27 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "{}",
+          "err_match_expected": "List",
+          "err_match_actual": "Record {}"
+        }
+      ],
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "{}",
+          "err_match_expected": "List",
+          "err_match_actual": "Record {}"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "match {} with | hd :: tl -> tl | [] -> []\nend",
+    "err_steps": 110
+  }
+]

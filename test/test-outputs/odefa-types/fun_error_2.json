@@ -1,0 +1,19 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "f" ],
+          "err_match_val":
+            "fun x -> (\n\n  one = 1;\n  m_bl~0 = x ~ int;\n  m_br~1 = one ~ int;\n  m_b~2 = m_bl~0 and m_br~1;\n  ret = m_b~2 ? (c_binop~3 = x + one) : (ab~4 = abort))",
+          "err_match_expected": "bool",
+          "err_match_actual": "fun"
+        }
+      ]
+    ],
+    "err_input_seq": [ 0 ],
+    "err_location": "h = f ? (et = g f) : (ef = 0)",
+    "err_steps": 66
+  }
+]

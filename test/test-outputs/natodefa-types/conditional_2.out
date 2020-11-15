@@ -1,9 +1,0 @@
-Type errors for:
-- Input sequence : []
-- Found at expr  : if f then true
-else false
---------------------
-* Value    : f = fun x -> x + 1
-* Expected : Boolean
-* Actual   : Function
-1 errors found. No further control flows exist.

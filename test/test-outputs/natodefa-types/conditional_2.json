@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "f" ],
+          "err_match_val": "fun x ->\nx + 1",
+          "err_match_expected": "Boolean",
+          "err_match_actual": "Function"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "if f then true\nelse false",
+    "err_steps": 58
+  }
+]

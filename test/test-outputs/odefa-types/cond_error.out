@@ -1,8 +1,0 @@
-Type errors for:
-- Input sequence  : []
-- Found at clause : ans = pred ? (r1 = 0) : (r2 = 1)
---------------------
-* Value    : pred = 0
-* Expected : bool
-* Actual   : int
-1 errors found. No further control flows exist.

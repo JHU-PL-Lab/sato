@@ -62,7 +62,7 @@ let show_input_sequence : int list -> string =
 module Input_sequence : Answer = struct
   type input_seq_record = {
     input_sequence : int list;
-    input_steps : int;
+    input_steps : int [@default 0];
   }
   [@@ deriving to_yojson]
   ;;
@@ -122,7 +122,7 @@ module Type_errors : Answer = struct
     err_errors : Error.Odefa_error.t list;
     err_input_seq : int list;
     err_location : Odefa_error_location.t;
-    err_steps : int;
+    err_steps : int [@ default 0];
   }
   [@@ deriving to_yojson]
   ;;
@@ -204,7 +204,7 @@ module Natodefa_type_errors : Answer = struct
     err_errors : On_error.On_error.t list;
     err_input_seq : int list;
     err_location : Natodefa_error_location.t;
-    err_steps : int;
+    err_steps : int [@ default 0];
   }
   [@@ deriving to_yojson]
   ;;

@@ -1,0 +1,36 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "a" ],
+          "err_match_val": "{}",
+          "err_match_expected": "Integer",
+          "err_match_actual": "Record {}"
+        }
+      ],
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "a" ],
+          "err_match_val": "{}",
+          "err_match_expected": "Boolean",
+          "err_match_actual": "Record {}"
+        }
+      ],
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "b" ],
+          "err_match_val": "2000",
+          "err_match_expected": "Boolean",
+          "err_match_actual": "Integer"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "a == b",
+    "err_steps": 182
+  }
+]

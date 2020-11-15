@@ -170,7 +170,15 @@ let run_generation
   (* Exception for when the user inputs a target var not in the program *)
   with
   | NoOperationsInProgram ->
-    print_endline "No error-able operations found; terminating."
+    begin
+      match args.args_output_format with
+      | Standard ->
+        output_string output "No error-able operations found."
+      | Compact ->
+        output_string output ""
+      | JSON ->
+        output_string output "[]"
+    end
   | Interpreter.Invalid_query msg ->
     prerr_endline msg;
     Stdlib.exit 1

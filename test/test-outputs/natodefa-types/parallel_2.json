@@ -1,0 +1,34 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "{}",
+          "err_match_expected": "Boolean",
+          "err_match_actual": "Record {}"
+        }
+      ]
+    ],
+    "err_input_seq": [ 1 ],
+    "err_location": "{} or false",
+    "err_steps": 333
+  },
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "fun x ->\nx",
+          "err_match_expected": "Integer",
+          "err_match_actual": "Function"
+        }
+      ]
+    ],
+    "err_input_seq": [ 0 ],
+    "err_location": "(fun x ->\nx) + 1",
+    "err_steps": 333
+  }
+]

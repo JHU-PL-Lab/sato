@@ -1,8 +1,0 @@
-Type errors for:
-- Input sequence  : [0]
-- Found at clause : p = r.lbl
---------------------
-* Value    : r = a = input
-* Expected : {lbl}
-* Actual   : int
-1 errors found. No further control flows exist.

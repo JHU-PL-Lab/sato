@@ -1,7 +1,0 @@
-Type errors for:
-- Input sequence  : []
-- Found at clause : d = a / c
---------------------
-* Left Val   : c = b = 0
-* Constraint : 0 <> 0
-1 errors found. No further control flows exist.

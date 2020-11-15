@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "d", "c", "b", "a" ],
+          "err_match_val": "input",
+          "err_match_expected": "Boolean",
+          "err_match_actual": "Integer"
+        }
+      ]
+    ],
+    "err_input_seq": [ 0 ],
+    "err_location": "d and true",
+    "err_steps": 216
+  }
+]

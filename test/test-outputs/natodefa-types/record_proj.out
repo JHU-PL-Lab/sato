@@ -1,8 +1,0 @@
-Type errors for:
-- Input sequence : []
-- Found at expr  : r.c
---------------------
-* Value    : r = {a = 2, b = 3}
-* Expected : Record {c}
-* Actual   : Record {a, b}
-1 errors found. No further control flows exist.

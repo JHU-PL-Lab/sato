@@ -1,7 +1,0 @@
-Type errors for:
-- Input sequence : [0]
-- Found at expr  : x / y
---------------------
-* Left Val   : y = 0
-* Constraint : y <> 0
-1 errors found. No further control flows exist.

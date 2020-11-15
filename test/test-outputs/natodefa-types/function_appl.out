@@ -1,8 +1,0 @@
-Type errors for:
-- Input sequence : []
-- Found at expr  : not_fn  1
---------------------
-* Value    : not_fn = 2
-* Expected : Function
-* Actual   : Integer
-1 errors found. No further control flows exist.

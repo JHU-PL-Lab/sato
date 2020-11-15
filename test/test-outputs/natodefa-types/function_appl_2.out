@@ -1,8 +1,0 @@
-Type errors for:
-- Input sequence : []
-- Found at expr  : g  1
---------------------
-* Value    : g = x + 1
-* Expected : Function
-* Actual   : Integer
-1 errors found. No further control flows exist.

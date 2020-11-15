@@ -28,31 +28,32 @@ let parse_arguments filename : string list =
 
 let make_test (in_file, out_file) =
   let args = parse_arguments in_file in
-  let expected =
-    let in_stream = File.open_in out_file in
-    let expected_str = BatIO.read_all in_stream in
-    BatIO.close_in in_stream;
-    expected_str
-  in
+  let expected = Yojson.Safe.from_file out_file in
   let test_thunk ctxt =
     assert_command
       ~foutput:(fun (cstream : char Stream.t) : unit ->
         let chars_ref = ref [] in
         Stream.iter (fun c -> chars_ref := c :: !chars_ref) cstream;
-        let actual = String.of_list @@ List.rev !chars_ref in
+        let actual =
+          !chars_ref
+          |> List.rev
+          |> String.of_list
+          |> Yojson.Safe.from_string
+        in
         assert_equal
           ~msg:(Printf.sprintf "./type_checker %s%s%s"
                 (String.join " " args)
                 (if List.length args > 0 then " " else "")
                 in_file)
-          ~printer:(fun s -> "\n" ^ s)
-          ~cmp:String.equal
+          ~printer:Yojson.Safe.(fun yj -> yj |> to_string |> prettify)
+          ~cmp:Yojson.Safe.equal
           expected
           actual
       )
       ~ctxt
       "./type_checker"
-      (in_file :: args)
+      (* Default arguments: "--output-format=json and --max-steps=10000" *)
+      (in_file :: "-fjson" :: "-s10000" :: args)
   in
   in_file >:: test_thunk
 ;;
@@ -60,8 +61,11 @@ let make_test (in_file, out_file) =
 let make_tests_from_dir dir_name =
   let input_dir = input_root ^ Filename.dir_sep ^ dir_name in
   let output_dir = output_root ^ Filename.dir_sep ^ dir_name in
-  if Sys.file_exists input_dir && Sys.file_exists output_dir
-    && Sys.is_directory input_dir && Sys.is_directory output_dir then
+  if Sys.file_exists input_dir
+      && Sys.file_exists output_dir
+      && Sys.is_directory input_dir
+      && Sys.is_directory output_dir
+  then
     input_dir
     |> Sys.files_of
     |> Enum.filter_map

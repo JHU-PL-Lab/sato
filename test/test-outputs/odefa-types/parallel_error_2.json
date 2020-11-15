@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "r", "a" ],
+          "err_match_val": "input",
+          "err_match_expected": "{lbl}",
+          "err_match_actual": "int"
+        }
+      ]
+    ],
+    "err_input_seq": [ 0 ],
+    "err_location": "p = r.lbl",
+    "err_steps": 301
+  }
+]

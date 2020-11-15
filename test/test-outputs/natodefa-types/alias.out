@@ -1,8 +1,0 @@
-Type errors for:
-- Input sequence : [0]
-- Found at expr  : d and true
---------------------
-* Value    : d = c = b = a = input
-* Expected : Boolean
-* Actual   : Integer
-1 errors found. No further control flows exist.
