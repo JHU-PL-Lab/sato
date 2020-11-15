@@ -5,7 +5,7 @@
         "Error_match",
         {
           "err_match_aliases": [ "not_rec" ],
-          "err_match_val": "fun x -> (\nret = x)",
+          "err_match_val": "fun x -> ...",
           "err_match_expected": "{label}",
           "err_match_actual": "fun"
         }

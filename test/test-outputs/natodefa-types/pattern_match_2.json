@@ -21,7 +21,7 @@
       ]
     ],
     "err_input_seq": [],
-    "err_location": "match `A 2 with | `B b -> b | `C c -> c\nend",
+    "err_location": "match `A 2 with | `B b -> b | `C c -> c end",
     "err_steps": 144
   }
 ]

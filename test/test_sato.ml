@@ -51,9 +51,9 @@ let make_test (in_file, out_file) =
           actual
       )
       ~ctxt
-      "./type_checker"
-      (* Default arguments: "--output-format=json and --max-steps=10000" *)
-      (in_file :: "-fjson" :: "-s10000" :: args)
+      "./sato"
+      (* Default argument: "--output-format=json" *)
+      (in_file :: "-fjson" :: args)
   in
   in_file >:: test_thunk
 ;;
@@ -79,7 +79,7 @@ let make_tests_from_dir dir_name =
           let out_file =
             filename
             |> Filename.remove_extension
-            |> (fun f -> output_dir ^ Filename.dir_sep ^ f ^ ".out")
+            |> (fun f -> output_dir ^ Filename.dir_sep ^ f ^ ".json")
           in
           if not @@ Sys.file_exists out_file then
             raise @@ File_test_creation_failure
@@ -98,9 +98,9 @@ let make_tests_from_dir dir_name =
 let tests =
   "Test Files" >::: (
     make_tests_from_dir ""
-    (* @ make_tests_from_dir "odefa-basic" *)
-    (* @ make_tests_from_dir "odefa-types" *)
-    (* @ make_tests_from_dir "natodefa-basic" *)
-    (* @ make_tests_from_dir "natodefa-types" *)
+    @ make_tests_from_dir "odefa-basic"
+    @ make_tests_from_dir "odefa-types"
+    @ make_tests_from_dir "natodefa-basic"
+    @ make_tests_from_dir "natodefa-types"
   )
 ;;

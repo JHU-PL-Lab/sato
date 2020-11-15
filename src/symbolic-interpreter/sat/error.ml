@@ -38,20 +38,29 @@ module type Error_type = sig
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
+let replace_linebreaks (str : string) : string =
+  String.replace_chars
+    (function '\n' -> " " | c -> String.of_char c) str
+;;
+
 module Ident : (Error_ident with type t = Ast.ident) = struct
   type t = Ast.ident;;
   let equal = Ast.equal_ident;;
   let pp = Ast_pp.pp_ident;;
   let show = Ast_pp.show_ident;;
-  let to_yojson ident = `String (Ast_pp.show_ident ident);;
+  let to_yojson ident =
+    `String (replace_linebreaks @@ show ident);;
 end;;
 
 module Value : (Error_value with type t = Ast.clause_body) = struct
   type t = Ast.clause_body;;
   let equal = Ast.equal_clause_body;;
-  let pp = Ast_pp.pp_clause_body;;
-  let show = Ast_pp.show_clause_body;;
-  let to_yojson value = `String (Ast_pp.show_clause_body value);;
+  (* We use the brief version in order to avoid printing out function
+     bodies (which may have clauses added during instrumentation. *)
+  let pp = Ast_pp_brief.pp_clause_body;;
+  let show = Ast_pp_brief.show_clause_body;;
+  let to_yojson value =
+    `String (replace_linebreaks @@ show value);;
 end;;
 
 module Binop : (Error_binop with type t =
@@ -72,10 +81,8 @@ module Binop : (Error_binop with type t =
 
   let show binop = Pp_utils.pp_to_string pp binop;;
 
-  let to_yojson (c1, op, c2) =
-    `String ((Ast_pp.show_clause_body c1) ^ " "
-              ^ (Ast_pp.show_binary_operator op) ^ " " 
-              ^ (Ast_pp.show_clause_body c2));;
+  let to_yojson binop =
+    `String (replace_linebreaks @@ show binop)
 end;;
 
 module Type : (Error_type with type t = Ast.type_sig) = struct

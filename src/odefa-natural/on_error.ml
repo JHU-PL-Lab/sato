@@ -41,12 +41,18 @@ end;;
 
 (* **** Natodefa modules **** *)
 
+let replace_linebreaks (str : string) : string =
+  String.replace_chars
+    (function '\n' -> " " | c -> String.of_char c) str
+;;
+
 module Ident : (Error_ident with type t = On_ast.ident) = struct
   type t = On_ast.ident;;
   let equal = On_ast.equal_ident;;
   let pp = On_ast_pp.pp_ident;;
   let show = On_ast_pp.show_ident;;
-  let to_yojson ident = `String (On_ast_pp.show_ident ident);;
+  let to_yojson ident =
+    `String (replace_linebreaks @@ show ident);;
 end;;
 
 module Value : (Error_value with type t = On_ast.expr) = struct
@@ -54,7 +60,8 @@ module Value : (Error_value with type t = On_ast.expr) = struct
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
-  let to_yojson value = `String (On_ast_pp.show_expr value);;
+  let to_yojson value =
+    `String (replace_linebreaks @@ show value);;
 end;;
 
 module Binop : (Error_binop with type t = On_ast.expr) = struct
@@ -62,7 +69,8 @@ module Binop : (Error_binop with type t = On_ast.expr) = struct
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = On_ast_pp.show_expr;;
-  let to_yojson binop = `String (On_ast_pp.show_expr binop);;
+  let to_yojson binop =
+    `String (replace_linebreaks @@ show binop);;
 end;;
 
 module Type : (Error_type with type t = On_ast.type_sig) = struct
@@ -71,7 +79,8 @@ module Type : (Error_type with type t = On_ast.type_sig) = struct
   let subtype _ _ = false;;
   let pp = On_ast_pp.pp_on_type;;
   let show = On_ast_pp.show_on_type;;
-  let to_yojson typ = `String (On_ast_pp.show_on_type typ);;
+  let to_yojson typ =
+    `String (replace_linebreaks @@ show typ);;
 end;;
 
 module On_error = Error.Make(Ident)(Value)(Binop)(Type);;
@@ -91,12 +100,30 @@ let odefa_error_remove_instrument_vars
   match error with
   | Error_binop err ->
     begin
-      let left_aliases = err.err_binop_left_aliases in
-      let right_aliases = err.err_binop_right_aliases in
+      let left_aliases' =
+        remove_instrument_aliases err.err_binop_left_aliases
+      in
+      let right_aliases' =
+        remove_instrument_aliases err.err_binop_right_aliases
+      in
+      let (_, op, _) =
+        err.err_binop_operation
+      in
+      let l_operand' =
+        match left_aliases' with
+        | [] -> err.err_binop_left_val
+        | v :: _ -> Ast.Var_body (Var (v, None))
+      in
+      let r_operand' =
+        match right_aliases' with
+        | [] -> err.err_binop_right_val
+        | v :: _ -> Ast.Var_body (Var (v, None))
+      in
       Error_binop {
         err with
-        err_binop_left_aliases = remove_instrument_aliases left_aliases;
-        err_binop_right_aliases = remove_instrument_aliases right_aliases;
+        err_binop_left_aliases = left_aliases';
+        err_binop_right_aliases = right_aliases';
+        err_binop_operation = (l_operand', op, r_operand')
       }
     end
   | Error_match err ->

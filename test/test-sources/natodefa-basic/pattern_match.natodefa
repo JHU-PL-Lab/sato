@@ -5,6 +5,8 @@
 # # EXPECT-ANALYSIS-NO-INCONSISTENCIES
 # EXPECT-NO-TYPE-ERRORS
 
+## MAXIMUM-STEPS 10000
+
 let match_fn x =
     match x with
     | int -> x + 0

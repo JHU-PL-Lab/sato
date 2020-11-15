@@ -5,6 +5,8 @@
 # EXPECT-ANALYSIS-NO-INCONSISTENCIES
 # EXPECT-NO-TYPE-ERRORS
 
+## MAXIMUM-STEPS 10000
+
 let rec sum n =
   if n == 0 then 0
   else n + sum2 (n-1)

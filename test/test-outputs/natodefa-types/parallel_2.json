@@ -21,14 +21,14 @@
         "Error_match",
         {
           "err_match_aliases": [],
-          "err_match_val": "fun x ->\nx",
+          "err_match_val": "fun x -> x",
           "err_match_expected": "Integer",
           "err_match_actual": "Function"
         }
       ]
     ],
     "err_input_seq": [ 0 ],
-    "err_location": "(fun x ->\nx) + 1",
+    "err_location": "(fun x -> x) + 1",
     "err_steps": 333
   }
 ]

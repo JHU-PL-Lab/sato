@@ -31,12 +31,18 @@ module type Error_location = sig
   val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
+let replace_linebreaks (str : string) : string =
+  String.replace_chars
+    (function '\n' -> " " | c -> String.of_char c) str
+;;
+
 module Odefa_error_location
   : Error_location with type t = Ast.clause = struct
   type t = Ast.clause;;
   let show = Ast_pp.show_clause;;
   let show_brief = Ast_pp_brief.show_clause;;
-  let to_yojson clause = `String (Ast_pp.show_clause clause);;
+  let to_yojson clause =
+    `String (replace_linebreaks @@ show clause);;
 end;;
 
 module Natodefa_error_location
@@ -44,7 +50,8 @@ module Natodefa_error_location
   type t = On_ast.expr;;
   let show = On_ast_pp.show_expr;;
   let show_brief = On_ast_pp.show_expr;;
-  let to_yojson expr = `String (On_ast_pp.show_expr expr);;
+  let to_yojson expr =
+    `String (replace_linebreaks @@ show expr);;
 end;;
 
 (* **** String showing utilities **** *)
@@ -62,7 +69,7 @@ let show_input_sequence : int list -> string =
 module Input_sequence : Answer = struct
   type input_seq_record = {
     input_sequence : int list;
-    input_steps : int [@default 0];
+    input_steps : int;
   }
   [@@ deriving to_yojson]
   ;;
@@ -122,7 +129,7 @@ module Type_errors : Answer = struct
     err_errors : Error.Odefa_error.t list;
     err_input_seq : int list;
     err_location : Odefa_error_location.t;
-    err_steps : int [@ default 0];
+    err_steps : int;
   }
   [@@ deriving to_yojson]
   ;;
@@ -204,7 +211,7 @@ module Natodefa_type_errors : Answer = struct
     err_errors : On_error.On_error.t list;
     err_input_seq : int list;
     err_location : Natodefa_error_location.t;
-    err_steps : int [@ default 0];
+    err_steps : int;
   }
   [@@ deriving to_yojson]
   ;;

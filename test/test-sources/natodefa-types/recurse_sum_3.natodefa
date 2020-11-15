@@ -4,6 +4,8 @@
 # EXPECT-TYPE-ERROR ~result [0] "n + true" "" "true" "int" "bool"
 # EXPECT-TYPE-ERROR ~result [1] "n * false" "" "false" "int" "bool"
 
+## MAXIMUM-STEPS 10000
+
 let rec sum0 n =
     if n < 1 then n + true else n + ( sum1 ( n - 1 ) )
 with sum1 n =

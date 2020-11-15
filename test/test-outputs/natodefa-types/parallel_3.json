@@ -12,7 +12,7 @@
       ]
     ],
     "err_input_seq": [ 1, 1 ],
-    "err_location": "if {} then 1\nelse 2 + {}",
+    "err_location": "if {} then 1 else 2 + {}",
     "err_steps": 504
   },
   {
@@ -28,7 +28,7 @@
       ]
     ],
     "err_input_seq": [ 1, 0 ],
-    "err_location": "if {} then 0\nelse 1",
+    "err_location": "if {} then 0 else 1",
     "err_steps": 504
   },
   {
@@ -44,7 +44,7 @@
       ]
     ],
     "err_input_seq": [ 0 ],
-    "err_location": "if 0 then false\nelse true",
+    "err_location": "if 0 then false else true",
     "err_steps": 257
   }
 ]

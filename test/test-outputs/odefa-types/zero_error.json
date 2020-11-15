@@ -8,7 +8,7 @@
           "err_binop_right_aliases": [],
           "err_binop_left_val": "0",
           "err_binop_right_val": "0",
-          "err_binop_operation": "0 <> 0"
+          "err_binop_operation": "c <> 0"
         }
       ]
     ],

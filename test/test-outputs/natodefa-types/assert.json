@@ -7,7 +7,7 @@
       ]
     ],
     "err_input_seq": [],
-    "err_location": "assert (let a = false in\na)",
+    "err_location": "assert (let a = false in a)",
     "err_steps": 76
   }
 ]
