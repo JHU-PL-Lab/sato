@@ -1,6 +1,6 @@
 opam-version: "2.0"
 name: "sato"
-version: "0.4.1+dev"
+version: "0.9.0+dev"
 synopsis: "Symbolic Analysis Typechecker for Odefa"
 maintainer: "JHU PL Lab <pl.cs@jhu.edu>"
 authors: [ "JHU PL Lab <pl.cs@jhu.edu>" ]

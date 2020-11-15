@@ -40,7 +40,7 @@ To build Sato itself, run the `make` command (which is itself an alias for the `
 ```
 ./sato <filename>
 ```
-where `<filename>` refers to a `.odefa` or `.natodefa` file that Sato will typecheck.  For the full command list, run `./type_checker --help`.
+where `<filename>` refers to a `.odefa` or `.natodefa` file that Sato will typecheck.  For the full command list, run `./sato --help`.
 
 To run tests on Sato (as well as DDPA and DDSE), run the `make test` command.
 

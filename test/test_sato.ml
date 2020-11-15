@@ -7,7 +7,6 @@ let input_root = "test/test-sources";;
 let output_root = "test/test-outputs";;
 
 let parse_arguments filename : string list =
-  (* let module String_map = Map.Make(String) in *)
   let arg_from_str str =
     let str' = String.trim str in
     if String.starts_with str' "##" then

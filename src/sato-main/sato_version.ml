@@ -1,18 +1,22 @@
 let major_version = 0;;
 
-let minor_version = 5;;
+let minor_version = 9;;
 
 let patch_version = 0;;
 
-let codenames =
-  ["Raava"; "Wan"; "Yangchen"; "Kuruk"; "Kyoshi"; "Roku"; "Aang"; "Korra"]
+let ascii_art =
+  "+---------------------------------------+\n" ^
+  "|    _____    ___     _______   ______  |\n" ^
+  "|   / ___/   /   |   /__  __/  / __  /  |\n" ^
+  "|   \\ \\     / /| |     / /    / / / /   |\n" ^
+  "|  __/ /   / __  |    / /    / /_/ /    |\n" ^
+  "| /___/   /_/  |_|   /_/    /_____/     |\n" ^
+  "|                                       |\n" ^
+  "+---------------------------------------+\n"
+;;
 
 let version_str =
-  "Sato version " ^
-  (string_of_int major_version) ^ "." ^
-  (string_of_int minor_version) ^ "." ^
-  (string_of_int patch_version) ^
-  match List.nth_opt codenames major_version with
-  | Some(name) -> " " ^ name
-  | None -> ""
+  ascii_art ^
+  (Printf.sprintf "> Version %d.%d.%d\n" major_version minor_version patch_version) ^
+  "> Licensed under Apache by the Johns Hopkins Programming Language Lab"
 ;;

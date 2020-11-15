@@ -36,7 +36,7 @@ let make_parsers () : parsers =
             "Could not understand mode: " ^ str ^ ".\n" ^
             "Valid modes are \"error\" and \"input\".")
         "MODE"
-        (Some "Specifies the mode of the executable")
+        (Some "Specifies the mode of the sato executable: error (default) or input.")
         (Some Type_checking)
         (fun s -> match s with
           | "error" -> Some Type_checking
@@ -48,21 +48,19 @@ let make_parsers () : parsers =
     parse_target_point =
       single_value_parser
         "VARIABLE"
-        (Some "Specifies the variable to reach with generated input.")
+        (Some "Specifies the variable to start demand-driven lookup from.")
         None
         Option.some;
     parse_max_steps =
       single_value_parser
         "MAX_STEPS"
-        (Some ("Specifies the maximum number of steps to take during " ^
-               "computation."))
+        (Some ("Specifies the maximum number of steps to take during computation."))
         None
         (fun x -> try Some(int_of_string x) with | Failure _ -> None);
     parse_max_results =
       single_value_parser
         "MAX_RESULTS"
-        (Some ("Specifies the maximum number of results to find during " ^
-               "computation."))
+        (Some ("Specifies the maximum number of results to find during computation."))
         None
         (fun x -> try Some(int_of_string x) with | Failure _ -> None);
     parse_exploration_policy =
@@ -98,7 +96,7 @@ let make_parsers () : parsers =
         ~invalid_value_err_msg:(fun _ str ->
           "Cannot understand output format " ^ str ^ ".\n" ^
           "Valid formats are \"default\", \"compact\", and \"json\"")
-        (Some "Specifies the output format: descriptive (default), compact, or JSON\n")
+        (Some "Specifies the output format: default (descriptive output), compact, or JSON\n")
         (Some Standard)
         (function
           | "default" -> Some Standard
