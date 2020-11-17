@@ -58,9 +58,16 @@ let pp_type_sig formatter t =
   | _ -> failwith "not yet implemented"
 ;;
 
-let rec pp_type_decl formatter type_decl =
+let rec pp_flat_type formatter t = 
+  match t with
+  | TypeInt -> Format.pp_print_string formatter "int"
+  | TypeBool -> Format.pp_print_string formatter "bool"
+  | TypeRecord record -> Format.fprintf formatter "%a" (pp_ident_map pp_type_decl) record
+  | TypeList t -> Format.fprintf formatter "[%a]" pp_type_decl t
+
+and pp_type_decl formatter type_decl =
   match type_decl with
-  | FirstOrderType t -> Format.fprintf formatter "%a" pp_type_sig t
+  | FirstOrderType t -> Format.fprintf formatter "%a" pp_flat_type t
   | HigherOrderType (t1, t2) ->  Format.fprintf formatter "(%a -> %a)" pp_type_decl t1 pp_type_decl t2
 ;;
   
@@ -154,6 +161,9 @@ and pp_expr formatter expr =
   | Let (ident, e1, e2) -> 
     Format.fprintf formatter "let@ %a =@ %a@ in@ @[%a@]"
       pp_ident ident pp_expr e1 pp_expr e2
+  | LetWithType (ident, e1, e2, type_decl) ->
+    Format.fprintf formatter "let@ (%a : %a) =@ %a@ in@ @[%a@]"
+      pp_ident ident pp_type_decl type_decl pp_expr e1 pp_expr e2
   | LetRecFun (funsig_lst, e) ->
     let pp_funsig_list formatter funsig_lst =
       Pp_utils.pp_concat_sep

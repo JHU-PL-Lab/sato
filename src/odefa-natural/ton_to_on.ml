@@ -12,10 +12,50 @@ let isBool (e : expr) : expr =
   Match (e, [(BoolPat, Bool true); (AnyPat, Assert (Bool false))])
 ;;
 
-let rec generate_assume (t : type_decl) : expr =
+let rec isRecord (r : type_decl Ident_map.t) (e : expr) : expr = 
+  let all_bindings = Ident_map.bindings r in
+  let dummy_var = Ident ("~dummy" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+  let fold_fun acc (Ident lbl, t) = Let (dummy_var, generate_assert t (RecordProj (e, Label lbl)), acc) in
+  let (Ident first_lbl, first_type) = List.hd all_bindings in
+  List.fold_left fold_fun (generate_assert first_type (RecordProj (e, Label first_lbl))) (List.tl all_bindings)
+
+and isList (t : type_decl) (e : expr) : expr =
+  let test_fun_name = Ident ("~testFun" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+  let test_list = Ident ("~testList" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+  let dummy_var = Ident ("~dummy" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+  let test_fun = Match (Var test_list, [(EmptyLstPat, Bool true); (LstDestructPat (Ident "hd", Ident "tl"), (Let (dummy_var, generate_assert t (Var (Ident "hd")), Appl (Var test_fun_name, Var (Ident "tl")))))]) in
+  let check_fun = Funsig (test_fun_name, [test_list], test_fun) in
+  LetRecFun ([check_fun], Appl (Var test_fun_name, e))
+
+and generate_assume (t : type_decl) : expr =
   match t with
   (* TODO: Implement the input type according to the type *)
-  | FirstOrderType _ -> Input
+  | FirstOrderType t' ->
+    begin 
+    match t' with
+    | TypeInt -> Input
+    | TypeBool -> 
+      let raw_input = Ident ("~rawInput" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+      Let (raw_input, Input, Geq (Var raw_input, Int 0))
+    | TypeRecord r ->
+      let all_bindings = Ident_map.bindings r in
+      let empty_record = Ident_map.empty in
+      let lbl_to_var = List.map 
+        (fun ((Ident lbl_str) as lbl, lbl_type) -> 
+          let lbl_var = Ident ("~" ^ lbl_str ^ string_of_int (counter := !counter + 1 ; !counter)) in
+          (lbl, lbl_var, lbl_type)) all_bindings 
+      in
+      let res_record = List.fold_left (fun acc (lbl, lbl_var, _) -> Ident_map.add lbl (Var lbl_var) acc) empty_record lbl_to_var 
+      in
+      let fold_fun acc (_, lbl_var, cur_t) = Let (lbl_var, generate_assume cur_t, acc)
+      in
+      let base_acc = Record res_record
+      in
+      List.fold_left fold_fun base_acc lbl_to_var
+    | TypeList l -> 
+      let entry_var = Ident ("~entry" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+      Let (entry_var, generate_assume l, List [Var entry_var])
+    end
   | HigherOrderType (t1, t2) -> 
     let arg_assume = Ident ("~tval" ^ string_of_int (counter := !counter + 1 ; !counter)) in
     (* TODO: The Assert here might needs to change according to how assert works *)
@@ -29,10 +69,11 @@ and generate_assert (t : type_decl) (e : expr) : expr =
       (* TODO: implement this correctly *)
       match t' with
       (* TODO: Check how to encode non-exhaustive match? *)
-      | IntType -> isInt e
-      | BoolType -> isBool e
+      | TypeInt -> isInt e
+      | TypeBool -> isBool e
       (* TODO: Implement more types here *)
-      | _ -> failwith "Shouldn't be here!"
+      | TypeRecord r -> isRecord r e
+      | TypeList t -> isList t e
     end
   | HigherOrderType (t1, t2) -> 
     begin
@@ -55,6 +96,13 @@ and generate_assert (t : type_decl) (e : expr) : expr =
       begin
         let sig' = transform_funsig fun_sig in
         LetFun (sig', typed_non_to_on e)
+      end
+    | LetWithType (x, e1, e2, type_decl) ->
+      begin
+        let test_expr = generate_assert type_decl (Var x) in
+        let test_ident = Ident ("~test_expr" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+        let test_let = Let (test_ident, test_expr, (typed_non_to_on e2)) in
+        Let (x, e1, test_let)
       end
     | LetRecFunWithType (sig_lst, e, type_decl_lst) ->
       begin

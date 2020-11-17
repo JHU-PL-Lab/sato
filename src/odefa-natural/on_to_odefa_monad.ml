@@ -253,6 +253,7 @@ let rec m_env_out_transform_expr
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
       return @@ (On_ast.Let(x, e1', e2'), combiner out1 out2)
+    | On_ast.LetWithType _ -> failwith "undefined"
     | On_ast.LetRecFun (funsigs, e1) ->
       let%bind (e1', out1) = recurse env e1 in
       let%bind (funsigs', outs) =

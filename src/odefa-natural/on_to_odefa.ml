@@ -110,6 +110,8 @@ let rec rename_variable
     else
       let new_e2 = recurse e2 in
       Let(id, new_e1, new_e2)
+  (* TODO: Actually implement this - EW *)
+  | LetWithType _ -> failwith "undefined"
   | LetFun (f_sig, e') ->
     let (Funsig(id, id_list, fun_e)) = f_sig in
     (* If old_name is same as the function name, then don't change anything *)
@@ -273,6 +275,8 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
         in
         let%orzero ([x'], [e1''; e2'']) = (xs, es) in
         return (Let(x', e1'', e2''), seen_declared''')
+      (* TODO: Actually implement this - EW *)
+      | LetWithType _ -> failwith "undefined"
       | LetRecFun (funsigs, expr) ->
         let%bind funsigs'rev, seen_declared' =
           list_fold_left_m
@@ -778,6 +782,8 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Var_body(e1_var)) in
     return (e1_clist @ [assignment_clause] @ e2_clist, e2_var)
+  (* TODO: Actually implement this - EW *)
+  | LetWithType _ -> failwith "undefined"
   | LetFun (sign, e) ->
     (* TODO: check for bugs!!! *)
     (* Translating the function signature... *)
@@ -970,7 +976,7 @@ let debug_transform_odefa
 
 let translate
     ?translation_context:(translation_context=None)
-    ?is_instrumented:(is_instrumented=false)
+    ?is_instrumented:(is_instrumented=true)
     (e : On_ast.expr)
   : (Ast.expr * On_to_odefa_maps.t) =
   let (e_m_with_info : (Ast.expr * On_to_odefa_maps.t) m) =

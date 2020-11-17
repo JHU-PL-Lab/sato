@@ -1,0 +1,7 @@
+let rec fold (f : int -> int -> bool) (lst : [int]) (accum : int) : bool =
+    match lst with
+    | [] -> accum
+    | hd :: tl -> f hd (fold f tl accum)
+    end
+in
+fold

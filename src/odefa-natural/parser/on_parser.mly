@@ -48,6 +48,7 @@ let add_record_entry lbl value old_record =
   in
   Ident_map.add key value old_record
 ;;
+
 %}
 
 %token <string> IDENTIFIER
@@ -182,6 +183,8 @@ expr:
       { new_rec_fun_with_type $3 $5 }
   | LET ident_decl EQUALS expr IN expr %prec prec_let
       { Let($2, $4, $6) }
+  | LET OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN EQUALS expr IN expr %prec prec_let
+      { LetWithType($3, $8, $10, $5) }
   | LET fun_sig IN expr %prec prec_fun
       { LetFun($2, $4)}
   | LET fun_sig_with_type IN expr %prec prec_fun
@@ -195,9 +198,24 @@ type_decl:
   | type_decl ARROW type_decl { HigherOrderType ($1, $3) }
   | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
 
+record_type:
+  | OPEN_BRACE record_type_body CLOSE_BRACE
+      { TypeRecord $2 }
+  | OPEN_BRACE CLOSE_BRACE
+      { TypeRecord (Ident_map.empty) }
+
+record_type_body:
+  | label EQUALS type_decl
+      { new_record $1 $3 }
+  | label EQUALS type_decl COMMA record_type_body
+      { add_record_entry $1 $3 $5 }
+;
+
 basic_types:
-  | INT { IntType }
-  | BOOL_KEYWORD { BoolType }
+  | INT { TypeInt }
+  | BOOL_KEYWORD { TypeBool }
+  | record_type { $1 }
+  | OPEN_BRACKET type_decl CLOSE_BRACKET { TypeList $2 }
 
 /* let foo x = ... */
 fun_sig:

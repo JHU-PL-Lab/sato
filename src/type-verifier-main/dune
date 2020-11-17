@@ -1,0 +1,12 @@
+(executable
+  (name type_verifier)
+  (libraries
+    batteries
+    jhupllib
+    odefa.ast
+    odefa.ddpa
+    odefa.natural
+    odefa.parser
+    odefa.answer-generation
+  )
+)

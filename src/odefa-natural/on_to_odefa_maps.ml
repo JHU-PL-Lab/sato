@@ -176,14 +176,14 @@ let rec on_expr_transformer transformer expr =
   | Function (id_lst, e) -> Function (id_lst, recurse e)
   | Appl (e1, e2) -> Appl (recurse e1, recurse e2)
   | Let (id, e1, e2) -> Let (id, recurse e1, recurse e2)
+  (* TODO: Actually implement this - EW *)
+  | LetWithType _ -> failwith "undefined"
   | LetFun (fs, e) ->
     let Funsig (fs_ident, fs_args, e_body) = fs in
     let fs' = Funsig (fs_ident, fs_args, recurse e_body) in
     LetFun (fs', recurse e)
-  | LetFunWithType (fs, e, t) -> 
-      let Funsig (fs_ident, fs_args, e_body) = fs in
-      let fs' = Funsig (fs_ident, fs_args, recurse e_body) in
-      LetFunWithType (fs', recurse e, t)
+  (* TODO: Actually implement this - EW *)
+  | LetFunWithType _ -> failwith "undefined"
   | LetRecFun (fs_lst, e) ->
     let fs_lst' =
       List.map
@@ -191,13 +191,8 @@ let rec on_expr_transformer transformer expr =
         fs_lst
     in
     LetRecFun (fs_lst', recurse e)
-  | LetRecFunWithType (fs_lst, e, t_lst) -> 
-    let fs_lst' =
-      List.map
-        (fun (Funsig (id, args, e')) -> Funsig (id, args, recurse e'))
-        fs_lst
-    in
-    LetRecFunWithType (fs_lst', recurse e, t_lst)
+  (* TODO: Actually implement this - EW *)
+  | LetRecFunWithType _ -> failwith "undefined"
   | Plus (e1, e2) -> Plus (recurse e1, recurse e2)
   | Minus (e1, e2) -> Minus (recurse e1, recurse e2)
   | Times (e1, e2) -> Times (recurse e1, recurse e2)
