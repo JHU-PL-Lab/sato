@@ -58,12 +58,8 @@ let pp_type_sig formatter t =
   | _ -> failwith "not yet implemented"
 ;;
 
-let rec pp_flat_type formatter t = 
-  match t with
-  | TypeInt -> Format.pp_print_string formatter "int"
-  | TypeBool -> Format.pp_print_string formatter "bool"
-  | TypeRecord record -> Format.fprintf formatter "%a" (pp_ident_map pp_type_decl) record
-  | TypeList t -> Format.fprintf formatter "[%a]" pp_type_decl t
+let rec pp_flat_type formatter (Predicate t) = 
+  Format.fprintf formatter "%a" pp_expr t
 
 and pp_type_decl formatter type_decl =
   match type_decl with

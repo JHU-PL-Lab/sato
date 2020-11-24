@@ -42,19 +42,15 @@ type type_sig =
   | VariantType of variant_label
 [@@ deriving eq, ord, show]
 
-type first_order_type = 
-  | TypeInt
-  | TypeBool
-  | TypeRecord of type_decl Ident_map.t
-  | TypeList of type_decl
+and predicate = Predicate of expr
 [@@ deriving eq, ord, show]
 
 and type_decl = 
-  | FirstOrderType of first_order_type
+  | FirstOrderType of predicate
   | HigherOrderType of type_decl * type_decl
 [@@ deriving eq, ord, show]
 
-type funsig = Funsig of ident * ident list * expr
+and funsig = Funsig of ident * ident list * expr
 
 (* and variant_content = Variant of variant_label * pattern *)
 

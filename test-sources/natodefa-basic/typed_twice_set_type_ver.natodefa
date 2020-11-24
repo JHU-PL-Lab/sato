@@ -1,0 +1,9 @@
+let isInt v = 
+    match v with
+    | int -> true
+    | any -> false
+    end
+in
+let twice (f : { f | let testFun f = let a = input in isInt (f a) in testFun}) (x : { x | isInt} ) : { ret | isInt} = f (f x) in
+let inc (x : { x | isInt } ) : { ret | isInt } = x + 1 in
+twice inc 0

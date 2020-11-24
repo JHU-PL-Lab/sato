@@ -193,29 +193,9 @@ expr:
       { Match($2, $5) }
 ;
 
+/* { x | expr } */ 
 type_decl:
-  | basic_types { FirstOrderType $1 }
-  | type_decl ARROW type_decl { HigherOrderType ($1, $3) }
-  | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
-
-record_type:
-  | OPEN_BRACE record_type_body CLOSE_BRACE
-      { TypeRecord $2 }
-  | OPEN_BRACE CLOSE_BRACE
-      { TypeRecord (Ident_map.empty) }
-
-record_type_body:
-  | label EQUALS type_decl
-      { new_record $1 $3 }
-  | label EQUALS type_decl COMMA record_type_body
-      { add_record_entry $1 $3 $5 }
-;
-
-basic_types:
-  | INT { TypeInt }
-  | BOOL_KEYWORD { TypeBool }
-  | record_type { $1 }
-  | OPEN_BRACKET type_decl CLOSE_BRACKET { TypeList $2 }
+ | OPEN_BRACE ident_decl PIPE expr CLOSE_BRACE { FirstOrderType (Predicate $4) }
 
 /* let foo x = ... */
 fun_sig:
