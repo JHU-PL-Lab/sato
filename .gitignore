@@ -10,6 +10,7 @@
 
 # Execution temp files
 /*.log
+/*.txt
 
 # Generated graph files
 /*.dot
@@ -28,9 +29,13 @@
 # Dune intermediates
 /*.install
 
+# Input/output files at root
+/*.odefa
+/*.natodefa
+/*.txt
+
 # Makefile temporaries
+/sato
 /ddpa_toploop
-/test_generator
-/type_checker
 /translator
 /sandbox

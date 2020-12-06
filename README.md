@@ -36,11 +36,11 @@ export LD_LIBRARY_PATH=`opam config var z3:lib`
 Run
 ---
 
-To build Sato itself, we can run the `make sato` command; we can also run `make` in order to build Sato, DDSE, and the DDPA toploop, as well as a translator from Natodefa to Odefa.  The basic usage of Sato is as follows:
+To build Sato itself, run the `make` command (which is itself an alias for the `make sato` command); we can also run `make ddpa` and `make translator` in order to build other utilities which may be useful for debugging. The basic usage of Sato is as follows:
 ```
-./type_checker -linfo -t<variable> <filename>
+./sato <filename>
 ```
-where `<filename>` refers to a `.odefa` or `.natodefa` file that Sato will typecheck, and `<variable>` is the variable that Sato begins symbolic lookup on.  For the full command list, run `./type_checker --help`.
+where `<filename>` refers to a `.odefa` or `.natodefa` file that Sato will typecheck.  For the full command list, run `./sato --help`.
 
 To run tests on Sato (as well as DDPA and DDSE), run the `make test` command.
 
@@ -59,8 +59,8 @@ TODOs
   - [x] Ignore errors in dead odefa code by throwing out aborts/errors encountered after the first one
 - [ ] Fix bugs relating to DDPA
   - Update: bugs revealed something fundamental to how lookup works; see below
-- [ ] Write benchmarks
-- [ ] Write library of commonly used predicates/contracts (copy from Clojure predicates?)
+- ~~Write benchmarks~~
+- ~~Write library of commonly used predicates/contracts (copy from Clojure predicates?)~`
 
 TODOs for theory refactor
 ----
@@ -73,11 +73,11 @@ TODOs for theory refactor
 
 TODOs for 100% coverage algorithm
 ----
-- [ ] Algorithm to discover all `abort` clauses
-- [ ] Record all visited aborts during lookup
-- [ ] Restart lookup until all aborts have been looked up/visited
-  - [ ] Deal with the "lookup starts off-by-one" problem
-- [ ] Write new tests for this
+- [x] Algorithm to discover all `abort` clauses
+- [x] Record all visited aborts during lookup
+- [x] Restart lookup until all aborts have been looked up/visited
+  - [x] Deal with the "lookup starts off-by-one" problem
+- [x] Write new tests for this
 - [ ] Note this in writeup
   - [ ] Describe how a single lookup is not complete (though it is sound)
 
@@ -90,9 +90,12 @@ More TODOs
 - [ ] Heuristic for when to end recursion
   - [ ] Idea 1: Scale max steps by lines of code
   - [ ] Idea 2: Limit context stack growth re. adding the same call site
+  - [x] Actual solution: limit steps that each evaluation can take using the `--maximum-steps` arg
 - [ ] Report errors locally, without having to reach the beginning (hard)
   - [ ] Type errors after infinite loops/omega combinators
   - [ ] Type errors in non-satisfiable universes
+  - [x] Actual solution: Perform "repeat evaluation on different vars" heuristic (see above)
 - [ ] Achieve 100% coverage in finding errors (ultimate goal...)
   - [ ] Run test from back, then if it gets stuck, restart in the middle of the program in a non-covered portion of code
+  - [x] Tentatively achieved using heuristic...
   - \(This is a key advantage over forward analyses - no need to know values starting from the middle\)

@@ -1,5 +1,5 @@
 open Batteries;;
-(* open Jhupllib;; *)
+open Jhupllib;;
 
 open Odefa_ast;;
 open Ast;;
@@ -14,121 +14,134 @@ exception Parse_failure of string;;
 
 module type Answer = sig
   type t;;
-  val answer_from_result : expr -> ident -> evaluation_result -> t;;
-  val answer_from_string : string -> t;;
+  val description : string;;
+  val answer_from_result : int -> expr -> ident -> evaluation_result -> t;;
   val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
   val show : t -> string;;
+  val show_compact : t -> string;;
   val count : t -> int;;
-  val count_list : t list -> int;;
   val generation_successful : t -> bool;;
-  val test_expected : t -> t -> bool;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
-(* **** String parsing utilities **** *)
+module type Error_location = sig
+  type t;;
+  val show : t -> string;;
+  val show_brief : t -> string;;
+  val to_yojson : t -> Yojson.Safe.t;;
+end;;
 
-(* Utility to parse int sequences separated by commas. *)
-let parse_comma_separated_ints (lst_str : string) : int list =
-  let lst_str' =
-    if (String.starts_with lst_str "[") &&
-         (String.ends_with lst_str "]") then
-      lst_str
-      |> String.lchop
-      |> String.rchop
-    else
-      lst_str
-  in
-  let str_lst =
-    lst_str'
-    |> Str.global_replace (Str.regexp "[ ]*") ""
-    |> Str.split (Str.regexp ",")
-  in
-  try
-    List.map int_of_string str_lst
-  with Failure _ ->
-    raise @@ Parse_failure "Unable to parse int list"
+let replace_linebreaks (str : string) : string =
+  String.replace_chars
+    (function '\n' -> " " | c -> String.of_char c) str
 ;;
 
-let split_with_regexp (re : Str.regexp) (str : string) : (string * string) =
-  if Str.string_match re str 0 then
-    let split_pos = Str.match_end () in
-    let prefix = String.trim @@ Str.string_before str split_pos in
-    let suffix = String.trim @@ Str.string_after str split_pos in
-    (prefix, suffix)
-  else
-    raise @@ Parse_failure "string does not match on regexp"
-;;
+module Odefa_error_location
+  : Error_location with type t = Ast.clause = struct
+  type t = Ast.clause;;
+  let show = Ast_pp.show_clause;;
+  let show_brief = Ast_pp_brief.show_clause;;
+  let to_yojson clause =
+    `String (replace_linebreaks @@ show clause);;
+end;;
+
+module Natodefa_error_location
+  : Error_location with type t = On_ast.expr = struct
+  type t = On_ast.expr;;
+  let show = On_ast_pp.show_expr;;
+  let show_brief = On_ast_pp.show_expr;;
+  let to_yojson expr =
+    `String (replace_linebreaks @@ show expr);;
+end;;
 
 (* **** String showing utilities **** *)
 
-let show_input_seq (input_seq : int list) =
-  "[" ^ (String.join ", " @@ List.map string_of_int input_seq) ^ "]"
+let pp_input_sequence formatter (input_seq : int list) =
+  Pp_utils.pp_list Format.pp_print_int formatter input_seq
+;;
+
+let show_input_sequence : int list -> string =
+  Pp_utils.pp_to_string pp_input_sequence
 ;;
 
 (* **** Input sequence **** *)
 
 module Input_sequence : Answer = struct
-  type t = int list option;;
+  type input_seq_record = {
+    input_sequence : int list;
+    input_steps : int;
+  }
+  [@@ deriving to_yojson]
+  ;;
 
-  let answer_from_result e x result =
+  type t = input_seq_record option
+  ;;
+
+  let description = "input";;
+
+  let answer_from_result steps e x result =
     let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
     match error_opt with
-    | None -> Some input_seq
+    | None -> Some {
+      input_sequence = input_seq;
+      input_steps = steps;
+    }
     | Some _ -> None
-  ;;
-
-  (* String "[ 1, 2, 3 ]" or "1, 2, 3" to input sequence *)
-  let answer_from_string arg_str =
-    Some (parse_comma_separated_ints arg_str)
   ;;
 
   (* Unused for input sequence generation. *)
   let set_odefa_natodefa_map (_ : On_to_odefa_maps.t) = ();;
 
-  let show inputs_opt =
-    match inputs_opt with
-    | Some inputs ->
-      "[" ^ (String.join ", " @@ List.map string_of_int inputs) ^ "]"
-    | None -> "???"
+  let show : t -> string = function
+    | Some { input_sequence; input_steps } ->
+      (Printf.sprintf "* Input sequence: %s\n" (show_input_sequence input_sequence)) ^
+      (Printf.sprintf "* Found in %d step%s\n" input_steps (if input_steps = 1 then "" else "s")) ^
+      "--------------------"
+    | None -> ""
   ;;
 
-  let count inputs_opt =
-    match inputs_opt with
-    | Some _ -> 1
-    | None -> 0 (* Fail silently *)
+  let show_compact : t -> string = function
+    | Some { input_sequence; input_steps } ->
+      Printf.sprintf
+        "- %s (%d stp.)"
+        (show_input_sequence input_sequence)
+        input_steps
+    | None -> ""
   ;;
 
-  let count_list (inputs_opt_lst : t list) =
-    inputs_opt_lst
-    |> List.filter_map identity
-    |> List.length
-  ;;
+  let count : t -> int = function Some _ -> 1 | None -> 0;;
 
-  let generation_successful inputs_opt =
-    match inputs_opt with
-    | Some _ -> true
-    | None -> false
-  ;;
+  let generation_successful : t -> bool = Option.is_some;;
 
-  let test_expected expected_inputs actual_inputs =
-    expected_inputs = actual_inputs
+  let to_yojson : t -> Yojson.Safe.t = function
+    | Some inputs -> input_seq_record_to_yojson inputs
+    | None -> `Null
   ;;
 end;;
 
 (* **** Type Errors **** *)
 
 module Type_errors : Answer = struct
-  
-  type t = {
+
+  type error_record = {
     err_errors : Error.Odefa_error.t list;
     err_input_seq : int list;
-    err_location : Ast.clause option;
-  };;
+    err_location : Odefa_error_location.t;
+    err_steps : int;
+  }
+  [@@ deriving to_yojson]
+  ;;
+
+  type t = error_record option
+  ;;
+
+  let description = "error";;
 
   let odefa_on_maps_option_ref = ref None;;
 
-  let answer_from_result e x result : t =
+  let answer_from_result steps e x result : t =
     let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
@@ -143,108 +156,73 @@ module Type_errors : Answer = struct
           let trans_inst_fn =
             On_to_odefa_maps.get_pre_inst_equivalent_clause odefa_on_maps
           in
-          {
+          Some {
             err_input_seq = input_seq;
-            err_location = Some (trans_inst_fn error_loc);
+            err_location = trans_inst_fn error_loc;
             err_errors = List.map rm_inst_fn error_list;
+            err_steps = steps;
           }
-        | None ->
-          {
-            err_input_seq = input_seq;
-            err_location = None;
-            err_errors = [];
-          }
+        | None -> None
       end
     | None -> failwith "Odefa/natodefa maps were not set!"
   ;;
 
-  (* Ex: [0, 1] "sum = a or z" "a = b" "c = 2" "int" "bool" *)
-  let answer_from_string arg_str : t =
-    let (input_str, loc_err_str) =
-      split_with_regexp (Str.regexp "\\[[^][]*\\]") arg_str
-    in
-    let (loc_str, error_str) =
-      split_with_regexp (Str.regexp "\"[^\"]*\"") loc_err_str
-    in
-    let loc_str =
-      (* Remove quotes *)
-      loc_str
-      |> String.lchop
-      |> String.rchop
-    in
-    let inputs = parse_comma_separated_ints input_str in
-    let location =
-      try
-        Odefa_parser.Parser.parse_clause_string loc_str
-      with Odefa_parser.Parser.Parse_error _ ->
-        failwith (Printf.sprintf "Cannot parse clause %s" loc_str)
-    in
-    let error = Error.Odefa_error.parse error_str in
-    {
-      err_input_seq = inputs;
-      err_location = Some location;
-      err_errors = [error];
-    }
-  ;;
 
   let set_odefa_natodefa_map odefa_on_maps : unit =
     odefa_on_maps_option_ref := Some (odefa_on_maps)
   ;;
 
-  let show (error : t) : string =
-    match error.err_location with
-    | Some error_loc ->
-      "Type errors for:\n" ^
-      "- Input sequence  : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
-      "- Found at clause : " ^ (Ast_pp.show_clause error_loc) ^ "\n" ^
+  (* TODO: Pretty-print *)
+
+  let show : t -> string = function
+    | Some error ->
+      "** Type Errors **\n" ^
+      (Printf.sprintf "- Input sequence  : %s\n" (show_input_sequence error.err_input_seq)) ^
+      (Printf.sprintf "- Found at clause : %s\n" (Odefa_error_location.show error.err_location)) ^
+      (Printf.sprintf "- Found in steps  : %s\n" (string_of_int error.err_steps)) ^
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map Error.Odefa_error.show error.err_errors)
     | None -> ""
   ;;
 
-  let count (errors : t) = List.length errors.err_errors;;
-
-  let count_list error_list =
-    error_list
-    |> List.map count
-    |> List.sum
+  let show_compact : t -> string = function
+    | Some error ->
+      "- err at: " ^ (Odefa_error_location.show_brief error.err_location)
+    | None ->
+      "- no errs"
   ;;
 
-  let generation_successful error =
-    match error.err_location with
-    | Some _ -> true
-    | None -> false
-  ;;
+  let count : t -> int = function
+    | Some err -> List.length err.err_errors
+    | None -> 0;;
 
-  let test_expected (expect_errs : t) (actual_errs : t) =
-    let exp_inputs = expect_errs.err_input_seq in
-    let act_inputs = actual_errs.err_input_seq in
-    let exp_loc = expect_errs.err_location in
-    let act_loc = actual_errs.err_location in
-    let exp_errors = expect_errs.err_errors in
-    let act_errors = expect_errs.err_errors in
-    if (exp_inputs <> act_inputs) || (exp_loc <> act_loc) then false else
-      begin
-        let is_mem err =
-          List.exists (Error.Odefa_error.equal err) act_errors
-        in
-        not @@ List.is_empty (List.filter is_mem exp_errors)
-      end
+  let generation_successful : t -> bool = Option.is_some;;
+
+  let to_yojson : t -> Yojson.Safe.t = function
+    | Some err -> error_record_to_yojson err
+    | None -> `Null
   ;;
 end;;
 
 module Natodefa_type_errors : Answer = struct
 
-  type t = {
+  type error_record = {
     err_errors : On_error.On_error.t list;
     err_input_seq : int list;
-    err_location : On_ast.expr option;
-  };;
+    err_location : Natodefa_error_location.t;
+    err_steps : int;
+  }
+  [@@ deriving to_yojson]
+  ;;
+
+  type t = error_record option;;
+
+  let description = "error";;
 
   let odefa_on_maps_option_ref = ref None;;
 
-  let answer_from_result e x result =
+  let answer_from_result steps e x result =
     let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
@@ -259,87 +237,49 @@ module Natodefa_type_errors : Answer = struct
             let on_err_list =
               List.map (On_error.odefa_to_natodefa_error odefa_on_maps) error_lst
             in
-            {
+            Some {
               err_input_seq = input_seq;
-              err_location = Some on_err_loc;
+              err_location = on_err_loc;
               err_errors = on_err_list;
+              err_steps = steps;
             }
-          | None ->
-            {
-              err_input_seq = input_seq;
-              err_location = None;
-              err_errors = [];
-            }
+          | None -> None
         end
       | None -> failwith "Odefa/natodefa maps were not set!"
-  ;;
-
-  let answer_from_string arg_str =
-    let (input_str, loc_err_str) =
-      split_with_regexp (Str.regexp "\\[[^][]*\\]") arg_str
-    in
-    let (loc_str, error_str) =
-      split_with_regexp (Str.regexp "\"[^\"]*\"") loc_err_str
-    in
-    let loc_str =
-      (* Remove quotes *)
-      loc_str
-      |> String.lchop
-      |> String.rchop
-    in
-    let inputs = parse_comma_separated_ints input_str in
-    let location = Odefa_natural.On_parse.parse_single_expr_string loc_str in
-    let error = On_error.On_error.parse error_str in
-    {
-      err_input_seq = inputs;
-      err_location = Some location;
-      err_errors = [error];
-    }
   ;;
 
   let set_odefa_natodefa_map odefa_on_maps =
     odefa_on_maps_option_ref := Some (odefa_on_maps)
   ;;
 
-  let show error =
-    match error.err_location with
-    | Some error_loc ->
-      "Type errors for:\n" ^
-      "- Input sequence : " ^ (show_input_seq error.err_input_seq) ^ "\n" ^
-      "- Found at expr  : " ^ (On_ast_pp.show_expr error_loc) ^ "\n" ^
+  let show : t -> string = function
+    | Some error ->
+      "** Type Errors **\n" ^
+      (Printf.sprintf "- Input sequence  : %s\n" (show_input_sequence error.err_input_seq)) ^
+      (Printf.sprintf "- Found at clause : %s\n" (Natodefa_error_location.show error.err_location)) ^
+      (Printf.sprintf "- Found in steps  : %s\n" (string_of_int error.err_steps)) ^
       "--------------------\n" ^
       (String.join "\n--------------------\n"
         @@ List.map On_error.On_error.show error.err_errors)
     | None -> ""
   ;;
 
-  let count error = List.length error.err_errors;;
-
-  let count_list error_list =
-    error_list
-    |> List.map count
-    |> List.sum
+  let show_compact : t -> string = function
+    | Some error ->
+      "- err at: " ^ (Natodefa_error_location.show_brief error.err_location) 
+    | None ->
+      "- no errs"
   ;;
 
-  let generation_successful error =
-    match error.err_location with
-    | Some _ -> true
-    | None -> false
+  let count : t -> int = function
+    | Some err -> List.length err.err_errors
+    | None -> 0
   ;;
 
-  let test_expected (expect_errs : t) (actual_errs : t) =
-    let exp_inputs = expect_errs.err_input_seq in
-    let act_inputs = actual_errs.err_input_seq in
-    let exp_loc = expect_errs.err_location in
-    let act_loc = actual_errs.err_location in
-    let exp_errors = expect_errs.err_errors in
-    let act_errors = expect_errs.err_errors in
-    if (exp_inputs <> act_inputs) || (exp_loc <> act_loc) then false else
-      begin
-        let is_mem err =
-          List.exists (On_error.On_error.equal err) act_errors
-        in
-        not @@ List.is_empty (List.filter is_mem exp_errors)
-      end
+  let generation_successful : t -> bool = Option.is_some;;
+
+  let to_yojson : t -> Yojson.Safe.t = function
+    | Some err -> error_record_to_yojson err
+    | None -> `Null
   ;;
 end;;

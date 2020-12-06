@@ -1,0 +1,12 @@
+(executable
+  (name sato)
+  (libraries
+    batteries
+    jhupllib
+    odefa.ast
+    odefa.ddpa
+    odefa.natural
+    odefa.parser
+    odefa.answer-generation
+  )
+)

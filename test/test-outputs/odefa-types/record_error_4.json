@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "not_rec" ],
+          "err_match_val": "fun x -> ...",
+          "err_match_expected": "{label}",
+          "err_match_actual": "fun"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "ans = not_rec.label",
+    "err_steps": 44
+  }
+]

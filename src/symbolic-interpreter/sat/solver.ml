@@ -793,20 +793,20 @@ let rec find_errors solver symbol =
             | Some vs -> _symbolic_to_concrete_value vs
             | None -> raise Not_found
         in
-        (* let l_operand =
+        let l_operand =
           if List.is_empty l_aliases then l_val else
             Ast.Var_body (Var (List.first l_aliases, None))
         in
         let r_operand =
           if List.is_empty r_aliases then r_val else
             Ast.Var_body (Var (List.first r_aliases, None))
-        in *)
+        in
         let binop_error =  Odefa_error.Error_binop {
           err_binop_left_val = l_val;
           err_binop_right_val = r_val;
           err_binop_left_aliases = l_aliases;
           err_binop_right_aliases = r_aliases;
-          err_binop_operation = (l_val, op, l_val);
+          err_binop_operation = (l_operand, op, r_operand);
         }
         in
         lazy_logger `trace (fun () ->

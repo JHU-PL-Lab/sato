@@ -1,4 +1,3 @@
-(copy_files# command-line/*.{ml,mli})
 (library
   (name odefa_answer_generation)
   (public_name odefa.answer-generation)
@@ -19,6 +18,7 @@
     (pps
       ocaml-monadic
       ppx_deriving.std
+      ppx_deriving_yojson
     )
   )
 )

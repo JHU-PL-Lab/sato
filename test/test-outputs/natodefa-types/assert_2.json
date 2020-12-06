@@ -1,0 +1,19 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_binop",
+        {
+          "err_binop_left_aliases": [],
+          "err_binop_right_aliases": [],
+          "err_binop_left_val": "true",
+          "err_binop_right_val": "true",
+          "err_binop_operation": "true <> true"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "assert (not true)",
+    "err_steps": 145
+  }
+]

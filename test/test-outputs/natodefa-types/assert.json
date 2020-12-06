@@ -1,0 +1,13 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_value",
+        { "err_value_aliases": [ "a" ], "err_value_val": "false" }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "assert (let a = false in a)",
+    "err_steps": 76
+  }
+]

@@ -10,133 +10,236 @@ open Ast_pp;;
 open Generator_answer;;
 open Generator_configuration;;
 
-module Interpreter = Odefa_symbolic_interpreter.Interpreter;;
-module Interpreter_types = Odefa_symbolic_interpreter.Interpreter_types;;
-module Relative_stack = Odefa_symbolic_interpreter.Relative_stack;;
-module Solver = Odefa_symbolic_interpreter.Solver;;
+module Interpreter =
+  Odefa_symbolic_interpreter.Interpreter;;
+module Interpreter_environment =
+  Odefa_symbolic_interpreter.Interpreter_environment;;
+module Interpreter_types =
+  Odefa_symbolic_interpreter.Interpreter_types;;
+module Relative_stack =
+  Odefa_symbolic_interpreter.Relative_stack;;
+module Solver =
+  Odefa_symbolic_interpreter.Solver;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "Generator";;
 
 module type Generator = sig
   module Answer : Answer;;
 
-  type generator =
+  type generator_reference =
     {
       gen_program : expr;
-      gen_target : Ident.t;
-      generator_fn : (int -> generation_result) option
-    }
-
-  and generation_result =
-    {
-      gen_answers : Answer.t list;
-      gen_steps : int;
-      gen_generator : generator;
+      gen_cfg : Ddpa_graph.ddpa_graph;
+      gen_exploration_policy : Interpreter.exploration_policy;
+      gen_max_steps : int option;
+      gen_max_results : int option;
     }
   ;;
+
+  type generation_parameters = {
+    gen_reference : generator_reference;
+    gen_evaluation : Interpreter.evaluation;
+    gen_target_vars : Ast.ident list;
+  }
+  ;;
+
+  type generation_result = {
+    gen_answers : Answer.t list;
+    gen_num_answers : int;
+    gen_is_complete : bool;
+  }
 
   val create :
     ?exploration_policy:Interpreter.exploration_policy ->
-    configuration -> expr -> ident -> generator;;
+    ?max_steps:(int option) ->
+    ?max_results:(int option) ->
+    configuration -> expr -> ident list ->
+    generation_parameters
+  ;;
+
   val generate_answers :
-    ?generation_callback:(Answer.t -> int -> unit) ->
-    int option -> generator ->
-    (Answer.t list * int) list * generator option;;
+    ?generation_callback:(Answer.t -> unit) ->
+    generation_parameters ->
+    generation_result
 end;;
 
-module Make(Answer : Answer) : Generator = struct
+module Make(Answer : Answer) = struct
   module Answer = Answer;;
 
-  type generator =
-    {
-      gen_program : expr;
-      gen_target : Ident.t;
-      generator_fn : (int -> generation_result) option
-    }
+  type generator_reference = {
+    gen_program : expr;
+    gen_cfg : Ddpa_graph.ddpa_graph;
+    gen_exploration_policy : Interpreter.exploration_policy;
+    gen_max_steps : int option;
+    gen_max_results : int option;
+  }
+  ;;
 
-  and generation_result =
-    {
-      gen_answers : Answer.t list;
-      gen_steps : int;
-      gen_generator : generator;
-    }
+  type generation_parameters = {
+    gen_reference : generator_reference;
+    gen_evaluation : Interpreter.evaluation;
+    gen_target_vars : Ast.ident list;
+  }
+  ;;
+
+  type generation_result = {
+    gen_answers : Answer.t list;
+    gen_num_answers : int;
+    gen_is_complete : bool;
+  }
+  ;;
+
+  let update_target_vars
+      (results : Interpreter.evaluation_result list)
+      (x_list : Ident.t list)
+    : Ident.t * Ident.t list =
+    match x_list with
+    | [] ->
+      raise @@ Invalid_argument "cannot have empty list of start vars"
+    | x :: x_list_tl ->
+      (* Eliminate already-visited vars from the list *)
+      let visited =
+        List.fold_left
+          (fun accum res ->
+            Ident_set.union accum res.Interpreter.er_visited
+          )
+          Ident_set.empty
+          results
+      in
+      let x_list_filtered =
+        List.filter
+          (fun cls_id ->
+            match Ident_set.Exceptionless.find cls_id visited with
+            | None -> true
+            | Some _ -> false
+          )
+        x_list_tl
+      in
+      lazy_logger `trace (fun () ->
+        "Remaining filtered target vars: " ^
+        "[" ^ (String.join "; " @@ List.map Ident.show x_list_filtered) ^ "]"
+      );
+      (x, x_list_filtered)
   ;;
 
   let rec take_steps
-      (e : expr)
-      (x : Ident.t)
-      (max_steps : int)
-      (evaluation : Interpreter.evaluation)
+      ?generation_callback:(generation_callback=fun _ -> ())
+      (gen_ref : generator_reference)
+      (prev_complete : bool)
+      (answers : Answer.t list)
+      (steps : int)
+      (x_list : Ident.t list)
+      (ev : Interpreter.evaluation)
     : generation_result =
-    let rec loop
-        (step_count : int)
-        (ev : Interpreter.evaluation)
-      : generation_result =
-      lazy_logger `trace (fun () -> Printf.sprintf
-                          "%d/%d completed in this pass" step_count max_steps);
-      if step_count = max_steps then begin
+    let recurse = take_steps ~generation_callback gen_ref in
+    match gen_ref.gen_max_results, gen_ref.gen_max_steps with
+    | (Some max_res, _) when List.length answers >= max_res ->
+      begin
         lazy_logger `trace (fun () ->
-            "Pass reached max step count; returning suspended generator.");
-        { gen_answers = [];
-          gen_steps = step_count;
-          gen_generator =
-            { gen_program = e;
-              gen_target = x;
-              generator_fn = Some(fun n -> take_steps e x n ev)
-            };
+          "Pass reached max number of results; terminating generation.");
+        {
+          gen_answers = answers;
+          gen_num_answers = List.length answers;
+          gen_is_complete = false;
         }
-      end else begin
-        let results, ev'_opt = Interpreter.step ev in
-        if List.is_empty results then begin
-          lazy_logger `trace (fun () -> "No new results found in this step.");
-          match ev'_opt with
-          | Some ev' ->
-            (* No result and no termination.  Keep running. *)
-            lazy_logger `trace (fun () ->
-                "Interpreter evaluation not yet complete; continuing.");
-            loop (step_count + 1) ev'
-          | None ->
-            (* No result and no remaining computation; we terminated!  Give
-              back a result indicating as much. *)
-            lazy_logger `trace (fun () ->
-                "Interpreter evaluation complete; stopping.");
-            { gen_answers = [];
-              gen_steps = step_count + 1;
-              gen_generator =
-                { gen_program = e;
-                  gen_target = x;
-                  generator_fn = None;
-                };
-            }
-        end else begin
-          (* We have results! *)
-          lazy_logger `trace (fun () -> "New result found in this step.");
-          let answers = List.map (Answer.answer_from_result e x) results in
-          let generator_fn =
-            match ev'_opt with
-            | None -> None
-            | Some ev' -> Some(fun n -> take_steps e x n ev')
-          in
-          { gen_answers = answers;
-            gen_steps = step_count + 1;
-            gen_generator =
-              { gen_program = e;
-                gen_target = x;
-                generator_fn = generator_fn;
-              };
-          }
-        end
       end
-    in
-    loop 0 evaluation
+    | (_, Some max_steps) when steps >= max_steps ->
+      begin
+        match x_list with
+        | [] | _ :: [] ->
+          lazy_logger `trace (fun () ->
+            "Pass reached max step count; terminating generation.");
+          {
+            gen_answers = answers;
+            gen_num_answers = List.length answers;
+            gen_is_complete = false;
+          }
+        | _ :: x' :: x_list' ->
+          lazy_logger `trace (fun () ->
+            "Pass reached max step count with remaining target vars; restart generation.");
+          let ev' =
+            Interpreter.start
+              ~exploration_policy:gen_ref.gen_exploration_policy
+              gen_ref.gen_cfg
+              gen_ref.gen_program
+              x'
+          in
+          recurse false answers 0 (x' :: x_list') ev'
+      end
+    | _, _ ->
+      begin
+        let results, ev'_opt = Interpreter.step ev in
+        let (x, x_list') = update_target_vars results x_list in
+        let answers' =
+          results
+          |> List.map (Answer.answer_from_result steps gen_ref.gen_program x)
+          |> List.filter (Answer.generation_successful)
+        in
+        let steps' = steps + 1 in
+        begin
+          match answers' with
+          | [] ->
+            lazy_logger `trace (fun () -> "No answer found on iteration.");
+          | _ :: _ ->
+            List.iter
+              (fun ans ->
+                lazy_logger `trace (fun () -> "Found answer on iteration.");
+                generation_callback ans)
+              answers'
+        end;
+        let answers'' = answers' @ answers in
+        match ev'_opt with
+        | Some ev' ->
+          lazy_logger `trace (fun () ->
+            "Continue current evaluation.");
+          recurse prev_complete answers'' steps' (x :: x_list') ev'
+        | None ->
+          (* Start a new evaluation if there's start vars left in the list. *)
+          match x_list' with
+          | [] ->
+            lazy_logger `trace (fun () ->
+              "Evaluation complete and no more variables left; stop.");
+            {
+              gen_answers = answers'';
+              gen_num_answers = List.length answers'';
+              gen_is_complete = prev_complete;
+            }
+          | (x' :: _) ->
+            lazy_logger `trace (fun () ->
+              "Evaluation complete with target variables left; restart evaluation.");
+            let ev' =
+              Interpreter.start
+                ~exploration_policy:gen_ref.gen_exploration_policy
+                gen_ref.gen_cfg
+                gen_ref.gen_program
+                x'
+            in
+            recurse prev_complete answers'' 0 x_list' ev'
+    end
+  ;;
+
+  let generate_answers
+      ?generation_callback:(generation_callback=(fun _ -> ()))
+      (gen_params : generation_parameters)
+    : generation_result =
+    take_steps
+      ~generation_callback
+      gen_params.gen_reference
+      true
+      []
+      0
+      gen_params.gen_target_vars
+      gen_params.gen_evaluation
   ;;
 
   let create
       ?exploration_policy:(exploration_policy=Interpreter.Explore_breadth_first)
+      ?max_steps:(max_steps=None)
+      ?max_results:(max_results=None)
       (conf : configuration)
       (e : expr)
-      (x : ident)
-    : generator =
+      (x_list : ident list)
+    : generation_parameters =
     let module Stack = (val conf.conf_context_model) in
     let module Analysis = Ddpa_analysis.Make(Stack) in
     let cfg =
@@ -145,81 +248,24 @@ module Make(Answer : Answer) : Generator = struct
       |> Analysis.perform_full_closure
       |> Analysis.cfg_of_analysis
     in
-    let evaluation =
-      Interpreter.start
-      ~exploration_policy:exploration_policy
-      cfg e x
+    let x = List.hd x_list in
+    lazy_logger `trace
+      (fun () -> Format.sprintf "Starting evaluation at variable %s" (show_ident x));
+    let evaluation = Interpreter.start ~exploration_policy cfg e x in
+    let gen_reference =
+      {
+        gen_program = e;
+        gen_cfg = cfg;
+        gen_exploration_policy = exploration_policy;
+        gen_max_steps = max_steps;
+        gen_max_results = max_results
+      }
     in
-    { gen_program = e;
-      gen_target = x;
-      generator_fn = Some(fun n -> take_steps e x n evaluation)
+    { 
+      gen_reference = gen_reference;
+      gen_target_vars = x_list;
+      gen_evaluation = evaluation;
     }
   ;;
 
-  let generate_answers
-      ?generation_callback:(generation_callback=fun _ _ -> ())
-      (max_steps_opt : int option)
-      (original_generator : generator)
-    : (Answer.t list * int) list * generator option =
-    lazy_logger `trace
-      (fun () -> "Generating inputs for expression:\n" ^
-                Pp_utils.pp_to_string pp_expr original_generator.gen_program
-      );
-    let max_steps_per_loop = 100 in
-    let rec loop
-        (gen : generator)
-        (steps_left_opt : int option)
-        (steps_taken : int)
-        (results : (Answer.t list * int) list)
-      : (Answer.t list * int) list * generator option =
-      let steps_to_take =
-        match steps_left_opt with
-        | None -> max_steps_per_loop
-        | Some n -> min n max_steps_per_loop
-      in
-      if steps_to_take = 0 then begin
-        (* We're quitting now! *)
-        lazy_logger `trace
-          (fun () -> "Out of generation steps; stopping with waiting generator.");
-        (results, Some gen)
-      end else begin
-        lazy_logger `trace
-          (fun () -> Printf.sprintf
-              "Taking up to %d step%s of generation in this loop" steps_to_take
-              (if steps_to_take = 1 then "" else "s"));
-        match gen.generator_fn with
-        | None ->
-          (* No further generation is possible. *)
-          lazy_logger `trace
-            (fun () -> "Generation terminated with no further results.");
-          (results, None)
-        | Some fn ->
-          let result = fn steps_to_take in
-          let steps_taken' = steps_taken + result.gen_steps in
-          lazy_logger `trace
-            (fun () -> Printf.sprintf "Took %d step%s (%d so far)"
-                result.gen_steps
-                (if result.gen_steps = 1 then "" else "s")
-                steps_taken');
-          begin
-            match result.gen_answers with
-            | _ :: _ ->
-              List.iter
-                (fun answer ->
-                  lazy_logger `trace (fun () -> "Found answer on iteration.");
-                  generation_callback answer steps_taken')
-                result.gen_answers
-            | [] ->
-              lazy_logger `trace (fun () -> "No answer found on iteration.");
-          end;
-          let results' = [(result.gen_answers, steps_taken')] @ results
-          in
-          let steps_left_opt' =
-            Option.map (fun n -> max 0 @@ n - result.gen_steps) steps_left_opt
-          in
-          loop result.gen_generator steps_left_opt' steps_taken' results'
-      end
-    in
-    loop original_generator max_steps_opt 0 []
-  ;;
 end;;
