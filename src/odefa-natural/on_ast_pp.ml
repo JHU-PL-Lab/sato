@@ -58,12 +58,23 @@ let pp_type_sig formatter t =
   | _ -> failwith "not yet implemented"
 ;;
 
-let rec pp_flat_type formatter (Predicate t) = 
-  Format.fprintf formatter "%a" pp_expr t
+let rec pp_first_order_type formatter t = 
+  match t with
+  | TypeInt -> Format.pp_print_string formatter "int"
+  | TypeBool -> Format.pp_print_string formatter "bool"
+  | TypeRecord record -> Format.fprintf formatter "%a" (pp_ident_map pp_type_decl) record
+  | TypeList t -> Format.fprintf formatter "[%a]" pp_type_decl t
+
+let rec pp_predicate formatter (Predicate p) = 
+  Format.fprintf formatter "%a" pp_expr p
 
 and pp_type_decl formatter type_decl =
   match type_decl with
-  | FirstOrderType t -> Format.fprintf formatter "%a" pp_flat_type t
+  | FirstOrderType (TypeDefinition (t', p_option)) -> 
+    if Option.is_some p_option
+    then Format.fprintf formatter "{%a | %a}" pp_first_order_type t' pp_predicate (Option.get p_option)
+    else Format.fprintf formatter "{%a}" pp_first_order_type t'
+
   | HigherOrderType (t1, t2) ->  Format.fprintf formatter "(%a -> %a)" pp_type_decl t1 pp_type_decl t2
 ;;
   
@@ -238,6 +249,11 @@ and pp_expr formatter expr =
       Format.fprintf formatter "assert %a" pp_expr e
     else
       Format.fprintf formatter "assert (%a)" pp_expr e
+  | Assume e ->
+    if expr_precedence_cmp expr e < 0 then
+      Format.fprintf formatter "assume %a" pp_expr e
+    else
+      Format.fprintf formatter "assume (%a)" pp_expr e
 ;;
 
 let show_ident = Pp_utils.pp_to_string pp_ident;;

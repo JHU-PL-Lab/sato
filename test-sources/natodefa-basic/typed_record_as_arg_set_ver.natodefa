@@ -1,0 +1,5 @@
+let isPos n = n > 0 in
+let isNeg n = n < 0 in
+let access_record (r : {a = { int | isPos } , b = bool}) : { int | isNeg } = r.a
+in
+access_record

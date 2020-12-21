@@ -180,6 +180,8 @@ let use_occurrences expression =
       | Binary_operation_body (left_operand, _, right_operand) ->
         Var_set.of_list [left_operand; right_operand]
       | Abort_body -> Var_set.empty
+      | Assume_body variable ->
+        Var_set.singleton variable
   )
   |> List.fold_left Var_set.union Var_set.empty
 ;;
@@ -252,6 +254,7 @@ and check_scope_clause_body
   | Binary_operation_body (Var(x1,_), _, Var(x2,_)) ->
     _bind_filter bound site_x [x1;x2]
   | Abort_body -> []
+  | Assume_body (Var (x, _)) -> _bind_filter bound site_x [x]
 ;;
 
 (** Returns a list of pairs of variables. The pair represents a violation on the
@@ -315,7 +318,8 @@ and check_abort_clauses_in_clause
   | Appl_body _
   | Match_body _
   | Projection_body _
-  | Binary_operation_body _ -> aborts
+  | Binary_operation_body _ 
+  | Assume_body _ -> aborts
 ;;
 
 let abort_clause_violations expression =
@@ -452,6 +456,7 @@ and map_clause_body_vars (fn : Var.t -> Var.t) (b : clause_body)
   | Binary_operation_body (x1, op, x2) ->
     Binary_operation_body (fn x1, op, fn x2)
   | Abort_body -> Abort_body
+  | Assume_body x -> Assume_body (fn x)
 
 and map_value_vars (fn : Var.t -> Var.t) (v : value) : value =
   match (v : value) with
@@ -491,7 +496,8 @@ and transform_exprs_in_clause_body (fn : expr -> expr) (body : clause_body)
   | Match_body (_, _)
   | Projection_body (_, _)
   | Binary_operation_body (_, _, _)
-  | Abort_body -> body
+  | Abort_body
+  | Assume_body _ -> body
 
 and transform_exprs_in_value (fn : expr -> expr) (v : value) : value =
   match (v : value) with

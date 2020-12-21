@@ -51,6 +51,7 @@ rule token = parse
   | "xnor"                           { KEYWORD_XNOR }
   | "xor"                            { KEYWORD_XOR }
   | "any"                            { KEYWORD_ANY }
+  | "assume"                         { KEYWORD_ASSUME }
   | "_"                              { UNDERSCORE }
   | "-"? digit+ as n                 { INT_LITERAL (int_of_string n) }
   | "+"                              { PLUS }

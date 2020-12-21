@@ -1,0 +1,3 @@
+let gt10 x = x > 10 in
+let sc (x : { int | gt10 } ) : int = true in
+sc

@@ -812,7 +812,36 @@ struct
         (* TODO: Replace with mathematically sound return value *)
         return (List.make (List.length symbol_list) abort_symbol)
       end;
-
+      
+      (* ### Assume rule (not a written rule yet) ### *)
+      begin
+        (* Lookup stack needs to be a singleton, since assume doesn't return
+           function values (which are the only valid non-bottom elements) *)
+        let%orzero [lookup_var] = lookup_stack in
+        (* This must be an assume clause assigning to that variable. *)
+        let%orzero Unannotated_clause(
+            Abs_clause (Abs_var x, Abs_assume_body (Abs_var x'))) =
+          acl1
+        in
+        [%guard equal_ident x lookup_var];
+        trace_rule "Assume" x;
+        let%bind () = record_visited_clause x in
+        (* Look up actual variable *)
+        let%bind symbol_list = recurse [x'] acl1 relstack in
+        let%orzero [symbol_1] = symbol_list in
+        (* Add assume constraint (x' = true) *)
+        let%bind () = record_constraint @@
+          Constraint.Constraint_value (symbol_1, Constraint.Bool true)
+        in
+        (* let%bind () = record_constraint @@
+          Constraint.Constraint_value_clause (symbol_1, Constraint.Bool true)
+        in *)
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "assume rule discovered that %s = true"
+            (show_symbol symbol_1));
+        return [symbol_1]
+      end;
+      
       (* Start-of-block and end-of-block handling (not actually a rule) *)
       (
         let%orzero (Start_clause _ | End_clause _) = acl1 in

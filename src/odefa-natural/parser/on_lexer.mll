@@ -61,6 +61,7 @@ rule token = parse
 | "match"              { MATCH }
 | "end"                { END }
 | "assert"             { ASSERT }
+| "assume"             { ASSUME }
 | "+"                  { PLUS }
 | "-"                  { MINUS }
 | "*"                  { ASTERISK }

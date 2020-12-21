@@ -121,6 +121,7 @@ and lift_clause_body b =
   | Binary_operation_body(x1,op,x2) ->
     Abs_binary_operation_body(lift_var x1, op, lift_var x2)
   | Abort_body -> Abs_abort_body
+  | Assume_body x -> Abs_assume_body (lift_var x)
 
 and lift_value v =
   match v with

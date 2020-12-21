@@ -197,6 +197,7 @@ let rec rename_variable
   | List es -> List (List.map recurse es)
   | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
   | Assert e -> Assert (recurse e)
+  | Assume e -> Assume (recurse e)
 ;;
 
 (** This function alphatizes an entire expression.  If a variable is defined
@@ -469,6 +470,9 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
       | Assert e ->
         let%bind e', seen_declared' = walk e seen_declared in
         return (Assert e', seen_declared')
+      | Assume e ->
+        let%bind e', seen_declared' = walk e seen_declared in
+        return (Assume e', seen_declared')
     in
     return (expr', seen_declared')
   in
@@ -949,6 +953,12 @@ and flatten_expr
     in
     let all_clauses = (flattened_exprs @ [alias_clause; cond_clause]) in
     return (all_clauses, assert_result)
+  | Assume e ->
+    let%bind (flattened_exprs, last_var) = flatten_expr e in
+    let%bind assume_var = fresh_var "assume" in
+    let%bind () = add_odefa_natodefa_mapping assume_var expr in
+    let new_clause = Ast.Clause(assume_var, Assume_body last_var) in
+    return (flattened_exprs @ [new_clause], assume_var)
 ;;
 
 let debug_transform_on

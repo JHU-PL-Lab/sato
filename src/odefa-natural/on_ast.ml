@@ -42,12 +42,23 @@ type type_sig =
   | VariantType of variant_label
 [@@ deriving eq, ord, show]
 
-and predicate = Predicate of expr
+type first_order_type = 
+  | TypeInt
+  | TypeBool
+  | TypeRecord of type_decl Ident_map.t
+  | TypeList of type_decl
+[@@ deriving eq, ord, show]
+
+and first_order_constrained_type = 
+  TypeDefinition of first_order_type * predicate option 
 [@@ deriving eq, ord, show]
 
 and type_decl = 
-  | FirstOrderType of predicate
+  | FirstOrderType of first_order_constrained_type
   | HigherOrderType of type_decl * type_decl
+[@@ deriving eq, ord, show]
+
+and predicate = Predicate of expr
 [@@ deriving eq, ord, show]
 
 and funsig = Funsig of ident * ident list * expr
@@ -81,7 +92,7 @@ and expr =
   | Match of expr * (pattern * expr) list
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
-  | Assert of expr
+  | Assert of expr | Assume of expr
 [@@deriving eq, ord]
 ;;
 
@@ -110,7 +121,7 @@ let expr_precedence expr =
   | ListCons _ -> 6
   | Plus _ | Minus _ -> 7
   | Times _ | Divide _ | Modulus _ -> 8
-  | Assert _ | VariantExpr _ -> 9
+  | Assert _ | Assume _ | VariantExpr _ -> 9
   | Appl _ -> 10
   | RecordProj _ -> 11
   | Int _ | Bool _ | Input | Var _ | List _ | Record _ -> 12

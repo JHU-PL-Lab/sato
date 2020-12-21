@@ -67,7 +67,8 @@ let successor_var (e : expr) (x : Ident.t) : Ident.t =
           | Match_body (_, _)
           | Projection_body (_, _)
           | Binary_operation_body (_, _, _)
-          | Abort_body -> []
+          | Abort_body 
+          | Assume_body _ -> []
           | Conditional_body (_, e1, e2) ->
             e1 :: e2 :: expr_flatten e1 @ expr_flatten e2
        )

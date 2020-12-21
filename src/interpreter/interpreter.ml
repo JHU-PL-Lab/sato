@@ -69,6 +69,7 @@ and var_replace_clause_body fn r =
     Projection_body(fn x,l)
   | Binary_operation_body(x1,op,x2) -> Binary_operation_body(fn x1, op, fn x2)
   | Abort_body -> Abort_body
+  | Assume_body(x) -> Assume_body(fn x)
 
 and var_replace_value fn v =
   match v with
@@ -330,6 +331,34 @@ let rec evaluate
         Environment.add env x None;
         clause_callback c;
         recurse env (Some x) t
+      | Assume_body x' -> 
+      (* TODO: What to do here? Do nothing? *)
+        let v_opt = lookup env x' in
+        begin
+          match v_opt with
+          | Some v -> 
+            begin
+              match v with
+              | Value_bool b ->
+                if b 
+                then
+                  (Environment.add env x v_opt;
+                  clause_callback c;
+                  recurse env (Some x) t)
+                else raise @@ Evaluation_failure
+                (Printf.sprintf
+                  "assume failed at %s; the assumption is false."
+                  (show_var x))
+              | _ -> raise @@ Evaluation_failure
+                (Printf.sprintf
+                  "assume failed at %s; the value is in fact %s."
+                  (show_var x) (show_value v))
+            end
+            | None -> raise @@ Evaluation_failure
+              (Printf.sprintf
+                "assume failed at %s; cannot assume undefined value."
+                (show_var x))
+        end
     end
 ;;
 

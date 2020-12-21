@@ -48,7 +48,8 @@ and enum_all_functions_in_body body : function_value Enum.t =
   | Binary_operation_body (_, _, _)
   | Match_body (_, _)
   | Projection_body (_, _)
-  | Abort_body ->
+  | Abort_body 
+  | Assume_body _ ->
     Enum.empty ()
 
 and enum_all_functions_in_value value : function_value Enum.t =
@@ -97,6 +98,7 @@ and enum_all_aborts_in_clause clause : (ident * abort_value) Enum.t =
   | Value_body v ->
     enum_all_aborts_in_value v
   | Abort_body (* Aborts are enumerated in conditionals *)
+  | Assume_body _
   | Var_body _
   | Input_body
   | Appl_body (_, _)

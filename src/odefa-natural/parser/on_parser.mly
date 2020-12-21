@@ -88,6 +88,7 @@ let add_record_entry lbl value old_record =
 %token MATCH
 %token END
 %token ASSERT
+%token ASSUME
 %token PLUS
 %token MINUS
 %token ASTERISK
@@ -113,7 +114,7 @@ let add_record_entry lbl value old_record =
 %right DOUBLE_COLON           /* :: */
 %left PLUS MINUS              /* + - */
 %left ASTERISK SLASH PERCENT  /* * / % */
-%right ASSERT prec_variant    /* Asserts and variants */
+%right ASSERT ASSUME prec_variant    /* Asserts, Assumes, and variants */
 %right ARROW                  /* -> for type declaration */
 
 %start <On_ast.expr> prog
@@ -141,6 +142,8 @@ expr:
       { $1 }
   | ASSERT expr
       { Assert($2) }
+  | ASSUME expr
+      { Assume($2) }
   | variant_label expr %prec prec_variant
       { VariantExpr($1, $2) }
   | expr ASTERISK expr
@@ -186,16 +189,44 @@ expr:
   | LET OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN EQUALS expr IN expr %prec prec_let
       { LetWithType($3, $8, $10, $5) }
   | LET fun_sig IN expr %prec prec_fun
-      { LetFun($2, $4)}
+      { LetFun($2, $4) }
   | LET fun_sig_with_type IN expr %prec prec_fun
       { new_Let_fun_with_type $2 $4 }
   | MATCH expr WITH PIPE? match_expr_list END
       { Match($2, $5) }
 ;
 
-/* { x | expr } */ 
+/* Question: Can modifier only be placed on first-order types? */
+/* 
+   type decl:
+   int, bool, etc.
+   int -> int
+   int -> { int | isPositive }
+ */
 type_decl:
- | OPEN_BRACE ident_decl PIPE expr CLOSE_BRACE { FirstOrderType (Predicate $4) }
+  | basic_types { FirstOrderType (TypeDefinition ($1, None)) }
+  | type_decl ARROW type_decl { HigherOrderType ($1, $3) }
+  | OPEN_BRACE basic_types PIPE expr CLOSE_BRACE { FirstOrderType (TypeDefinition ($2, Some (Predicate $4))) }
+  | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
+
+record_type:
+  | OPEN_BRACE record_type_body CLOSE_BRACE
+      { TypeRecord $2 }
+  | OPEN_BRACE CLOSE_BRACE
+      { TypeRecord (Ident_map.empty) }
+
+record_type_body:
+  | label EQUALS type_decl
+      { new_record $1 $3 }
+  | label EQUALS type_decl COMMA record_type_body
+      { add_record_entry $1 $3 $5 }
+;
+
+basic_types:
+  | INT { TypeInt }
+  | BOOL_KEYWORD { TypeBool }
+  | record_type { $1 }
+  | OPEN_BRACKET type_decl CLOSE_BRACKET { TypeList $2 }
 
 /* let foo x = ... */
 fun_sig:

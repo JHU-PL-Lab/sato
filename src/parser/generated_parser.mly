@@ -68,6 +68,7 @@ let rec mark_dupes_record_labels lbls_seen r_list =
 %token KEYWORD_XNOR
 %token KEYWORD_XOR
 %token KEYWORD_ANY
+%token KEYWORD_ASSUME
 %token UNDERSCORE
 %token PLUS
 %token MINUS
@@ -126,6 +127,8 @@ clause_body:
       { Input_body }
   | KEYWORD_ABORT
       { Abort_body }
+  | KEYWORD_ASSUME variable
+      { Assume_body $2 }
   | variable
       { Var_body($1) }
   | variable variable

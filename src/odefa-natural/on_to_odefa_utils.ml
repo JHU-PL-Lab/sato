@@ -161,6 +161,9 @@ let rec env_out_transform_expr
     | On_ast.Assert e ->
       let (e', out) = recurse env e in
       (On_ast.Assert e', out)
+    | On_ast.Assume e ->
+      let (e', out) = recurse env e in
+      (On_ast.Assume e', out)
   in
   let (e'', out'') = transformer recurse env e' in
   (e'', combiner out' out'')

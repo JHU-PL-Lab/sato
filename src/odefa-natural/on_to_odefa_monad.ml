@@ -381,6 +381,9 @@ let rec m_env_out_transform_expr
     | On_ast.Assert e ->
       let%bind (e', out) = recurse env e in
       return @@ (On_ast.Assert e', out)
+    | On_ast.Assume e ->
+      let%bind (e', out) = recurse env e in
+      return @@ (On_ast.Assume e', out)
   in
   let%bind (e'', out'') = transformer recurse env e' in
   return (e'', combiner out' out'')
