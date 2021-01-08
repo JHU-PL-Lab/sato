@@ -142,6 +142,7 @@ and clause_body =
   | Projection_body of var * ident
   | Binary_operation_body of var * binary_operator * var
   | Abort_body
+  | Assume_body of var
 [@@deriving eq, ord, to_yojson]
 
 (** A type to represent clauses. *)

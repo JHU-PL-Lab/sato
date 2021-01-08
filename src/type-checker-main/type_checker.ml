@@ -6,11 +6,13 @@ open Odefa_natural;;
 open Odefa_parser;;
 
 open Odefa_answer_generation;;
+open Odefa_symbolic_interpreter;;
 
 let logger = Logger_utils.make_logger "Type_checker";;
 let lazy_logger = Logger_utils.make_lazy_logger "Type_checker";;
 
 exception CommandLineParseFailure of string;;
+exception NoOperationsInProgram;;
 exception TypeCheckComplete;;
 
 exception GenerationComplete;;
@@ -37,6 +39,7 @@ let parse_program
           Odefa_instrumentation.instrument_odefa pre_inst_ast
         in
         Ast_wellformedness.check_wellformed_expr odefa_ast;
+        print_endline @@ Ast_pp.show_expr odefa_ast;
         (odefa_ast, on_odefa_maps)
       end
     | _ ->
@@ -83,6 +86,21 @@ let print_results
     print_endline "Further control flows may exist."
 ;;
 
+
+let get_target_vars
+    (args: Type_checker_parser.type_checker_args)
+    (expr : Ast.expr)
+  : Ast.ident list =
+  match args.tc_target_var with
+  | Some v -> [v]
+  | None ->
+    begin
+      match Interpreter_environment.list_instrument_conditionals expr with
+      | [] -> raise NoOperationsInProgram
+      | target_list -> target_list
+    end
+;;
+
 let run_error_check
     (module Error_generator : Generator.Generator)
     (args : Type_checker_parser.type_checker_args)
@@ -93,6 +111,7 @@ let run_error_check
   Ans.set_odefa_natodefa_map on_odefa_maps;
   try
     (* Prepare and create generator *)
+    let target_vars = get_target_vars args expr in
     let results_remaining = ref args.tc_maximum_results in
     let total_errors = ref 0 in
     let generator =
@@ -100,7 +119,7 @@ let run_error_check
         ~exploration_policy:args.tc_exploration_policy
         args.tc_generator_configuration
         expr
-        args.tc_target_var
+        target_vars
     in
     let generation_callback
       (type_errors : Ans.t) (steps: int) : unit =
@@ -127,7 +146,10 @@ let run_error_check
     with GenerationComplete ->
       print_endline "Errors found; terminating";
   (* Exception for when the user inputs a target var not in the program *)
-  with Odefa_symbolic_interpreter.Interpreter.Invalid_query msg ->
+  with
+  | NoOperationsInProgram ->
+    print_endline "No error-able operations found; terminating."
+  | Interpreter.Invalid_query msg ->
     prerr_endline msg
 ;;
 

@@ -13,6 +13,29 @@ let new_record lbl value =
   Ident_map.singleton key value
 ;;
 
+let new_rec_fun_with_type fun_sig_and_type let_body =
+  let fun_sig_list = List.map fst fun_sig_and_type in 
+  let fun_type_list = List.map snd fun_sig_and_type in
+  LetRecFunWithType (fun_sig_list, let_body, fun_type_list)
+;;
+
+let new_Let_fun_with_type fun_sig_and_type let_body =
+  let fun_sig, fun_type = fun_sig_and_type in
+  LetFunWithType (fun_sig, let_body, fun_type)
+;;
+
+let new_fun_with_type fun_name typed_param_list return_type fun_body = 
+  let param_list = List.map fst typed_param_list in
+  let type_list = List.map snd typed_param_list in
+  let function_type_p = 
+    match type_list with
+    | [] -> failwith "undefined"
+    | _ -> List.fold_right
+        (fun acc -> fun t -> HigherOrderType (acc, t)) type_list return_type
+  in
+  (Funsig (fun_name, param_list, fun_body), function_type_p)
+;; 
+
 let add_record_entry lbl value old_record =
   let (Label k) = lbl in
   let key =
@@ -25,6 +48,7 @@ let add_record_entry lbl value old_record =
   in
   Ident_map.add key value old_record
 ;;
+
 %}
 
 %token <string> IDENTIFIER
@@ -42,6 +66,7 @@ let add_record_entry lbl value old_record =
 %token EQUALS
 %token ARROW
 %token DOT
+%token COLON
 %token DOUBLE_COLON
 %token UNDERSCORE
 %token PIPE
@@ -63,6 +88,7 @@ let add_record_entry lbl value old_record =
 %token MATCH
 %token END
 %token ASSERT
+%token ASSUME
 %token PLUS
 %token MINUS
 %token ASTERISK
@@ -88,7 +114,8 @@ let add_record_entry lbl value old_record =
 %right DOUBLE_COLON           /* :: */
 %left PLUS MINUS              /* + - */
 %left ASTERISK SLASH PERCENT  /* * / % */
-%right ASSERT prec_variant    /* Asserts and variants */
+%right ASSERT ASSUME prec_variant    /* Asserts, Assumes, and variants */
+%right ARROW                  /* -> for type declaration */
 
 %start <On_ast.expr> prog
 %start <On_ast.expr option> delim_expr
@@ -115,6 +142,8 @@ expr:
       { $1 }
   | ASSERT expr
       { Assert($2) }
+  | ASSUME expr
+      { Assume($2) }
   | variant_label expr %prec prec_variant
       { VariantExpr($1, $2) }
   | expr ASTERISK expr
@@ -153,23 +182,75 @@ expr:
       { Function($2, $4) }
   | LET REC fun_sig_list IN expr %prec prec_fun
       { LetRecFun($3, $5) }
+  | LET REC fun_sig_with_type_list IN expr %prec prec_let 
+      { new_rec_fun_with_type $3 $5 }
   | LET ident_decl EQUALS expr IN expr %prec prec_let
       { Let($2, $4, $6) }
+  | LET OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN EQUALS expr IN expr %prec prec_let
+      { LetWithType($3, $8, $10, $5) }
   | LET fun_sig IN expr %prec prec_fun
-      { LetFun($2, $4)}
+      { LetFun($2, $4) }
+  | LET fun_sig_with_type IN expr %prec prec_fun
+      { new_Let_fun_with_type $2 $4 }
   | MATCH expr WITH PIPE? match_expr_list END
       { Match($2, $5) }
 ;
+
+/* Question: Can modifier only be placed on first-order types? */
+/* 
+   type decl:
+   int, bool, etc.
+   int -> int
+   int -> { int | isPositive }
+ */
+type_decls:
+  | type_decl { [$1] }
+  | type_decl PIPE type_decls { $1 :: $3 }
+
+type_decl:
+  | basic_types { FirstOrderType (TypeDefinition ($1, None)) }
+  | type_decl ARROW type_decl { HigherOrderType ($1, $3) }
+  | OPEN_BRACE basic_types PIPE expr CLOSE_BRACE { FirstOrderType (TypeDefinition ($2, Some (Predicate $4))) }
+  | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
+
+record_type:
+  | OPEN_BRACE record_type_body CLOSE_BRACE
+      { TypeRecord $2 }
+  | OPEN_BRACE CLOSE_BRACE
+      { TypeRecord (Ident_map.empty) }
+
+record_type_body:
+  | label EQUALS type_decl
+      { new_record $1 $3 }
+  | label EQUALS type_decl COMMA record_type_body
+      { add_record_entry $1 $3 $5 }
+;
+
+basic_types:
+  | INT { TypeInt }
+  | BOOL_KEYWORD { TypeBool }
+  | record_type { $1 }
+  | OPEN_BRACKET type_decl CLOSE_BRACKET { TypeList $2 }
 
 /* let foo x = ... */
 fun_sig:
   | ident_decl param_list EQUALS expr
       { Funsig ($1, $2, $4) }
 
+/* let foo (x : int) ... : int = ... */
+fun_sig_with_type:
+  | ident_decl param_list_with_type COLON type_decl EQUALS expr
+      { new_fun_with_type $1 $2 $4 $6 }
+
 /* let rec foo x y = ... with bar a b = ... in ... */
 fun_sig_list:
   | fun_sig { [$1] }
   | fun_sig WITH fun_sig_list { $1 :: $3 }
+
+/* let rec foo (x : int) (y : bool) ... : (bool -> bool) = ... with bar (a : int) (b : int) : ... = ... in ... */
+fun_sig_with_type_list:
+  | fun_sig_with_type { [$1] }
+  | fun_sig_with_type WITH fun_sig_with_type_list { $1 :: $3 }
 
 /* (fun x -> x) y */
 appl_expr:
@@ -203,6 +284,15 @@ primary_expr:
 ;
 
 /* **** Idents + labels **** */
+
+param_list_with_type:
+  | param_with_type param_list_with_type { $1 :: $2 }
+  | param_with_type { [$1] }
+;
+
+param_with_type:
+  | OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN { ($2, $4) }
+;
 
 param_list:
   | ident_decl param_list { $1 :: $2 }

@@ -1,0 +1,6 @@
+let record_constraint re = 
+    re.a >= 0
+in
+let isTrue b = not b in
+let test (test_record : {{a = int, b = bool} | record_constraint}) : { bool | isTrue } = (test_record.a < 0) in
+test

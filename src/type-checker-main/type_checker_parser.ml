@@ -13,7 +13,7 @@ open Odefa_symbolic_interpreter.Interpreter;;
 
 type type_checker_args = {
   tc_filename : string;
-  tc_target_var : Ident.t;
+  tc_target_var : Ident.t option;
   tc_generator_configuration : Generator_configuration.configuration;
   tc_maximum_steps : int option;
   tc_maximum_results : int option;
@@ -35,7 +35,12 @@ let parse_args () : type_checker_args =
     { tc_generator_configuration = conf;
       tc_filename = filename;
       tc_target_var =
-        Ident(insist "Target point" parsers.parse_target_point);
+        begin
+          match parsers.parse_target_point.BatOptParse.Opt.option_get () with
+          | Some name -> Some (Ident name)
+          | None -> None
+        end;
+        (* Ident(insist "Target point" parsers.parse_target_point); *)
       tc_maximum_steps =
         parsers.parse_max_steps.BatOptParse.Opt.option_get ();
       tc_maximum_results =

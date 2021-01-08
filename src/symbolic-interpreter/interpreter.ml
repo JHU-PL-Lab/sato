@@ -8,6 +8,7 @@ open Ast_pp;;
 open Ddpa_abstract_ast;;
 open Ddpa_graph;;
 open Ddpa_utils;;
+open Interpreter_environment;;
 open Interpreter_types;;
 open Logger_utils;;
 
@@ -19,221 +20,33 @@ type exploration_policy =
   | Explore_least_relative_stack_repetition
 ;;
 
-(** This type describes the information which must be in context during lookup. *)
-type lookup_environment = {
-  le_cfg : ddpa_graph;
-  (** The DDPA CFG to use during lookup. *)
+(* Record of all visited clauses in a program *)
 
-  le_clause_mapping : clause Ident_map.t;
-  (** A mapping from identifiers to the concrete clauses which define them. *)
+module Ident_hashtbl = Hashtbl.Make(Ident);;
 
-  le_clause_predecessor_mapping : clause Ident_map.t;
-  (** A mapping from clauses (represented by the identifier they define) to the
-      concrete clauses which appear immediately *before* them.  The first clause
-      in each expression does not appear in this map. *)
+let clause_visits_hashtbl : int Ident_hashtbl.t = Ident_hashtbl.create 20;;
 
-  le_function_parameter_mapping : function_value Ident_map.t;
-  (** A mapping from function parameter variables to the functions which declare
-      them. *)
+(* let pp_ident_hashtbl = Pp_utils.pp_map pp_ident Format.pp_print_int Ident_hashtbl.enum;;
+let show_ident_hashtbl = Pp_utils.pp_to_string pp_ident_hashtbl;; *)
 
-  le_function_return_mapping : function_value Ident_map.t;
-  (** A mapping from function return variables to the functions which declare
-      them. *)
-
-  le_abort_mapping : abort_value Ident_map.t;
-  (** A mapping from abort clause identifiers to identifier information
-    associated with the error. *)
-
-  le_first_var : Ident.t;
-  (** The identifier which represents the first defined variable in the
-      program. *)
-}
-[@@deriving show]
-;;
-
-(* Enumerate all functions in a program *)
-
-let rec enum_all_functions_in_expr expr : function_value Enum.t =
+(*
+let rec enum_all_clauses_in_expr expr : unit =
   let Expr(clauses) = expr in
-  Enum.concat @@ Enum.map enum_all_functions_in_clause @@ List.enum clauses
+  Enum.iter (fun clause -> enum_all_clauses_in_clause clause) @@ List.enum clauses
 
-and enum_all_functions_in_clause clause : function_value Enum.t =
-  let Clause(_, body) = clause in
-  enum_all_functions_in_body body
-
-and enum_all_functions_in_body body : function_value Enum.t =
-  match body with
-  | Value_body v ->
-    enum_all_functions_in_value v
-  | Var_body _
-  | Input_body
-  | Appl_body (_, _)
-  | Binary_operation_body (_, _, _) ->
-    Enum.empty ()
-  | Conditional_body (_, e1, e2) ->
-    Enum.append
-      (enum_all_functions_in_expr e1) (enum_all_functions_in_expr e2)
-  | Match_body (_, _)
-  | Projection_body (_, _)
-  | Abort_body ->
-    Enum.empty ()
-
-and enum_all_functions_in_value value : function_value Enum.t =
-  match value with
-  | Value_record _ -> Enum.empty ()
-  | Value_function(Function_value(_,e) as f) ->
-    Enum.append (Enum.singleton f) @@ enum_all_functions_in_expr e
-  | Value_int _
-  | Value_bool _ -> Enum.empty ()
-;;
-
-(* Enumerate all aborts in a program *)
-
-let rec enum_all_aborts_in_expr expr : (ident * abort_value) Enum.t =
-  let Expr clauses = expr in
-  Enum.concat @@ Enum.map enum_all_aborts_in_clause @@ List.enum clauses
-
-and enum_all_aborts_in_clause clause : (ident * abort_value) Enum.t =
-  let Clause (Var (cls_id, _), body) = clause in
-  match body with
-  | Conditional_body (Var (pred_id, _), e1, e2) ->
-    begin
-      let enum_ret_abort e branch =
-        let Expr(c_list) = e in
-        match List.Exceptionless.last c_list with
-        | None -> Enum.empty ()
-        | Some cls ->
-          begin
-            match cls with
-            | Clause (Var (abort_id, _), Abort_body) ->
-              let abort_val = {
-                abort_conditional_ident = cls_id;
-                abort_predicate_ident = pred_id;
-                abort_conditional_branch = branch;
-              }
-              in
-              Enum.singleton (abort_id, abort_val)
-            | _ -> Enum.empty ()
-          end
-      in
-      Enum.empty ()
-      |> Enum.append (enum_ret_abort e1 true)
-      |> Enum.append (enum_ret_abort e2 false)
-      |> Enum.append (enum_all_aborts_in_expr e1)
-      |> Enum.append (enum_all_aborts_in_expr e2)
-    end
-  | Value_body v ->
-    enum_all_aborts_in_value v
-  | Abort_body (* Aborts are enumerated in conditionals *)
-  | Var_body _
-  | Input_body
-  | Appl_body (_, _)
-  | Binary_operation_body (_, _, _)
-  | Match_body (_, _)
-  | Projection_body (_, _) ->
-    Enum.empty ()
-
-and enum_all_aborts_in_value value : (ident * abort_value) Enum.t =
-  match value with
-  | Value_function (Function_value (_, e)) ->
-    enum_all_aborts_in_expr e
-  | Value_int _ | Value_bool _ | Value_record _ ->
-    Enum.empty ()
-;;
-
-(**
-   Given a program and its corresponding CFG, constructs an appropriate lookup
-   environment.
+and enum_all_clauses_in_clause clause : unit =
+  let Clause(Var (ident, _), body) = clause in
+  begin
+    match body with
+    | Value_body (Value_function (Function_value (_, body))) ->
+      enum_all_clauses_in_expr body
+    | Conditional_body (_, e1, e2) ->
+      enum_all_clauses_in_expr e1;
+      enum_all_clauses_in_expr e2;
+    | _ -> ()
+  end;
+  Ident_hashtbl.add clause_visits_hashtbl ident 0
 *)
-let prepare_environment
-    (cfg : ddpa_graph)
-    (e : expr)
-  : lookup_environment =
-  let (function_parameter_mapping, function_return_mapping) =
-    enum_all_functions_in_expr e
-    |> Enum.fold
-      (fun (pm,rm) (Function_value(Var(p,_),Expr(clss)) as f) ->
-         let pm' = Ident_map.add p f pm in
-         let retvar =
-           clss
-           |> List.last
-           |> (fun (Clause(Var(r,_),_)) -> r)
-         in
-         let rm' = Ident_map.add retvar f rm in
-         (pm', rm')
-      )
-      (Ident_map.empty, Ident_map.empty)
-  in
-  let clause_mapping =
-    Ast_tools.flatten e
-    |> List.enum
-    |> Enum.fold
-      (fun map (Clause(Var(x,_),_) as c) ->
-         Ident_map.add x c map
-      )
-      Ident_map.empty
-  in
-  let rec expr_flatten ((Expr clauses) as expr) : expr list =
-    expr ::
-    (clauses
-     |>
-     List.map
-       (fun (Clause(_,b)) ->
-          match b with
-          | Value_body (Value_function(Function_value(_,e))) -> expr_flatten e
-          | Value_body _
-          | Var_body _
-          | Input_body
-          | Appl_body (_, _)
-          | Match_body (_, _)
-          | Projection_body (_, _)
-          | Binary_operation_body (_, _, _)
-          | Abort_body -> []
-          | Conditional_body (_, e1, e2) ->
-            e1 :: e2 :: expr_flatten e1 @ expr_flatten e2
-       )
-     |> List.concat
-    )
-  in
-  let clause_predecessor_mapping =
-    expr_flatten e
-    |> List.enum
-    |> Enum.map
-      (fun (Expr clauses) ->
-         let c1 = List.enum clauses in
-         let c2 = List.enum clauses in
-         Enum.drop 1 c1;
-         Enum.combine c1 c2
-         |> Enum.map
-           (fun (Clause(Var(x,_),_),clause) -> (x,clause))
-      )
-    |> Enum.concat
-    |> Ident_map.of_enum
-  in
-  let first_var =
-    e
-    |> (fun (Expr cls) -> cls)
-    |> List.first
-    |> (fun (Clause(Var(x,_),_)) -> x)
-  in
-  let abort_map =
-    enum_all_aborts_in_expr e
-    |> Ident_map.of_enum
-  in
-  let lookup_env =
-    { le_cfg = cfg;
-      le_clause_mapping = clause_mapping;
-      le_clause_predecessor_mapping = clause_predecessor_mapping;
-      le_function_parameter_mapping = function_parameter_mapping;
-      le_function_return_mapping = function_return_mapping;
-      le_abort_mapping = abort_map;
-      le_first_var = first_var;
-    }
-  in
-  lazy_logger `debug (fun () -> Printf.sprintf "Lookup environment:\n%s"
-      (show_lookup_environment lookup_env));
-  lookup_env
-;;
 
 (* The type of the symbolic interpreter's cache key.  The arguments are the
    lookup stack, the clause identifying the program point at which lookup is
@@ -330,6 +143,7 @@ type evaluation_result = {
   er_stack : Relative_stack.concrete_stack;
   er_solution : (symbol -> value option);
   er_aborts : abort_value Symbol_map.t;
+  er_visited : Ident_set.t;
 };;
 
 exception Invalid_query of string;;
@@ -447,6 +261,38 @@ struct
       return ()
   ;;
 
+  let increment_clause_visit_count acl =
+    match acl with
+    | Unannotated_clause unannotated_cls ->
+      let (Abs_clause (Abs_var ident, _)) = unannotated_cls in
+      Ident_hashtbl.modify_opt
+        ident
+        (function Some v -> Some (v + 1) | None -> Some 1)
+        clause_visits_hashtbl
+    | _ -> ()
+  ;;
+
+  (* let gather_stop_vars cfg acls =
+    let rec loop s =
+      match s with
+      | [] -> []
+      | acl :: acls' ->
+        begin
+          match acl with
+          | Unannotated_clause (Abs_clause (x, _))
+          | Start_clause x | End_clause x ->
+            let (Abs_var ident) = x in
+            ident :: loop acls'
+          | Binding_enter_clause _
+          | Binding_exit_clause _
+          | Nonbinding_enter_clause _ ->
+            let acl_succs = List.of_enum @@ succs acl cfg in
+            (loop acl_succs) @ (loop acls')
+        end
+    in
+    loop acls
+  ;; *)
+
   let rec rule_computations
       (env : lookup_environment)
       (lookup_stack : Ident.t list)
@@ -473,6 +319,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Value Discovery rule lookup *)
         trace_rule "Value Discovery" x;
+        let%bind () = record_visited_clause x in
         (* Get the value v assigned here. *)
         let%orzero (Clause (_, Value_body(v))) =
           Ident_map.find x env.le_clause_mapping
@@ -527,6 +374,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Input rule lookup *)
         trace_rule "Input" x;
+        let%bind () = record_visited_clause x in
         (* Induce the resulting formula *)
         let lookup_symbol = Symbol (lookup_var, relstack) in
         let%bind () = record_constraint @@
@@ -556,6 +404,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Binop rule lookup *)
         trace_rule "Binop" x;
+        let%bind () = record_visited_clause x in
         (* Look up operand variables *)
         let%bind symbol_list_1 = recurse [x'] acl1 relstack in
         let%bind symbol_list_2 = recurse [x''] acl1 relstack in
@@ -586,6 +435,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Pattern Match rule lookup *)
         trace_rule "Pattern Match" x;
+        let%bind () = record_visited_clause x in
         (* Look up the symbol that is being matched upon *)
         let%bind symbol_list = recurse (x' :: lookup_stack') acl1 relstack in
         let%orzero pat_symbol :: symbol_list' = symbol_list in
@@ -618,6 +468,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Value Discard rule lookup *)
         trace_rule "Value Discard" x;
+        let%bind () = record_visited_clause x in
         (* We found the variable, so toss it and keep going. *)
         let%bind symbol_list = recurse (query_element :: lookup_stack') acl1 relstack in
         let lookup_symbol = Symbol(lookup_var, relstack) in
@@ -639,6 +490,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Alias rule lookup *)
         trace_rule "Alias" x;
+        let%bind () = record_visited_clause x in
         (* Look for the alias now. *)
         let%bind symbol_list = recurse (x' :: lookup_stack') acl1 relstack in
         let%orzero alias_symbol :: symbol_list' = symbol_list in
@@ -666,6 +518,7 @@ struct
         trace_rule "Function Enter Parameter" x;
         (* Build the popped relative stack. *)
         let%orzero Abs_clause (Abs_var xr, Abs_appl_body (Abs_var xf,_)) = c in
+        let%bind () = record_visited_clause xr in
         let%orzero Some relstack' = Relative_stack.pop relstack xr in
         (* Record this wiring decision. *)
         let cc = Ident_map.find xr env.le_clause_mapping in
@@ -695,15 +548,16 @@ struct
       (* ### Function Enter Non-Local rule ### *)
       begin
         (* Grab variable from lookup stack *)
-        let%orzero x :: lookup_stack' = lookup_stack in
+        let%orzero lookup_var :: lookup_stack' = lookup_stack in
         (* This must be a binding enter clause which DOES NOT define our
             lookup variable. *)
         let%orzero Binding_enter_clause (Abs_var x'', Abs_var x', c) = acl1 in
-        [%guard not @@ equal_ident x x''];
+        [%guard not @@ equal_ident lookup_var x''];
         (* Report Function Enter Non-Local rule lookup *)
-        trace_rule "Function Enter Non-Local" x;
+        trace_rule "Function Enter Non-Local" lookup_var;
         (* Build the popped relative stack. *)
         let%orzero Abs_clause(Abs_var xr, Abs_appl_body (Abs_var xf, _)) = c in
+        let%bind () = record_visited_clause xr in
         let%orzero Some relstack' = Relative_stack.pop relstack xr in
         (* Record this wiring decision. *)
         let cc = Ident_map.find xr env.le_clause_mapping in
@@ -718,10 +572,10 @@ struct
         in
         (* Proceed to look up the variable in the context of the function's
             definition. *)
-        let%bind symbol_list = recurse (xf :: x :: lookup_stack') acl1 relstack' in
+        let%bind symbol_list = recurse (xf :: lookup_var :: lookup_stack') acl1 relstack' in
         let%orzero _ :: ret_symbol :: symbol_list' = symbol_list in
         (* Add alias constraints (as symbols have different relative stacks *)
-        let lookup_symbol = Symbol (x, relstack) in
+        let lookup_symbol = Symbol (lookup_var, relstack) in
         let%bind () = record_constraint @@
           Constraint.Constraint_alias (lookup_symbol, ret_symbol)
         in
@@ -745,6 +599,7 @@ struct
         trace_rule "Function Exit" x;
         (* Look up the definition point of the function. *)
         let%orzero Abs_clause (Abs_var xr, Abs_appl_body(Abs_var xf, _)) = c in
+        let%bind () = record_visited_clause xr in
         let%bind fun_symbol_list =
           recurse [xf] (Unannotated_clause(c)) relstack
         in
@@ -794,9 +649,12 @@ struct
         let%orzero lookup_var :: _ = lookup_stack in
         (* This must be a non-binding enter wiring node for a conditional. *)
         let%orzero Nonbinding_enter_clause (av, c) = acl1 in
-        let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, _, _)) = c in
+        let%orzero
+          Abs_clause(Abs_var xc, Abs_conditional_body(Abs_var x1, _, _)) = c
+        in
         (* Report Conditional Top rule lookup *)
         trace_rule "Conditional Top" lookup_var;
+        let%bind () = record_visited_clause xc in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
           recurse [x1] (Unannotated_clause c) relstack
@@ -825,11 +683,13 @@ struct
         let%orzero Binding_exit_clause (Abs_var x, Abs_var x', c) = acl1 in
         [%guard equal_ident x lookup_var];
         (* Ensure that we're considering the true branch *)
-        let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, e1, _)) = c in
+        let%orzero
+          Abs_clause(Abs_var xc, Abs_conditional_body(Abs_var x1, e1, _)) = c in
         let Abs_var e1ret = retv e1 in
         [%guard equal_ident x' e1ret];
         (* Report Conditional Bottom - True rule lookup *)
         trace_rule "Conditional Bottom - True" lookup_var;
+        let%bind () = record_visited_clause xc in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
           recurse [x1] (Unannotated_clause c) relstack
@@ -861,12 +721,15 @@ struct
             variable. *)
         let%orzero Binding_exit_clause (Abs_var x, Abs_var x', c) = acl1 in
         [%guard equal_ident x lookup_var];
-        (* Report Conditional Bottom - False rule lookup *)
-        trace_rule "Conditional Bottom - False" lookup_var;
         (* Ensure that we're considering the false branch *)
-        let%orzero Abs_clause(_, Abs_conditional_body(Abs_var x1, _, e2)) = c in
+        let%orzero
+          Abs_clause(Abs_var xc, Abs_conditional_body(Abs_var x1, _, e2)) = c
+        in
         let Abs_var e2ret = retv e2 in
         [%guard equal_ident x' e2ret];
+        (* Report Conditional Bottom - False rule lookup *)
+        trace_rule "Conditional Bottom - False" lookup_var;
+        let%bind () = record_visited_clause xc in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
           recurse [x1] (Unannotated_clause c) relstack
@@ -904,6 +767,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Record Projection rule lookup *)
         trace_rule "Record Projection" lookup_var;
+        let%bind () = record_visited_clause x in
         (* Look up the record itself and identify the symbol it uses. *)
         (* We ignore the stacks here intentionally; see note 1 above. *)
         let%bind symbol_list = recurse (x' :: lookup_stack') acl1 relstack in
@@ -933,8 +797,8 @@ struct
         in
         (* Report Abort rule lookup *)
         trace_rule "Abort" x;
+        let%bind () = record_visited_clause x in
         let abort_symbol = Symbol(x, relstack) in
-        (* TODO: Take care of any uncaught exceptions? *)
         (* Look up the first variable of the program *)
         let abort_value = Ident_map.find x env.le_abort_mapping in
         let%bind symbol_list = recurse [env.le_first_var] acl1 relstack in
@@ -948,7 +812,36 @@ struct
         (* TODO: Replace with mathematically sound return value *)
         return (List.make (List.length symbol_list) abort_symbol)
       end;
-
+      
+      (* ### Assume rule (not a written rule yet) ### *)
+      begin
+        (* Lookup stack needs to be a singleton, since assume doesn't return
+           function values (which are the only valid non-bottom elements) *)
+        let%orzero [lookup_var] = lookup_stack in
+        (* This must be an assume clause assigning to that variable. *)
+        let%orzero Unannotated_clause(
+            Abs_clause (Abs_var x, Abs_assume_body (Abs_var x'))) =
+          acl1
+        in
+        [%guard equal_ident x lookup_var];
+        trace_rule "Assume" x;
+        let%bind () = record_visited_clause x in
+        (* Look up actual variable *)
+        let%bind symbol_list = recurse [x'] acl1 relstack in
+        let%orzero [symbol_1] = symbol_list in
+        (* Add assume constraint (x' = true) *)
+        let%bind () = record_constraint @@
+          Constraint.Constraint_value (symbol_1, Constraint.Bool true)
+        in
+        (* let%bind () = record_constraint @@
+          Constraint.Constraint_value_clause (symbol_1, Constraint.Bool true)
+        in *)
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "assume rule discovered that %s = true"
+            (show_symbol symbol_1));
+        return [symbol_1]
+      end;
+      
       (* Start-of-block and end-of-block handling (not actually a rule) *)
       (
         let%orzero (Start_clause _ | End_clause _) = acl1 in
@@ -970,7 +863,7 @@ struct
     let mon_val = lookup env lookup_stack' acl0' relstack' in
     let cache_key = Cache_lookup (lookup_stack', acl0', relstack') in
     cache cache_key mon_val
-
+  
   and lookup
       (env : lookup_environment)
       (lookup_stack : Ident.t list)
@@ -978,6 +871,7 @@ struct
       (relstack : Relative_stack.t)
     : (symbol list) M.m =
     let open M in
+    increment_clause_visit_count acl0;
     let%bind acl1 = pick @@ preds acl0 env.le_cfg in
     let%bind () = pause () in
     _trace_log_lookup lookup_stack relstack acl0 acl1;
@@ -1012,7 +906,13 @@ struct
          the concrete stack it produces.  The symbol is only used to generate
          formulae, which we'll get from the completed computations. *)
       let%bind _ =
-        lookup env [initial_lookup_var] acl Relative_stack.empty
+        (* We need to start from the successor of the program point, since the
+           lookup itself starts at the previous clause.  The successor clause
+           will either be another unannotated clause or a end clause, so only
+           a single successor is picked with the same call stack. *)
+        let%bind acl' = pick @@ succs acl cfg in
+        lookup env [initial_lookup_var] acl' Relative_stack.empty
+        (* lookup env [initial_lookup_var] acl Relative_stack.empty *)
       in
       return ()
     in
@@ -1036,13 +936,30 @@ struct
               (Solver.show eval_result.M.er_solver)
           )
       end;
+      (* print_endline @@ show_ident_hashtbl clause_visits_hashtbl; *)
       let solver = eval_result.M.er_solver in
       let errors = eval_result.M.er_abort_points in
+      (*
+      let visited_clauses =
+        Symbol_map.fold
+          (fun k v accum -> 
+            let (Symbol (abort_ident, _)) = k in
+            let cond_ident = v.abort_conditional_ident in
+            accum
+            |> Ident_set.add abort_ident
+            |> Ident_set.add cond_ident
+          )
+          errors
+          Ident_set.empty
+      in
+      *)
+      let visited_clauses = eval_result.M.er_visited_clauses in
       Some {
         er_solver = solver;
         er_stack = stack;
         er_solution = get_value;
         er_aborts = errors;
+        er_visited = visited_clauses;
       }
     | None ->
       begin

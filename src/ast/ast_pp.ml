@@ -102,6 +102,8 @@ and pp_clause_body formatter b =
       pp_var x1 pp_binary_operator op pp_var x2
   | Abort_body ->
     Format.pp_print_string formatter "abort"
+  | Assume_body x ->
+    Format.fprintf formatter "assume %a" pp_var x
 
 and pp_clause formatter c =
   match c with

@@ -546,7 +546,6 @@ struct
             |> List.enum
             |> Enum.filter_map
               (fun (then_branch, body_expr) ->
-                 (*
                  let pred = function
                    | Abs_value_bool n -> n = then_branch
                    | _ -> false
@@ -555,8 +554,6 @@ struct
                    Some (body_expr, then_branch)
                  else
                    None
-                  *)
-                 Some (body_expr, then_branch)
               )
             |> Enum.map (fun (Abs_expr(body), then_branch) ->
                 wire_conditional
@@ -567,7 +564,7 @@ struct
             raise @@ Utils.Invariant_failure
               "Unhandled clause in perform_closure_steps"
         )
-                         |> Enum.concat
+        |> Enum.concat
     in
     (* Due to the stateful effects of computing the new edges, we're going to
        want to pull on the entire enumeration before we start looking at the

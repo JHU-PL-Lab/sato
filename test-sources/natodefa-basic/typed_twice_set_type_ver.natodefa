@@ -1,0 +1,10 @@
+let isInt v = 
+    match v with
+    | int -> true
+    | any -> false
+    end
+in
+let isPos n = n > 0 in
+let twice (f : int -> int) (x : int) : int = f (f x) in
+let inc (x : { int | isPos} ) : int = x + 1 in
+twice inc 0

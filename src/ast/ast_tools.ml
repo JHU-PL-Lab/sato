@@ -2,37 +2,129 @@ open Batteries;;
 
 open Ast;;
 
+(* **** Expression flattening **** *)
+
 (** Returns a list of all clauses that occur in expression, deeply traversing
     the syntax tree. *)
 let rec flatten (Expr clauses) =
   match clauses with
-  | [] ->
-    []
-  | ((Clause(_, Value_body(Value_function(Function_value(_, function_body)))))
-     as clause) :: rest_clauses ->
-    clause :: flatten function_body @ flatten (Expr rest_clauses)
-  | ((Clause(_, Conditional_body(_, match_body, antimatch_body)))
-     as clause) :: rest_clauses ->
-    clause ::
-    flatten match_body @
-    flatten antimatch_body @
-    flatten (Expr rest_clauses)
+  | [] -> []
   | clause :: rest_clauses ->
-    clause :: flatten (Expr rest_clauses)
+    begin
+      match clause with
+      | Clause (_, Value_body (Value_function (Function_value (_, body)))) ->
+        clause :: flatten body @ flatten (Expr rest_clauses)
+      | Clause (_, Conditional_body (_, e1, e2)) ->
+        clause :: (flatten e1) @ (flatten e2) @ (flatten (Expr rest_clauses))
+      | _ ->
+        clause :: flatten (Expr rest_clauses)
+    end
 ;;
 
 (** Returns a list of clauses that occur in the immediate block, shallowly
     traversing the syntax tree and inlining conditionals only. *)
 let rec flatten_immediate_block (Expr clauses) =
   match clauses with
-  | [] ->
-    []
-  | ((Clause (_, Conditional_body(_, match_body, antimatch_body)))
-     as clause) :: rest_clauses ->
-    clause :: flatten_immediate_block match_body @ flatten_immediate_block antimatch_body @ flatten_immediate_block (Expr rest_clauses)
+  | [] -> []
+  | ((Clause (_, Conditional_body(_, e1, e2))) as clause) :: rest_clauses ->
+    clause
+      :: flatten_immediate_block e1
+      @ flatten_immediate_block e2
+      @ flatten_immediate_block (Expr rest_clauses)
   | clause :: rest_clauses ->
     clause :: flatten_immediate_block (Expr rest_clauses)
 ;;
+
+(** Returns a list of expressions that occur in the expression, starting with
+    the main expression and followed by sub-expressions. *)
+let rec expr_flatten ((Expr clauses) as expr) : expr list =
+  let sub_exprs =
+    clauses
+    |> List.map
+      (fun (Clause(_, body)) ->
+        match body with
+        | Value_body (Value_function(Function_value(_, fun_body))) ->
+          expr_flatten fun_body
+        | Conditional_body (_, e1, e2) ->
+          e1 :: e2 :: expr_flatten e1 @ expr_flatten e2
+        | _ -> []
+      )
+    |> List.concat
+  in 
+  expr :: sub_exprs
+;;
+
+(* **** First and last vars **** *)
+
+(** Returns the last defined variable in a list of clauses. *)
+let rv (cs : clause list) : Var.t =
+  let Clause(x, _) = List.last cs in x
+;;
+
+(** Returns the last defined variable in an expression. *)
+let retv (e : expr) : Var.t =
+  let Expr(clauses) = e in
+  rv clauses
+;;
+
+let firstv (e : expr) : Var.t =
+  let Expr(clauses) = e in
+  let Clause(x, _) = List.first clauses in x
+;;
+
+(* **** Ident to clause mappings **** *)
+
+(** Returns a mapping between clause identifiers with their respective clauses. *)
+let clause_mapping (expr : expr) : clause Ident_map.t =
+  let add_clause_map map clause =
+    let (Clause (Var (x, _), _)) = clause in
+    Ident_map.add x clause map
+  in
+  expr
+  |> flatten
+  |> List.enum
+  |> Enum.fold add_clause_map Ident_map.empty
+;;
+
+(** Returns a mapping between clause identifiers and the predecessors of their
+    respective clauses.  Clauses without predecessors (i.e. the first variable
+    of a program, conditional branch, or fuction body) are not mapped. *)
+let clause_predecessor_mapping (expr: expr) : clause Ident_map.t =
+  expr
+  |> expr_flatten
+  |> List.enum
+  |> Enum.map
+    (fun (Expr clauses) ->
+      let c1 = List.enum clauses in
+      let c2 = List.enum clauses in
+      Enum.drop 1 c1;
+      let assoc = Enum.combine c1 c2 in
+      Enum.map (fun (Clause (Var (x, _), _), clause) -> (x, clause)) assoc
+    )
+  |> Enum.concat
+  |> Ident_map.of_enum
+;;
+
+(** Returns a mapping between clause identifiers and the successors of their
+    respective clauses.  Clauses without successors (i.e. the return variable
+    of a program, conditional branch, or fuction body) are not mapped. *)
+let clause_successor_mapping (expr : expr) : clause Ident_map.t =
+  expr
+  |> expr_flatten
+  |> List.enum
+  |> Enum.map
+    (fun (Expr clauses) ->
+      let c1 = List.enum clauses in
+      let c2 = List.enum clauses in
+      Enum.drop 1 c2;
+      let assoc = Enum.combine c1 c2 in
+      Enum.map (fun (Clause (Var (x, _), _), clause) -> (x, clause)) assoc
+    )
+  |> Enum.concat
+  |> Ident_map.of_enum
+;;
+
+(* **** Variable bindings **** *)
 
 (** Returns the set of immediate variable bindings that occur in expression,
     shallowly traversing the syntax tree. *)
@@ -88,6 +180,8 @@ let use_occurrences expression =
       | Binary_operation_body (left_operand, _, right_operand) ->
         Var_set.of_list [left_operand; right_operand]
       | Abort_body -> Var_set.empty
+      | Assume_body variable ->
+        Var_set.singleton variable
   )
   |> List.fold_left Var_set.union Var_set.empty
 ;;
@@ -107,7 +201,7 @@ let non_unique_bindings expression =
   |> Var_set.of_list
 ;;
 
-(* Check variable scope *)
+(* **** Check variable scope **** *)
 
 let _bind_filter bound site_x vars =
   vars
@@ -160,6 +254,7 @@ and check_scope_clause_body
   | Binary_operation_body (Var(x1,_), _, Var(x2,_)) ->
     _bind_filter bound site_x [x1;x2]
   | Abort_body -> []
+  | Assume_body (Var (x, _)) -> _bind_filter bound site_x [x]
 ;;
 
 (** Returns a list of pairs of variables. The pair represents a violation on the
@@ -171,7 +266,7 @@ let scope_violations expression =
   |> List.map (fun (i1,i2) -> (Var(i1,None)),Var(i2,None))
 ;;
 
-(* Abort clause well-formedness *)
+(* **** Abort clause well-formedness **** *)
 
 let rec check_abort_clauses_in_expr
     (e : expr) (aborts : bool Ident_map.t) : bool Ident_map.t =
@@ -205,6 +300,8 @@ and check_abort_clauses_in_clause
       |> check_abort_clauses_in_expr e2
     end
   | Abort_body ->
+    (* Well-formed abort variables should already been found in the
+       conditonal body case. *)
     let is_ret_cls =
       Ident_map.exists (fun k v -> equal_ident ident k && v) aborts
     in
@@ -221,14 +318,16 @@ and check_abort_clauses_in_clause
   | Appl_body _
   | Match_body _
   | Projection_body _
-  | Binary_operation_body _ -> aborts
+  | Binary_operation_body _ 
+  | Assume_body _ -> aborts
 ;;
 
 let abort_clause_violations expression =
   Ident_map.empty
   |> check_abort_clauses_in_expr expression
   |> Ident_map.enum
-  |> Enum.filter_map (fun (ab_id, b) -> if b then None else Some (Var (ab_id, None)))
+  |> Enum.filter_map
+    (fun (ab_id, b) -> if b then None else Some (Var (ab_id, None)))
   |> List.of_enum
 ;;
 
@@ -252,7 +351,7 @@ and list_aborts_in_value value : ident list =
   | _ -> []
 ;;
 
-(* Record label duplication check *)
+(* **** Record label duplication check **** *)
 
 (* This separator functions separately from the usual separator "~" used
    in natodefa translation, instrumentation, etc.  Note the triple tildes
@@ -332,15 +431,7 @@ let record_label_duplications expression =
   non_unique_record_labels_expr expression
 ;;
 
-(** Returns the last defined variable in a list of clauses. *)
-let rv (cs : clause list) : Var.t =
-  let Clause(x,_) = List.last cs in x
-;;
-
-(** Returns the last defined variable in an expression. *)
-let retv (e : expr) : Var.t =
-  let Expr(cs) = e in rv cs
-;;
+(* **** Expression mapping and transformation **** *)
 
 (** Homomorphically maps all variables in an expression. *)
 let rec map_expr_vars (fn : Var.t -> Var.t) (e : expr) : expr =
@@ -365,6 +456,7 @@ and map_clause_body_vars (fn : Var.t -> Var.t) (b : clause_body)
   | Binary_operation_body (x1, op, x2) ->
     Binary_operation_body (fn x1, op, fn x2)
   | Abort_body -> Abort_body
+  | Assume_body x -> Assume_body (fn x)
 
 and map_value_vars (fn : Var.t -> Var.t) (v : value) : value =
   match (v : value) with
@@ -392,19 +484,20 @@ and transform_exprs_in_clause (fn : expr -> expr) (c : clause) : clause =
 and transform_exprs_in_clause_body (fn : expr -> expr) (body : clause_body)
   : clause_body =
   match (body : clause_body) with
-  | Value_body v -> Value_body (transform_exprs_in_value fn v)
-  | Var_body _ -> body
-  | Input_body -> body
-  | Appl_body (_, _) -> body
+  | Value_body v ->
+    Value_body (transform_exprs_in_value fn v)
   | Conditional_body (x, e1, e2) ->
-    Conditional_body (x,
-                      transform_exprs_in_expr fn e1,
-                      transform_exprs_in_expr fn e2)
-  | Match_body(x, p) ->
-    Match_body(x, p)
-  | Projection_body (_, _) -> body
-  | Binary_operation_body (_, _, _) -> body
-  | Abort_body -> body
+    let e1' = transform_exprs_in_expr fn e1 in
+    let e2' = transform_exprs_in_expr fn e2 in
+    Conditional_body (x, e1', e2')
+  | Var_body _ 
+  | Input_body
+  | Appl_body (_, _)
+  | Match_body (_, _)
+  | Projection_body (_, _)
+  | Binary_operation_body (_, _, _)
+  | Abort_body
+  | Assume_body _ -> body
 
 and transform_exprs_in_value (fn : expr -> expr) (v : value) : value =
   match (v : value) with

@@ -73,6 +73,7 @@ let rec instrument_clauses (c_list : clause list) : (clause list) m =
       | Var_body _
       | Input_body
       | Match_body _
+      | Assume_body _ 
       | Abort_body ->
         (* Nothing to constrain *)
         begin

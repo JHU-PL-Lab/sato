@@ -80,7 +80,8 @@ and _abs_exprs_of_clause (Abs_clause(_,b)) =
   | Abs_match_body _
   | Abs_projection_body _
   | Abs_binary_operation_body _
-  | Abs_abort_body -> Enum.empty ()
+  | Abs_abort_body
+  | Abs_assume_body _ -> Enum.empty ()
 
 and _abs_exprs_of_value v =
   match v with
