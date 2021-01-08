@@ -203,6 +203,10 @@ expr:
    int -> int
    int -> { int | isPositive }
  */
+type_decls:
+  | type_decl { [$1] }
+  | type_decl PIPE type_decls { $1 :: $3 }
+
 type_decl:
   | basic_types { FirstOrderType (TypeDefinition ($1, None)) }
   | type_decl ARROW type_decl { HigherOrderType ($1, $3) }

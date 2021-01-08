@@ -108,9 +108,12 @@ and generate_assume (t : type_decl) : expr =
         let base_acc = Let (rec_input, Record res_record, end_expr) in
         List.fold_left fold_fun base_acc lbl_to_var
       | TypeList l -> 
-        let entry_var = Ident ("~entry" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+        let len_var = Ident ("~len" ^ string_of_int (counter := !counter + 1 ; !counter)) in
         let list_var = Ident ("~list" ^ string_of_int (counter := !counter + 1 ; !counter)) in
         let dummy_var = Ident ("~dummy" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+        let maker_var = Ident ("~list_maker" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+        (* let cur_len = Ident ("~cur_len" ^ string_of_int (counter := !counter + 1 ; !counter)) in *)
+        let elm_var = Ident ("~elm" ^ string_of_int (counter := !counter + 1 ; !counter)) in
         let end_expr = 
           if (Option.is_some p_option)
           then 
@@ -118,8 +121,12 @@ and generate_assume (t : type_decl) : expr =
             Let (dummy_var,  Assume (Appl (p, Var list_var)), Var list_var)
           else Var list_var
         in
-        let inner_let = Let (list_var, List [Var entry_var], end_expr) in
-        Let (entry_var, generate_assume l, inner_let)
+        let recur_call = Let (elm_var, generate_assume l, ListCons (Var elm_var, Appl (Var maker_var, Minus (Var len_var, Int 1)))) in
+        let list_maker = If (Equal (Var len_var, Int 0), List [], recur_call) in
+        let list_maker_fun = Funsig (maker_var, [len_var], list_maker) in
+        let inner_let = Let (list_var, Appl (Var maker_var, Var len_var), end_expr) in
+        let list_len = Let (len_var, Input, inner_let) in
+        LetRecFun ([list_maker_fun], list_len)
       (* let arg_gen = Ident ("~argGen" ^ string_of_int (counter := !counter + 1 ; !counter)) in
       let dummy_arg = Ident ("~dummy" ^ string_of_int (counter := !counter + 1 ; !counter)) in
       let arg_input = Ident ("~argInput" ^ string_of_int (counter := !counter + 1 ; !counter)) in
