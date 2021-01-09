@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "r" ],
+          "err_match_val": "{a = 2, b = 3}",
+          "err_match_expected": "Record {c}",
+          "err_match_actual": "Record {a, b}"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "r.c",
+    "err_steps": 175
+  }
+]

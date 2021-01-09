@@ -1,7 +1,7 @@
 open Batteries;;
 open Jhupllib;;
 
-type label = Label of string [@@deriving eq, ord, show];;
+type label = Label of string [@@deriving eq, ord, show, to_yojson];;
 
 type ident = Ident of string [@@deriving eq, ord, show, to_yojson];;
 
@@ -30,7 +30,7 @@ module Ident_map = struct
   include Yojson_utils.Map_to_yojson(M)(Ident);;
 end;;
 
-type variant_label = Variant_label of string [@@deriving eq, ord, show]
+type variant_label = Variant_label of string [@@deriving eq, ord, show, to_yojson]
 
 type type_sig =
   | TopType
@@ -93,19 +93,21 @@ and expr =
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
   | Assert of expr | Assume of expr
-[@@deriving eq, ord]
+[@@deriving eq, ord, to_yojson]
 ;;
 
 module Expr = struct
   type t = expr;;
   let equal = equal_expr;;
   let compare = compare_expr;;
+  let to_yojson = expr_to_yojson;;
 end;;
 
 module Pattern = struct
   type t = pattern;;
   let equal = equal_pattern;;
   let compare = compare_pattern;;
+  let to_yojson = pattern_to_yojson;;
 end;;
 
 (** Takes [expr] as an argument.  Returns the relative precedence of the

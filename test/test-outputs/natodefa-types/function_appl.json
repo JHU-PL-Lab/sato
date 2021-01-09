@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "not_fn" ],
+          "err_match_val": "2",
+          "err_match_expected": "Function",
+          "err_match_actual": "Integer"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "not_fn  1",
+    "err_steps": 178
+  }
+]

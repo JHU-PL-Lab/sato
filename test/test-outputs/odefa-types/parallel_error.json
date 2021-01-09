@@ -1,0 +1,34 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "b" ],
+          "err_match_val": "1",
+          "err_match_expected": "bool",
+          "err_match_actual": "int"
+        }
+      ]
+    ],
+    "err_input_seq": [ 1 ],
+    "err_location": "rg = a or b",
+    "err_steps": 427
+  },
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "a" ],
+          "err_match_val": "true",
+          "err_match_expected": "int",
+          "err_match_actual": "bool"
+        }
+      ]
+    ],
+    "err_input_seq": [ 0 ],
+    "err_location": "rf = a + b",
+    "err_steps": 435
+  }
+]

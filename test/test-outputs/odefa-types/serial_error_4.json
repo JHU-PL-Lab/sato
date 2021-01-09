@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "x", "zero" ],
+          "err_match_val": "0",
+          "err_match_expected": "bool",
+          "err_match_actual": "int"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "rx = x and tru",
+    "err_steps": 204
+  }
+]

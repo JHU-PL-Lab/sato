@@ -1,0 +1,13 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_value",
+        { "err_value_aliases": [ "b", "a" ], "err_value_val": "false" }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "res = b ? (ret = 0) : (ab = abort)",
+    "err_steps": 62
+  }
+]

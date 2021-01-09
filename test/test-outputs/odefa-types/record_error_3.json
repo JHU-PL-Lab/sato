@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "r" ],
+          "err_match_val": "{one=o, zero=z}",
+          "err_match_expected": "bool",
+          "err_match_actual": "{one, zero}"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "s = r ? (s1 = 3) : (s2 = 4)",
+    "err_steps": 52
+  }
+]

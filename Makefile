@@ -1,37 +1,30 @@
 .PHONY: all ddse sato clean repl sandbox test benchmark
 
-all:
-	dune build
-	dune build src/toploop-main/ddpa_toploop.exe
-	dune build src/test-generation-main/test_generator.exe
-	dune build src/translator-main/translator.exe
-	dune build src/type-checker-main/type_checker.exe
-	dune build src/type-verifier-main/type_verifier.exe
-	rm -f ddpa_toploop
-	rm -f translator
-	rm -f test_generator
-	rm -f type_checker
-	rm -f type_verifier
-	ln -s _build/default/src/toploop-main/ddpa_toploop.exe ddpa_toploop
-	ln -s _build/default/src/test-generation-main/test_generator.exe test_generator
-	ln -s _build/default/src/translator-main/translator.exe translator
-	ln -s _build/default/src/type-checker-main/type_checker.exe type_checker
-	ln -s _build/default/src/type-verifier-main/type_verifier.exe type_verifier
-
-ddse:
-	dune build
-	dune build src/test-generation-main/test_generator.exe
-	rm -f test_generator
-	ln -s _build/default/src/test-generation-main/test_generator.exe test_generator
+all: sato
 
 sato:
 	dune build
-	dune build src/type-checker-main/type_checker.exe
-	dune build src/type-checker-main/type_verifier.exe
-	rm -f type_checker
+	dune build src/sato-main/sato.exe
+	rm -f sato
+	ln -s _build/default/src/sato-main/sato.exe sato 
+
+translator:
+	dune build
+	dune build src/translator-main/translator.exe
+	rm -f translator
+	ln -s _build/default/src/translator-main/translator.exe translator
+
+ddpa:
+	dune build
+	dune build src/toploop-main/ddpa_toploop.exe
+	rm -f ddpa_toploop
+	ln -s _build/default/src/toploop-main/ddpa_toploop.exe ddpa_toploop
+
+type-verifier:
+	dune build
+	dune build src/type-verifier-main/type_verifier.exe
 	rm -f type_verifier
-	ln -s _build/default/src/type-checker-main/type_checker.exe type_checker
-	ln -s _build/default/src/type-verifier-main/type_verifier.exe type_verifier
+	ln -s _build/default/src/type-verifier-main/type_verifier.exe type_verifier 
 
 sandbox:
 	dune build test/sandbox/sandbox.exe
@@ -42,8 +35,8 @@ repl:
 	dune utop src -- -require pdr-programming
 
 test:
-	dune build test/unittest/test.exe
-	_build/default/test/unittest/test.exe
+	dune build test/test.exe
+	_build/default/test/test.exe
 
 clean:
 	dune clean
@@ -51,8 +44,8 @@ clean:
 	rm -f translator
 	rm -f sandbox
 	rm -f test_generator
-	rm -f type_checker
 	rm -f type_verifier
+	rm -f sato
 
 benchmark:
 	dune exec benchmark-test-generation/benchmark.exe

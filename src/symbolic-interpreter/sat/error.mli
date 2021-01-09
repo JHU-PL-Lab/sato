@@ -13,7 +13,7 @@ module type Error_ident = sig
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 (** Representation of a value-assigning clause in an error *)
@@ -22,7 +22,7 @@ module type Error_value = sig
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 (** Representation of a binary operation in an error *)
@@ -31,7 +31,7 @@ module type Error_binop = sig
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 (** Representation of a type annotation in an error *)
@@ -41,7 +41,7 @@ module type Error_type = sig
   val subtype : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
   val show : t -> string;;
-  val parse : string -> t;;
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 (* **** Modules **** *)
@@ -113,14 +113,13 @@ module type Error = sig
   (** Returns true if two errors are equal, false otherwise. *)
   val equal : t -> t -> bool;;
 
-  (** Parse a string into an error.  Used primarily for testing. *)
-  val parse : string -> t;;
-
   (** Pretty-printer for an error. *)
   val pp : t Pp_utils.pretty_printer;;
 
   (** Show the error as a string. *)
   val show : t -> string;;
+
+  val to_yojson : t -> Yojson.Safe.t;;
 end;;
 
 (** Functor of an error based on if it uses odefa or natodefa-related types *)
