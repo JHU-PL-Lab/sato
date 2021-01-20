@@ -179,7 +179,7 @@ expr:
   | expr LESS_EQUAL expr
       { Leq($1, $3) }
   | NOT expr
-    { Not($2) }
+      { Not($2) }
   | expr AND expr
       { And($1, $3) }
   | expr OR expr
