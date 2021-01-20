@@ -40,26 +40,26 @@ type type_sig =
   | RecType of Ident_set.t
   | ListType
   | VariantType of variant_label
-[@@ deriving eq, ord, show]
+[@@ deriving eq, ord, show, to_yojson]
 
 type first_order_type = 
   | TypeInt
   | TypeBool
-  | TypeRecord of type_decl Ident_map.t
-  | TypeList of type_decl
-[@@ deriving eq, ord, show]
+  | TypeRecord of (type_decl list) Ident_map.t
+  | TypeList of type_decl list
+[@@ deriving eq, ord, show, to_yojson]
 
 and first_order_constrained_type = 
   TypeDefinition of first_order_type * predicate option 
-[@@ deriving eq, ord, show]
+[@@ deriving eq, ord, show, to_yojson]
 
 and type_decl = 
   | FirstOrderType of first_order_constrained_type
-  | HigherOrderType of type_decl * type_decl
-[@@ deriving eq, ord, show]
+  | HigherOrderType of type_decl list * type_decl list
+[@@ deriving eq, ord, show, to_yojson]
 
 and predicate = Predicate of expr
-[@@ deriving eq, ord, show]
+[@@ deriving eq, ord, show, to_yojson]
 
 and funsig = Funsig of ident * ident list * expr
 
@@ -78,7 +78,7 @@ and expr =
   | Appl of expr * expr
   | Let of ident * expr * expr
   | LetRecFun of funsig list * expr | LetFun of funsig * expr
-  | LetWithType of ident * expr * expr * type_decl
+  | LetWithType of ident * expr * expr * type_decl list
   | LetRecFunWithType of funsig list * expr * type_decl list
   | LetFunWithType of funsig * expr * type_decl
   | Plus of expr * expr | Minus of expr * expr

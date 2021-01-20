@@ -24,14 +24,22 @@ let new_Let_fun_with_type fun_sig_and_type let_body =
   LetFunWithType (fun_sig, let_body, fun_type)
 ;;
 
-let new_fun_with_type fun_name typed_param_list return_type fun_body = 
+let new_fun_with_type 
+  (fun_name : ident) 
+  (typed_param_list : (ident * type_decl list) list) 
+  (return_type : type_decl list)
+  (fun_body : expr) = 
   let param_list = List.map fst typed_param_list in
-  let type_list = List.map snd typed_param_list in
+  let (type_list : type_decl list list) = List.map snd typed_param_list in
   let function_type_p = 
     match type_list with
     | [] -> failwith "undefined"
-    | _ -> List.fold_right
-        (fun acc -> fun t -> HigherOrderType (acc, t)) type_list return_type
+    | _ -> 
+      let reversed_list = List.rev type_list in
+      let last_type = List.hd reversed_list in
+      let accumulator = HigherOrderType (last_type, return_type) in
+      List.fold_left
+          (fun acc -> fun t -> HigherOrderType (t, [acc])) accumulator (List.tl reversed_list)
   in
   (Funsig (fun_name, param_list, fun_body), function_type_p)
 ;; 
@@ -186,7 +194,7 @@ expr:
       { new_rec_fun_with_type $3 $5 }
   | LET ident_decl EQUALS expr IN expr %prec prec_let
       { Let($2, $4, $6) }
-  | LET OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN EQUALS expr IN expr %prec prec_let
+  | LET OPEN_PAREN ident_decl COLON type_decls CLOSE_PAREN EQUALS expr IN expr %prec prec_let
       { LetWithType($3, $8, $10, $5) }
   | LET fun_sig IN expr %prec prec_fun
       { LetFun($2, $4) }
@@ -203,15 +211,16 @@ expr:
    int -> int
    int -> { int | isPositive }
  */
+
 type_decls:
   | type_decl { [$1] }
   | type_decl PIPE type_decls { $1 :: $3 }
+  | OPEN_PAREN type_decls CLOSE_PAREN { $2 }
 
 type_decl:
   | basic_types { FirstOrderType (TypeDefinition ($1, None)) }
-  | type_decl ARROW type_decl { HigherOrderType ($1, $3) }
+  | type_decls ARROW type_decls { HigherOrderType ($1, $3) }
   | OPEN_BRACE basic_types PIPE expr CLOSE_BRACE { FirstOrderType (TypeDefinition ($2, Some (Predicate $4))) }
-  | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
 
 record_type:
   | OPEN_BRACE record_type_body CLOSE_BRACE
@@ -220,9 +229,9 @@ record_type:
       { TypeRecord (Ident_map.empty) }
 
 record_type_body:
-  | label EQUALS type_decl
+  | label EQUALS type_decls
       { new_record $1 $3 }
-  | label EQUALS type_decl COMMA record_type_body
+  | label EQUALS type_decls COMMA record_type_body
       { add_record_entry $1 $3 $5 }
 ;
 
@@ -230,7 +239,7 @@ basic_types:
   | INT { TypeInt }
   | BOOL_KEYWORD { TypeBool }
   | record_type { $1 }
-  | OPEN_BRACKET type_decl CLOSE_BRACKET { TypeList $2 }
+  | OPEN_BRACKET type_decls CLOSE_BRACKET { TypeList $2 }
 
 /* let foo x = ... */
 fun_sig:
@@ -239,7 +248,7 @@ fun_sig:
 
 /* let foo (x : int) ... : int = ... */
 fun_sig_with_type:
-  | ident_decl param_list_with_type COLON type_decl EQUALS expr
+  | ident_decl param_list_with_type COLON type_decls EQUALS expr
       { new_fun_with_type $1 $2 $4 $6 }
 
 /* let rec foo x y = ... with bar a b = ... in ... */
@@ -291,7 +300,7 @@ param_list_with_type:
 ;
 
 param_with_type:
-  | OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN { ($2, $4) }
+  | OPEN_PAREN ident_decl COLON type_decls CLOSE_PAREN { ($2, $4) }
 ;
 
 param_list:
