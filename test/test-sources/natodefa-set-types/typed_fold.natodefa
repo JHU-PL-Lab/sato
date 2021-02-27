@@ -1,3 +1,6 @@
+# EXPECT-WELL-FORMED
+# EXPECT-NO-TYPE-ERRORS
+
 let rec fold (f : bool -> int -> int) (lst : [bool]) (accum : int) : int =
     match lst with
     | [] -> accum

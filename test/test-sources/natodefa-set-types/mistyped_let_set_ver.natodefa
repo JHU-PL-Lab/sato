@@ -1,3 +1,8 @@
+# EXPECT-WELL-FORMED
+# EXPECT-TYPE-ERROR-COUNT 2
+# EXPECT-TYPE-ERROR ~result [0; -1] "assert false" "" "true" "" "true" "false" 
+# EXPECT-TYPE-ERROR ~result [0; 0] "assert false" "" "true" "" "true" "false" 
+
 let isInt v = 
     match v with
     | int -> true

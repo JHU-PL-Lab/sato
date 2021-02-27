@@ -1,3 +1,6 @@
+# EXPECT-WELL-FORMED
+# EXPECT-NO-TYPE-ERRORS
+
 let record_constraint re = 
     re.a >= 0
 in

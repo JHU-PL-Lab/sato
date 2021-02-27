@@ -20,6 +20,9 @@ let string_contents = [^'"']*
 let ident_start = alpha
 let ident_cont = alpha | digit | '_'
 
+(* let type_var_start = alpha | '\'' *)
+(* let type_var_cont = alpha | digit *)
+
 rule token = parse
 | eof                  { EOF }
 | comment              { incr_lineno lexbuf; token lexbuf }
@@ -75,5 +78,6 @@ rule token = parse
 | ">="                 { GREATER_EQUAL }
 | digit+ as n          { INT_LITERAL (int_of_string n) }
 | ident_start ident_cont* as s     { IDENTIFIER s }
+(* | type_var_start type_var_cont* as t     { TYPEVAR t } *)
 
 {}

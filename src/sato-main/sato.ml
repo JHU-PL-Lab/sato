@@ -4,6 +4,7 @@ open Jhupllib;;
 open Odefa_ast;;
 open Odefa_natural;;
 open Odefa_parser;;
+open Ton_to_on;;
 
 open Odefa_answer_generation;;
 open Odefa_symbolic_interpreter;;
@@ -24,8 +25,9 @@ let parse_program
     | ".natodefa" ->
       begin
         let natodefa_ast = File.with_file_in filename On_parse.parse_program in
+        let desugared_typed = typed_non_to_on natodefa_ast in
         let (odefa_ast, on_odefa_maps) =
-          On_to_odefa.translate natodefa_ast
+          On_to_odefa.translate desugared_typed
         in
         Ast_wellformedness.check_wellformed_expr odefa_ast;
         (odefa_ast, on_odefa_maps)

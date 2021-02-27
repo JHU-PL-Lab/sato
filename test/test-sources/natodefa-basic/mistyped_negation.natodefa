@@ -1,2 +1,0 @@
-let neg (x : int) : int = not x in
-neg

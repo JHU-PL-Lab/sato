@@ -1,6 +1,6 @@
 .PHONY: all ddse sato clean repl sandbox test benchmark
 
-all: sato
+all: sato ddse translator
 
 sato:
 	dune build
@@ -19,12 +19,6 @@ ddpa:
 	dune build src/toploop-main/ddpa_toploop.exe
 	rm -f ddpa_toploop
 	ln -s _build/default/src/toploop-main/ddpa_toploop.exe ddpa_toploop
-
-type-verifier:
-	dune build
-	dune build src/type-verifier-main/type_verifier.exe
-	rm -f type_verifier
-	ln -s _build/default/src/type-verifier-main/type_verifier.exe type_verifier 
 
 sandbox:
 	dune build test/sandbox/sandbox.exe
