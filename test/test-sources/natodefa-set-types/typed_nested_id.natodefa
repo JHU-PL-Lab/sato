@@ -2,6 +2,6 @@
 # EXPECT-NO-TYPE-ERRORS
 
 let intId (x : int) : int = 
-    let intId2 (y : int) : int = y in
+    let intId2 y = y in
     intId2 x
 in intId 5

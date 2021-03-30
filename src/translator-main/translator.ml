@@ -42,8 +42,8 @@ let main () : unit =
         else
           odefa_expr
       in
-      let _ = Ast_pp.show_expr result_expr in
-      (* print_endline expr_string; *)
+      let expr_string = Ast_pp.show_expr result_expr in
+      print_endline expr_string;
       print_endline "";
     end
   | Scheme_to_odefa_natural ->

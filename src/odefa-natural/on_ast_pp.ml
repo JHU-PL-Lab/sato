@@ -58,31 +58,29 @@ let pp_type_sig formatter t =
   | _ -> failwith "not yet implemented"
 ;;
 
-let rec pp_first_order_type formatter t = 
-  match t with
-  | TypeInt -> Format.pp_print_string formatter "int"
-  | TypeBool -> Format.pp_print_string formatter "bool"
-  | TypeRecord record -> Format.fprintf formatter "%a" (pp_ident_map pp_type_decl_list) record
-  | TypeList t -> Format.fprintf formatter "[%a]" pp_type_decl_list t
-
-and pp_predicate formatter (Predicate p) = 
+let rec pp_predicate formatter (Predicate p) = 
   Format.fprintf formatter "%a" pp_expr p
 
 and pp_type_decl formatter type_decl =
   match type_decl with
-  | FirstOrderType (TypeDefinition (t', p_option)) -> 
-    if Option.is_some p_option
-    then Format.fprintf formatter "{%a | %a}" pp_first_order_type t' pp_predicate (Option.get p_option)
-    else Format.fprintf formatter "{%a}" pp_first_order_type t'
-  | HigherOrderType (t1, t2) ->  Format.fprintf formatter "(%a -> %a)" pp_type_decl_list t1 pp_type_decl_list t2
+  | TypeVar v -> Format.fprintf formatter "%a" pp_ident v
+  | TypeInt -> Format.pp_print_string formatter "int"
+  | TypeBool -> Format.pp_print_string formatter "bool"
+  | TypeRecord record -> Format.fprintf formatter "%a" (pp_ident_map pp_type_decl) record
+  | TypeList t -> Format.fprintf formatter "[%a]" pp_type_decl t
+  | TypeUnion (t1, t2) -> Format.fprintf formatter "%a v %a" pp_type_decl t1 pp_type_decl t2
+  | TypeIntersect (t1, t2) -> Format.fprintf formatter "%a ^ %a" pp_type_decl t1 pp_type_decl t2
+  | TypeArrow (t1, t2) -> Format.fprintf formatter "(%a -> %a)" pp_type_decl t1 pp_type_decl t2
+  | TypeSet (t, p) -> Format.fprintf formatter "{%a | %a}" pp_type_decl t pp_predicate p
+  | TypeRecurse (tvar, t) ->  Format.fprintf formatter "Mu %a.%a" pp_ident tvar pp_type_decl t
 
-and pp_type_decl_list formatter list =
+(* and pp_type_decl_list formatter list =
   Pp_utils.pp_concat_sep
     " "
     (fun formatter x -> pp_type_decl formatter x)
     formatter
     (List.enum list)
-;;
+;; *)
 
 let rec pp_funsig formatter (Funsig (x, ident_list, e)) =
   Format.fprintf formatter "%a@ %a =@ @[%a@]"
@@ -176,7 +174,7 @@ and pp_expr formatter expr =
       pp_ident ident pp_expr e1 pp_expr e2
   | LetWithType (ident, e1, e2, type_decl) ->
     Format.fprintf formatter "let@ (%a : %a) =@ %a@ in@ @[%a@]"
-      pp_ident ident pp_type_decl_list type_decl pp_expr e1 pp_expr e2
+      pp_ident ident pp_type_decl type_decl pp_expr e1 pp_expr e2
   | LetRecFun (funsig_lst, e) ->
     let pp_funsig_list formatter funsig_lst =
       Pp_utils.pp_concat_sep

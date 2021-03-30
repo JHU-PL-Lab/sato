@@ -1,0 +1,4 @@
+let rec f (g : int -> int ) (x : (int -> int) -> int) : int = 
+    x g
+in
+f

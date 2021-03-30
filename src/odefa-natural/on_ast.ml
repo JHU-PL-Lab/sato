@@ -42,20 +42,17 @@ type type_sig =
   | VariantType of variant_label
 [@@ deriving eq, ord, show, to_yojson]
 
-type first_order_type = 
+and type_decl = 
+  | TypeVar of ident
   | TypeInt
   | TypeBool
-  | TypeRecord of (type_decl list) Ident_map.t
-  | TypeList of type_decl list
-[@@ deriving eq, ord, show, to_yojson]
-
-and first_order_constrained_type = 
-  TypeDefinition of first_order_type * predicate option 
-[@@ deriving eq, ord, show, to_yojson]
-
-and type_decl = 
-  | FirstOrderType of first_order_constrained_type
-  | HigherOrderType of type_decl list * type_decl list
+  | TypeRecord of type_decl Ident_map.t
+  | TypeList of type_decl
+  | TypeUnion of type_decl * type_decl
+  | TypeIntersect of type_decl * type_decl
+  | TypeArrow of type_decl * type_decl
+  | TypeSet of type_decl * predicate
+  | TypeRecurse of ident * type_decl
 [@@ deriving eq, ord, show, to_yojson]
 
 and predicate = Predicate of expr
@@ -78,7 +75,7 @@ and expr =
   | Appl of expr * expr
   | Let of ident * expr * expr
   | LetRecFun of funsig list * expr | LetFun of funsig * expr
-  | LetWithType of ident * expr * expr * type_decl list
+  | LetWithType of ident * expr * expr * type_decl
   | LetRecFunWithType of funsig list * expr * type_decl list
   | LetFunWithType of funsig * expr * type_decl
   | Plus of expr * expr | Minus of expr * expr
@@ -93,6 +90,7 @@ and expr =
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
   | Assert of expr | Assume of expr
+  (* | Protected of expr *)
 [@@deriving eq, ord, to_yojson]
 ;;
 
