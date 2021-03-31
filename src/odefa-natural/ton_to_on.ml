@@ -34,8 +34,9 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       let gen_expr = Let (int_input, Input, Var int_input) in
       Function ([Ident "~null"], gen_expr)
     in
+    let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
     let checker = 
-      Function ([Ident "exp"], Match (Var (Ident "exp"), [(IntPat, Bool true); (AnyPat, Bool false)]))
+      Function ([Ident exp_str], Match (Var (Ident exp_str), [(IntPat, Bool true); (AnyPat, Bool false)]))
     in
     let rec_map = 
       Ident_map.empty
@@ -51,8 +52,9 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       let gen_expr = Let (bool_input, Geq (get_raw, Int 0), Var bool_input) in
       Function ([Ident "~null"], gen_expr)
     in
+    let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
     let checker = 
-      Function ([Ident "exp"], Match (Var (Ident "exp"), [(BoolPat, Bool true); (AnyPat, Bool false)]))
+      Function ([Ident exp_str], Match (Var (Ident exp_str), [(BoolPat, Bool true); (AnyPat, Bool false)]))
     in
     let rec_map = 
       Ident_map.empty
@@ -89,20 +91,21 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       let all_keys = Enum.map (fun k -> (k, None)) (Ident_map.keys r) in
       let type_dict = Ident_map.of_enum all_keys in
       let dummy_var = Ident ("~dummy" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+      let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
       let fold_fun acc (Ident lbl, t) = 
         let gc_pair = semantic_pair_of t in
         Let (dummy_var, 
-              Appl (RecordProj (gc_pair, Label "checker"), RecordProj (Var (Ident "exp"), Label lbl)), 
-              acc)
+              Appl (RecordProj (gc_pair, Label "checker"), RecordProj (Var (Ident exp_str), Label lbl)), 
+              And (Var dummy_var, acc))
       in
       let (Ident first_lbl, first_type) = List.hd all_bindings in
       let gc_pair = semantic_pair_of first_type in
-      let init_acc = Appl (RecordProj (gc_pair, Label "checker"), RecordProj (Var (Ident "exp"), Label first_lbl)) in
+      let init_acc = Appl (RecordProj (gc_pair, Label "checker"), RecordProj (Var (Ident exp_str), Label first_lbl)) in
       let fun_body = List.fold_left fold_fun init_acc (List.tl all_bindings) in
-      let match_body = Match (Var (Ident "exp"), 
+      let match_body = Match (Var (Ident exp_str), 
                               [(RecPat type_dict, fun_body); 
                               (AnyPat, Bool false)]) in
-      Function ([Ident "exp"], match_body)
+      Function ([Ident exp_str], match_body)
     in
     let rec_map = 
       Ident_map.empty
@@ -138,17 +141,20 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
                [(EmptyLstPat, Bool true); 
                 (LstDestructPat 
                   (Ident "hd", Ident "tl"), 
-                  (Let (dummy_var, Appl (RecordProj (gc_pair, Label "checker"), Var (Ident "hd")), Appl (Var test_fun_name, Var (Ident "tl")))))
+                  (Let (dummy_var, 
+                        Appl (RecordProj (gc_pair, Label "checker"), Var (Ident "hd")), 
+                        And (Var dummy_var, Appl (Var test_fun_name, Var (Ident "tl"))))))
                ]) in
       let check_fun = Funsig (test_fun_name, [test_list], test_fun) in
-      let fun_body = LetRecFun ([check_fun], Appl (Var test_fun_name, Var (Ident "exp"))) in
-      let match_body = Match (Var (Ident "exp"), 
+      let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
+      let fun_body = LetRecFun ([check_fun], Appl (Var test_fun_name, Var (Ident exp_str))) in
+      let match_body = Match (Var (Ident exp_str), 
                               [(EmptyLstPat, Bool true); 
                                (LstDestructPat (Ident "~dummy1", Ident "~dummy2"), fun_body);
                                (AnyPat, Bool false)
                               ]) 
       in
-      Function ([Ident "exp"], match_body)
+      Function ([Ident exp_str], match_body)
     in
     let rec_map = 
       Ident_map.empty
@@ -179,12 +185,13 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       let branch = If (Geq (Var select_int, Int 0), checker1, checker2) in
       let fun_body = Let (select_int, Input, branch) in
       Function ([Ident "exp"], fun_body) *)
+      let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
       let select_int = Ident ("~select_int" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-      let checker1 = If (Appl (RecordProj (gc_pair1, Label "checker"), Var (Ident "exp")), Bool true, Appl (RecordProj (gc_pair2, Label "checker"), Var (Ident "exp"))) in
-      let checker2 = If (Appl (RecordProj (gc_pair2, Label "checker"), Var (Ident "exp")), Bool true, Appl (RecordProj (gc_pair1, Label "checker"), Var (Ident "exp"))) in
+      let checker1 = If (Appl (RecordProj (gc_pair1, Label "checker"), Var (Ident exp_str)), Bool true, Appl (RecordProj (gc_pair2, Label "checker"), Var (Ident exp_str))) in
+      let checker2 = If (Appl (RecordProj (gc_pair2, Label "checker"), Var (Ident exp_str)), Bool true, Appl (RecordProj (gc_pair1, Label "checker"), Var (Ident exp_str))) in
       let branch = If (Geq (Var select_int, Int 0), checker1, checker2) in
       let fun_body = Let (select_int, Input, branch) in
-      Function ([Ident "exp"], fun_body)
+      Function ([Ident exp_str], fun_body)
     in
     let rec_map = 
       Ident_map.empty
@@ -203,12 +210,13 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       let gen_expr = Function ([arg_assume], inner_expr) in
       Function ([Ident "~null"], gen_expr)
     in
+    let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
     let checker = 
       let arg_assert = Ident ("~arg_assert" ^ string_of_int (counter := !counter + 1 ; !counter)) in
       let fun_body = Let (arg_assert, 
                           Appl (RecordProj (gc_pair1, Label "generator"), Int 0), 
-                          Appl (RecordProj (gc_pair2, Label "checker"), Appl (Var (Ident "exp"), Var arg_assert))) in
-      Function ([Ident "exp"], fun_body)
+                          Appl (RecordProj (gc_pair2, Label "checker"), Appl (Var (Ident exp_str), Var arg_assert))) in
+      Function ([Ident exp_str], fun_body)
     in
     let rec_map = 
       Ident_map.empty
@@ -226,10 +234,11 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
                           pred_check) in
       Function ([Ident "~null"], gen_expr)
     in
+    let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
     let checker = 
-      let fun_body = If (Appl (RecordProj (gc_pair, Label "checker"), Var (Ident "exp")), 
-                         Appl (p, Var (Ident "exp")), Bool false) in
-      Function ([Ident "exp"], fun_body)
+      let fun_body = If (Appl (RecordProj (gc_pair, Label "checker"), Var (Ident exp_str)), 
+                         Appl (p, Var (Ident exp_str)), Bool false) in
+      Function ([Ident exp_str], fun_body)
     in
     let rec_map = 
       Ident_map.empty
@@ -250,11 +259,12 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
                           validate) in
       Function ([Ident "~null"], gen_expr)
     in
+    let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
     let checker = 
-      let fun_body = If (Appl (RecordProj (gc_pair1, Label "checker"), Var (Ident "exp")), 
-                         Appl (RecordProj (gc_pair2, Label "checker"), Var (Ident "exp")), 
+      let fun_body = If (Appl (RecordProj (gc_pair1, Label "checker"), Var (Ident exp_str)), 
+                         Appl (RecordProj (gc_pair2, Label "checker"), Var (Ident exp_str)), 
                          Bool false) in
-      Function ([Ident "exp"], fun_body)
+      Function ([Ident exp_str], fun_body)
     in
     let rec_map = 
       Ident_map.empty
@@ -286,8 +296,9 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
     let generator = 
       Function ([Ident "~null"], RecordProj (gc_pair, Label "generator"))
     in 
+    let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
     let checker = 
-      Function ([Ident "exp"], Appl (RecordProj (gc_pair, Label "checker"), Var (Ident "exp")))
+      Function ([Ident exp_str], Appl (RecordProj (gc_pair, Label "checker"), Var (Ident exp_str)))
     in
     let rec_map = 
       Ident_map.empty

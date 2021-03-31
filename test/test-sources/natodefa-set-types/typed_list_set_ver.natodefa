@@ -9,5 +9,5 @@ let rec testFun l =
 in
 let userinput = input in
 let val = userinput in
-let (x : { [int] | testFun } ) = [val] in
+let (x : { [int] | testFun } ) = [val, val] in
 x

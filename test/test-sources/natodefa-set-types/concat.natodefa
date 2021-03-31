@@ -1,4 +1,4 @@
-let rec prepend (l1 : [int]) (l2 : [bool]) : [int] = 
+let rec prepend (l1 : [int]) (l2 : [bool]) : [int || bool] = 
     match l2 with
     | [] -> l1
     | hd :: tl -> prepend (hd :: l1) tl
