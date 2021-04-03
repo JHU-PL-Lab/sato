@@ -24,14 +24,22 @@ let new_Let_fun_with_type fun_sig_and_type let_body =
   LetFunWithType (fun_sig, let_body, fun_type)
 ;;
 
-let new_fun_with_type fun_name typed_param_list return_type fun_body = 
+let new_fun_with_type 
+  (fun_name : ident) 
+  (typed_param_list : (ident * type_decl) list) 
+  (return_type : type_decl)
+  (fun_body : expr) = 
   let param_list = List.map fst typed_param_list in
-  let type_list = List.map snd typed_param_list in
+  let (type_list : type_decl list) = List.map snd typed_param_list in
   let function_type_p = 
     match type_list with
     | [] -> failwith "undefined"
-    | _ -> List.fold_right
-        (fun acc -> fun t -> HigherOrderType (acc, t)) type_list return_type
+    | _ -> 
+      let reversed_list = List.rev type_list in
+      let last_type = List.hd reversed_list in
+      let accumulator = TypeArrow (last_type, return_type) in
+      List.fold_left
+          (fun acc -> fun t -> TypeArrow (t, acc)) accumulator (List.tl reversed_list)
   in
   (Funsig (fun_name, param_list, fun_body), function_type_p)
 ;; 
@@ -51,6 +59,7 @@ let add_record_entry lbl value old_record =
 
 %}
 
+// %token <string> TYPEVAR
 %token <string> IDENTIFIER
 %token <int> INT_LITERAL
 %token <bool> BOOL
@@ -70,6 +79,8 @@ let add_record_entry lbl value old_record =
 %token DOUBLE_COLON
 %token UNDERSCORE
 %token PIPE
+%token DOUBLE_PIPE
+%token DOUBLE_AMPERSAND
 %token FUNCTION
 %token RECORD
 %token WITH
@@ -89,6 +100,7 @@ let add_record_entry lbl value old_record =
 %token END
 %token ASSERT
 %token ASSUME
+// %token MU
 %token PLUS
 %token MINUS
 %token ASTERISK
@@ -171,7 +183,7 @@ expr:
   | expr LESS_EQUAL expr
       { Leq($1, $3) }
   | NOT expr
-    { Not($2) }
+      { Not($2) }
   | expr AND expr
       { And($1, $3) }
   | expr OR expr
@@ -203,15 +215,19 @@ expr:
    int -> int
    int -> { int | isPositive }
  */
-type_decls:
-  | type_decl { [$1] }
-  | type_decl PIPE type_decls { $1 :: $3 }
 
 type_decl:
-  | basic_types { FirstOrderType (TypeDefinition ($1, None)) }
-  | type_decl ARROW type_decl { HigherOrderType ($1, $3) }
-  | OPEN_BRACE basic_types PIPE expr CLOSE_BRACE { FirstOrderType (TypeDefinition ($2, Some (Predicate $4))) }
+  | basic_types { $1 }
+  // | type_var { TypeVar $1 }
+  // | MU type_var DOT type_decl { TypeRecurse ($2, $4) }
+  | type_decl ARROW type_decl { TypeArrow ($1, $3) }
+  | OPEN_BRACE basic_types PIPE expr CLOSE_BRACE { TypeSet ($2, Predicate $4) }
+  | type_decl DOUBLE_PIPE type_decl { TypeUnion ($1, $3) }
+  | type_decl DOUBLE_AMPERSAND type_decl { TypeIntersect ($1, $3) }
   | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
+
+// type_var:
+//   | TYPEVAR { Ident $1 }
 
 record_type:
   | OPEN_BRACE record_type_body CLOSE_BRACE

@@ -1,7 +1,7 @@
 open Batteries;;
 open Jhupllib;;
 
-type label = Label of string [@@deriving eq, ord, show];;
+type label = Label of string [@@deriving eq, ord, show, to_yojson];;
 
 type ident = Ident of string [@@deriving eq, ord, show, to_yojson];;
 
@@ -30,7 +30,7 @@ module Ident_map = struct
   include Yojson_utils.Map_to_yojson(M)(Ident);;
 end;;
 
-type variant_label = Variant_label of string [@@deriving eq, ord, show]
+type variant_label = Variant_label of string [@@deriving eq, ord, show, to_yojson]
 
 type type_sig =
   | TopType
@@ -40,26 +40,23 @@ type type_sig =
   | RecType of Ident_set.t
   | ListType
   | VariantType of variant_label
-[@@ deriving eq, ord, show]
+[@@ deriving eq, ord, show, to_yojson]
 
-type first_order_type = 
+and type_decl = 
+  (* | TypeVar of ident *)
   | TypeInt
   | TypeBool
   | TypeRecord of type_decl Ident_map.t
   | TypeList of type_decl
-[@@ deriving eq, ord, show]
-
-and first_order_constrained_type = 
-  TypeDefinition of first_order_type * predicate option 
-[@@ deriving eq, ord, show]
-
-and type_decl = 
-  | FirstOrderType of first_order_constrained_type
-  | HigherOrderType of type_decl * type_decl
-[@@ deriving eq, ord, show]
+  | TypeUnion of type_decl * type_decl
+  | TypeIntersect of type_decl * type_decl
+  | TypeArrow of type_decl * type_decl
+  | TypeSet of type_decl * predicate
+  (* | TypeRecurse of ident * type_decl *)
+[@@ deriving eq, ord, show, to_yojson]
 
 and predicate = Predicate of expr
-[@@ deriving eq, ord, show]
+[@@ deriving eq, ord, show, to_yojson]
 
 and funsig = Funsig of ident * ident list * expr
 
@@ -93,19 +90,22 @@ and expr =
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
   | Assert of expr | Assume of expr
-[@@deriving eq, ord]
+  (* | Protected of expr *)
+[@@deriving eq, ord, to_yojson]
 ;;
 
 module Expr = struct
   type t = expr;;
   let equal = equal_expr;;
   let compare = compare_expr;;
+  let to_yojson = expr_to_yojson;;
 end;;
 
 module Pattern = struct
   type t = pattern;;
   let equal = equal_pattern;;
   let compare = compare_pattern;;
+  let to_yojson = pattern_to_yojson;;
 end;;
 
 (** Takes [expr] as an argument.  Returns the relative precedence of the
