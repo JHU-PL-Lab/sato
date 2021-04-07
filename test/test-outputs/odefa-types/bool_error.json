@@ -1,0 +1,27 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "a" ],
+          "err_match_val": "0",
+          "err_match_expected": "bool",
+          "err_match_actual": "int"
+        }
+      ],
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "b" ],
+          "err_match_val": "1",
+          "err_match_expected": "bool",
+          "err_match_actual": "int"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "c = a and b",
+    "err_steps": 68
+  }
+]

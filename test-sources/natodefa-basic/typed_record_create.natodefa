@@ -1,5 +1,0 @@
-let create_record (x : int) (y : bool) : {a = (int -> int), b = bool} =
-    let boo = if (y == 0) then true else false in
-    {a = fun x -> x + 1, b = not boo}
-in (create_record 1 true).a 1 
-

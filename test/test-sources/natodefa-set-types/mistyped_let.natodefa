@@ -1,0 +1,12 @@
+# EXPECT-WELL-FORMED
+# EXPECT-NO-TYPE-ERRORS
+
+let coinToss (x : int) : int =
+    if x < 0 then true else false
+in
+let test = input in
+let (x : bool) = 
+    if (coinToss test)
+    then true else 1
+in
+x

@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "rec" ],
+          "err_match_val": "{x=zero, y=one}",
+          "err_match_expected": "{z}",
+          "err_match_actual": "{x, y}"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "ans = rec.z",
+    "err_steps": 72
+  }
+]

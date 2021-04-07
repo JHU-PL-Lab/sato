@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "g" ],
+          "err_match_val": "x + 1",
+          "err_match_expected": "Function",
+          "err_match_actual": "Integer"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "g  1",
+    "err_steps": 232
+  }
+]

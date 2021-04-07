@@ -1,0 +1,13 @@
+# EXPECT-WELL-FORMED
+# EXPECT-NO-TYPE-ERRORS
+
+let rec testFun l = 
+    match l with
+    | [] -> true
+    | hd :: tl -> if (hd > 10) then testFun tl else false
+    end
+in
+let userinput = input in
+let val = userinput in
+let (x : { [int] | testFun } ) = [val] in
+x

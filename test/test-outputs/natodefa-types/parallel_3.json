@@ -1,0 +1,50 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "{}",
+          "err_match_expected": "Boolean",
+          "err_match_actual": "Record {}"
+        }
+      ]
+    ],
+    "err_input_seq": [ 1, 1 ],
+    "err_location": "if {} then 1 else 2 + {}",
+    "err_steps": 504
+  },
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "{}",
+          "err_match_expected": "Boolean",
+          "err_match_actual": "Record {}"
+        }
+      ]
+    ],
+    "err_input_seq": [ 1, 0 ],
+    "err_location": "if {} then 0 else 1",
+    "err_steps": 504
+  },
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "0",
+          "err_match_expected": "Boolean",
+          "err_match_actual": "Integer"
+        }
+      ]
+    ],
+    "err_input_seq": [ 0 ],
+    "err_location": "if 0 then false else true",
+    "err_steps": 257
+  }
+]

@@ -1,0 +1,6 @@
+# EXPECT-WELL-FORMED
+# EXPECT-NO-TYPE-ERRORS
+
+let gt10 x = x > 10 in
+let sc (x : { int | gt10 } ) : bool = true in
+sc

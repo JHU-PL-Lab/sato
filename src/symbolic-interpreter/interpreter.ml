@@ -20,34 +20,6 @@ type exploration_policy =
   | Explore_least_relative_stack_repetition
 ;;
 
-(* Record of all visited clauses in a program *)
-
-module Ident_hashtbl = Hashtbl.Make(Ident);;
-
-let clause_visits_hashtbl : int Ident_hashtbl.t = Ident_hashtbl.create 20;;
-
-(* let pp_ident_hashtbl = Pp_utils.pp_map pp_ident Format.pp_print_int Ident_hashtbl.enum;;
-let show_ident_hashtbl = Pp_utils.pp_to_string pp_ident_hashtbl;; *)
-
-(*
-let rec enum_all_clauses_in_expr expr : unit =
-  let Expr(clauses) = expr in
-  Enum.iter (fun clause -> enum_all_clauses_in_clause clause) @@ List.enum clauses
-
-and enum_all_clauses_in_clause clause : unit =
-  let Clause(Var (ident, _), body) = clause in
-  begin
-    match body with
-    | Value_body (Value_function (Function_value (_, body))) ->
-      enum_all_clauses_in_expr body
-    | Conditional_body (_, e1, e2) ->
-      enum_all_clauses_in_expr e1;
-      enum_all_clauses_in_expr e2;
-    | _ -> ()
-  end;
-  Ident_hashtbl.add clause_visits_hashtbl ident 0
-*)
-
 (* The type of the symbolic interpreter's cache key.  The arguments are the
    lookup stack, the clause identifying the program point at which lookup is
    proceeding, and the relative call stack at this point.
@@ -260,38 +232,6 @@ struct
     end else
       return ()
   ;;
-
-  let increment_clause_visit_count acl =
-    match acl with
-    | Unannotated_clause unannotated_cls ->
-      let (Abs_clause (Abs_var ident, _)) = unannotated_cls in
-      Ident_hashtbl.modify_opt
-        ident
-        (function Some v -> Some (v + 1) | None -> Some 1)
-        clause_visits_hashtbl
-    | _ -> ()
-  ;;
-
-  (* let gather_stop_vars cfg acls =
-    let rec loop s =
-      match s with
-      | [] -> []
-      | acl :: acls' ->
-        begin
-          match acl with
-          | Unannotated_clause (Abs_clause (x, _))
-          | Start_clause x | End_clause x ->
-            let (Abs_var ident) = x in
-            ident :: loop acls'
-          | Binding_enter_clause _
-          | Binding_exit_clause _
-          | Nonbinding_enter_clause _ ->
-            let acl_succs = List.of_enum @@ succs acl cfg in
-            (loop acl_succs) @ (loop acls')
-        end
-    in
-    loop acls
-  ;; *)
 
   let rec rule_computations
       (env : lookup_environment)
@@ -646,14 +586,14 @@ struct
 
       (* ### Conditional Top rule ### *)
       begin
-        let%orzero lookup_var :: _ = lookup_stack in
+        (* let%orzero lookup_var :: _ = lookup_stack in *)
         (* This must be a non-binding enter wiring node for a conditional. *)
         let%orzero Nonbinding_enter_clause (av, c) = acl1 in
         let%orzero
           Abs_clause(Abs_var xc, Abs_conditional_body(Abs_var x1, _, _)) = c
         in
         (* Report Conditional Top rule lookup *)
-        trace_rule "Conditional Top" lookup_var;
+        trace_rule "Conditional Top" (* lookup_var *) xc;
         let%bind () = record_visited_clause xc in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
@@ -871,7 +811,6 @@ struct
       (relstack : Relative_stack.t)
     : (symbol list) M.m =
     let open M in
-    increment_clause_visit_count acl0;
     let%bind acl1 = pick @@ preds acl0 env.le_cfg in
     let%bind () = pause () in
     _trace_log_lookup lookup_stack relstack acl0 acl1;
@@ -928,32 +867,22 @@ struct
       raise @@ Jhupllib.Utils.Invariant_failure
         "no stack constraint in solution!"
     | Some (get_value, Some stack) ->
+      let solver = eval_result.M.er_solver in
+      let errors = eval_result.M.er_abort_points in
+      let visited_clauses = eval_result.M.er_visited_clauses in
       begin
         lazy_logger `debug (fun () ->
             Printf.sprintf
               "Discovered answer of stack %s and formulae:\n%s"
               (Relative_stack.show_concrete_stack stack)
-              (Solver.show eval_result.M.er_solver)
-          )
+              (Solver.show solver)
+          );
+        lazy_logger `debug (fun () ->
+            Printf.sprintf
+              "Visited clauses:\n%s"
+              (Ident_set.show visited_clauses)
+        )
       end;
-      (* print_endline @@ show_ident_hashtbl clause_visits_hashtbl; *)
-      let solver = eval_result.M.er_solver in
-      let errors = eval_result.M.er_abort_points in
-      (*
-      let visited_clauses =
-        Symbol_map.fold
-          (fun k v accum -> 
-            let (Symbol (abort_ident, _)) = k in
-            let cond_ident = v.abort_conditional_ident in
-            accum
-            |> Ident_set.add abort_ident
-            |> Ident_set.add cond_ident
-          )
-          errors
-          Ident_set.empty
-      in
-      *)
-      let visited_clauses = eval_result.M.er_visited_clauses in
       Some {
         er_solver = solver;
         er_stack = stack;

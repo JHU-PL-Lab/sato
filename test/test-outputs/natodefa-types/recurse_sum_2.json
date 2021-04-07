@@ -1,0 +1,34 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "true",
+          "err_match_expected": "Integer",
+          "err_match_actual": "Boolean"
+        }
+      ]
+    ],
+    "err_input_seq": [ 0 ],
+    "err_location": "n < true",
+    "err_steps": 1727
+  },
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [],
+          "err_match_val": "false",
+          "err_match_expected": "Integer",
+          "err_match_actual": "Boolean"
+        }
+      ]
+    ],
+    "err_input_seq": [ 1 ],
+    "err_location": "n < false",
+    "err_steps": 1625
+  }
+]

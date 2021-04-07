@@ -1,0 +1,34 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "b" ],
+          "err_match_val": "false",
+          "err_match_expected": "int",
+          "err_match_actual": "bool"
+        }
+      ]
+    ],
+    "err_input_seq": [ 0, 0 ],
+    "err_location": "sum1 = a + b",
+    "err_steps": 598
+  },
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "b" ],
+          "err_match_val": "false",
+          "err_match_expected": "int",
+          "err_match_actual": "bool"
+        }
+      ]
+    ],
+    "err_input_seq": [ 0, -1 ],
+    "err_location": "sum1 = a + b",
+    "err_steps": 682
+  }
+]

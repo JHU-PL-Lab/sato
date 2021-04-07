@@ -1,0 +1,19 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "f" ],
+          "err_match_val":
+            "fun x -> ...",
+          "err_match_expected": "bool",
+          "err_match_actual": "fun"
+        }
+      ]
+    ],
+    "err_input_seq": [ 0 ],
+    "err_location": "h = f ? (et = g f) : (ef = 0)",
+    "err_steps": 66
+  }
+]

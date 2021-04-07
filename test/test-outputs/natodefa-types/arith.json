@@ -1,0 +1,27 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "x" ],
+          "err_match_val": "false",
+          "err_match_expected": "Integer",
+          "err_match_actual": "Boolean"
+        }
+      ],
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "y" ],
+          "err_match_val": "false",
+          "err_match_expected": "Integer",
+          "err_match_actual": "Boolean"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "x + y",
+    "err_steps": 112
+  }
+]

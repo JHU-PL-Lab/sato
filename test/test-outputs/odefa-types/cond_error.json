@@ -1,0 +1,18 @@
+[
+  {
+    "err_errors": [
+      [
+        "Error_match",
+        {
+          "err_match_aliases": [ "pred" ],
+          "err_match_val": "0",
+          "err_match_expected": "bool",
+          "err_match_actual": "int"
+        }
+      ]
+    ],
+    "err_input_seq": [],
+    "err_location": "ans = pred ? (r1 = 0) : (r2 = 1)",
+    "err_steps": 38
+  }
+]

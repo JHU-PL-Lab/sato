@@ -4,28 +4,50 @@ open On_ast;;
 
 let counter = ref 0;;
 
-let isInt (e : expr) : expr = 
-  Match (e, [(IntPat, Bool true); (AnyPat, Assert (Bool false))])
+let isInt (e : expr) (antimatch : expr) : expr = 
+  Match (e, [(IntPat, Bool true); (AnyPat, antimatch)])
 ;;
 
-let isBool (e : expr) : expr = 
-  Match (e, [(BoolPat, Bool true); (AnyPat, Assert (Bool false))])
+let isBool (e : expr) (antimatch : expr) : expr = 
+  Match (e, [(BoolPat, Bool true); (AnyPat, antimatch)])
 ;;
 
-let rec isRecord (r : type_decl Ident_map.t) (e : expr) : expr = 
+let rec isRecord (r : type_decl Ident_map.t) (e : expr) (antimatch : expr) : expr = 
   let all_bindings = Ident_map.bindings r in
+  let all_keys = Enum.map (fun k -> (k, None)) (Ident_map.keys r) in
+  let type_dict = Ident_map.of_enum all_keys in
   let dummy_var = Ident ("~dummy" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-  let fold_fun acc (Ident lbl, t) = Let (dummy_var, generate_assert t (RecordProj (e, Label lbl)), acc) in
+  let fold_fun acc (Ident lbl, t) = Let (dummy_var, generate_assert t (RecordProj (e, Label lbl)) (Assert (Bool false)), acc) in
   let (Ident first_lbl, first_type) = List.hd all_bindings in
-  List.fold_left fold_fun (generate_assert first_type (RecordProj (e, Label first_lbl))) (List.tl all_bindings)
+  let check_rec_content = List.fold_left fold_fun (generate_assert first_type (RecordProj (e, Label first_lbl)) (Assert (Bool false))) (List.tl all_bindings) in
+  let check_rec_type = 
+    Match (e, [(RecPat type_dict, check_rec_content); (AnyPat, antimatch)])
+  in
+  let _ = print_endline "you are here!" in
+  check_rec_type
 
-and isList (t : type_decl) (e : expr) : expr =
+and isList (t : type_decl) (e : expr) (antimatch : expr) : expr =
   let test_fun_name = Ident ("~testFun" ^ string_of_int (counter := !counter + 1 ; !counter)) in
   let test_list = Ident ("~testList" ^ string_of_int (counter := !counter + 1 ; !counter)) in
   let dummy_var = Ident ("~dummy" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-  let test_fun = Match (Var test_list, [(EmptyLstPat, Bool true); (LstDestructPat (Ident "hd", Ident "tl"), (Let (dummy_var, generate_assert t (Var (Ident "hd")), Appl (Var test_fun_name, Var (Ident "tl")))))]) in
+  let test_fun = Match (Var test_list, 
+                        [(EmptyLstPat, Bool true); 
+                         (LstDestructPat (Ident "hd", Ident "tl"), 
+                            (Let (dummy_var, 
+                                  generate_assert t (Var (Ident "hd")) (Assert (Bool false)), 
+                                  Appl (Var test_fun_name, Var (Ident "tl")))
+                            )
+                         )
+                        ]
+                       ) in
   let check_fun = Funsig (test_fun_name, [test_list], test_fun) in
-  LetRecFun ([check_fun], Appl (Var test_fun_name, e))
+  let check_list_content = LetRecFun ([check_fun], Appl (Var test_fun_name, e)) in
+  let discard1 = Ident ("~discard" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+  let discard2 = Ident ("~discard" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+  let check_list_type = 
+    Match (e, [(EmptyLstPat, Bool true); (LstDestructPat (discard1, discard2), check_list_content); (AnyPat, antimatch)]) 
+  in
+  check_list_type
 
 and generate_assume (t : type_decl) : expr =
   match t with
@@ -69,13 +91,13 @@ and generate_assume (t : type_decl) : expr =
   | TypeIntersect (t1, t2) -> 
     let assume_t1 = generate_assume t1 in
     let candidate_var = Ident ("~candidate" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-    let validate = If (generate_assert t2 (Var candidate_var), 
+    let validate = If (generate_assert t2 (Var candidate_var) (Assert (Bool false)), 
                        Var candidate_var, 
                        Assume (Bool false)) in
     Let (candidate_var, assume_t1, validate)
   | TypeArrow (t1, t2) -> 
     let arg_assume = Ident ("~tval" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-    let inner_expr = If (generate_assert t1 (Var arg_assume), generate_assume t2, Assert (Bool false)) in 
+    let inner_expr = If (generate_assert t1 (Var arg_assume) (Assert (Bool false)), generate_assume t2, Assert (Bool false)) in 
     Function ([arg_assume], inner_expr)
   | TypeSet (t, Predicate p) ->
     let assume_t = generate_assume t in
@@ -83,29 +105,29 @@ and generate_assume (t : type_decl) : expr =
     let pred_check = If (Appl (p, Var candidate), Var candidate, Assume (Bool false)) in
     Let (candidate, assume_t, pred_check)
 
-and generate_assert (t : type_decl) (e : expr) : expr = 
+and generate_assert (t : type_decl) (e : expr) (antimatch : expr) : expr = 
   match t with
-  | TypeInt -> isInt e
-  | TypeBool -> isBool e
-  | TypeRecord r -> isRecord r e
-  | TypeList t -> isList t e
+  | TypeInt -> isInt e antimatch
+  | TypeBool -> isBool e antimatch
+  | TypeRecord r -> isRecord r e antimatch
+  | TypeList t -> isList t e antimatch
   | TypeUnion (t1, t2) -> 
     let select_int = Ident ("~select_int" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-    let checker1 = If (generate_assert t1 e, Bool true, generate_assert t2 e) in
-    let checker2 = If (generate_assert t2 e, Bool true, generate_assert t1 e) in
+    let checker1 = generate_assert t1 e (generate_assert t2 e (Assert (Bool false))) in
+    let checker2 = generate_assert t2 e (generate_assert t1 e (Assert (Bool false))) in
     let branch = If (Geq (Var select_int, Int 0), checker1, checker2) in
     Let (select_int, Input, branch)
   | TypeIntersect (t1, t2) -> 
     let dummy_var = Ident ("~dummy" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-    Let (dummy_var, generate_assert t1 e, generate_assert t2 e)
+    Let (dummy_var, generate_assert t1 e (Assert (Bool false)) , generate_assert t2 e (Assert (Bool false)))
   | TypeArrow (t1, t2) -> 
-    begin
-      let arg_assert = Ident ("~arg" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-      Let (arg_assert, generate_assume t1, generate_assert t2 (Appl (e, Var arg_assert)))
-    end
+    let arg_assert = Ident ("~arg" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+    Let (arg_assert, 
+         generate_assume t1, 
+         generate_assert t2 (Appl (e, Var arg_assert)) (Assert (Bool false)))
   | TypeSet (t, Predicate p) ->
     let dummy_var = Ident ("~dummy" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-    Let (dummy_var, generate_assert t e, Assert (Appl (p, e)))
+    Let (dummy_var, generate_assert t e (Assert (Bool false)), Assert (Appl (p, e)))
   
   let rec typed_non_to_on (e : expr) : expr = 
     match e with
@@ -125,7 +147,8 @@ and generate_assert (t : type_decl) (e : expr) : expr =
       end
     | LetWithType (x, e1, e2, type_decl) ->
       begin
-        let test_expr = generate_assert type_decl (Var x) in
+        let _ = print_endline "LetWithType" in
+        let test_expr = generate_assert type_decl (Var x) (Assert (Bool false)) in
         let test_ident = Ident ("~test_expr" ^ string_of_int (counter := !counter + 1 ; !counter)) in
         let test_let = Let (test_ident, test_expr, (typed_non_to_on e2)) in
         Let (x, e1, test_let)
@@ -134,7 +157,7 @@ and generate_assert (t : type_decl) (e : expr) : expr =
       begin
         let fun_names = List.map (fun (Funsig (id, _, _)) -> Var id) sig_lst in
         let combined_lst = List.combine fun_names type_decl_lst in
-        let test_exprs = List.map (fun (f, t) -> generate_assert t f) combined_lst in
+        let test_exprs = List.map (fun (f, t) -> generate_assert t f (Assert (Bool false))) combined_lst in
         let test_ident = Ident ("~test_expr" ^ string_of_int (counter := !counter + 1 ; !counter)) in
         let test_lets = List.fold_right 
           (fun cur_elm cur_acc -> Let (test_ident, cur_elm, cur_acc)) test_exprs (typed_non_to_on e)
@@ -144,7 +167,8 @@ and generate_assert (t : type_decl) (e : expr) : expr =
       end
     | LetFunWithType ((Funsig (f, _, _) as fun_sig), e, type_decl) ->
       begin
-        let test_expr = generate_assert type_decl (Var f) in
+        let _ = print_endline "LetFunWithType" in
+        let test_expr = generate_assert type_decl (Var f) (Assert (Bool false)) in
         let test_ident = Ident ("~test_expr" ^ string_of_int (counter := !counter + 1 ; !counter)) in
         let test_let = Let (test_ident, test_expr, (typed_non_to_on e)) in
         let fun_sig' = transform_funsig fun_sig in
@@ -177,5 +201,5 @@ and generate_assert (t : type_decl) (e : expr) : expr =
     | Assert e -> Assert (typed_non_to_on e)
     | Assume e -> Assume (typed_non_to_on e)
 
-  and transform_funsig (Funsig (fun_name, params, e)) = 
-      Funsig (fun_name, params, typed_non_to_on e)
+and transform_funsig (Funsig (fun_name, params, e)) = 
+    Funsig (fun_name, params, typed_non_to_on e)
