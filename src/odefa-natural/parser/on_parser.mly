@@ -101,6 +101,8 @@ let add_record_entry lbl value old_record =
 %token ASSERT
 %token ASSUME
 %token MU
+%token REIFY
+%token TYPIFY
 %token PLUS
 %token MINUS
 %token ASTERISK
@@ -156,6 +158,8 @@ expr:
       { Assert($2) }
   | ASSUME expr
       { Assume($2) }
+  | REIFY type_decl
+      { Reify($2) }
   | variant_label expr %prec prec_variant
       { VariantExpr($1, $2) }
   | expr ASTERISK expr
@@ -218,13 +222,14 @@ expr:
 
 type_decl:
   | basic_types { $1 }
-  | type_var { TypeVar $1 }
-  | MU type_var DOT type_decl { TypeRecurse ($2, $4) }
+  | ident_decl { TypeVar $1 }
+  | MU ident_decl DOT type_decl { TypeRecurse ($2, $4) }
   | type_decl ARROW type_decl { TypeArrow ($1, $3) }
   | OPEN_BRACE basic_types PIPE expr CLOSE_BRACE { TypeSet ($2, Predicate $4) }
   | type_decl DOUBLE_PIPE type_decl { TypeUnion ($1, $3) }
   | type_decl DOUBLE_AMPERSAND type_decl { TypeIntersect ($1, $3) }
   | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
+  | TYPIFY expr { Typify $2 }
 
 type_var:
   | TYPEVAR { Ident $1 }

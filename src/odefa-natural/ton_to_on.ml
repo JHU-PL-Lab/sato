@@ -286,6 +286,70 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       | TypeSet (st, p) -> TypeSet (rename_tree old_var new_var st, p)
       | TypeRecurse (t_var', rt) ->
         if (old_var == t_var') then TypeRecurse (new_var, rename_tree old_var new_var rt) else TypeRecurse (t_var', rename_tree old_var new_var rt)
+      | Typify t_expr -> 
+        begin
+          let rec rename_funsig (Funsig (fun_name, params, e)) = 
+            Funsig (fun_name, params, rename_expr e)
+          and rename_expr (e : expr) : expr = 
+            match e with
+            | Int _ | Bool _ | Var _ | Input -> e
+            | Function (id_lst, e) -> Function (id_lst, rename_expr e)
+            | Appl (e1, e2) -> Appl (rename_expr e1, rename_expr e2) 
+            | Let (x, e1, e2) -> Let (x, rename_expr e1, rename_expr e2)
+            | LetRecFun (sig_lst, e) ->
+              begin
+                let sig_lst' = List.map rename_funsig sig_lst in 
+                LetRecFun (sig_lst', rename_expr e)
+              end
+            | LetFun (fun_sig, e) ->
+              begin
+                let sig' = rename_funsig fun_sig in
+                LetFun (sig', rename_expr e)
+              end
+            | LetWithType (x, e1, e2, td) ->
+              begin
+                let td' = rename_tree old_var new_var td in 
+                LetWithType (x, rename_expr e1, rename_expr e2, td')
+              end
+            | LetRecFunWithType (sig_lst, e, type_decl_lst) ->
+              begin
+                let sig_lst' = List.map rename_funsig sig_lst in
+                let type_decl_lst' = List.map (rename_tree old_var new_var) type_decl_lst in
+                LetRecFunWithType (sig_lst', rename_expr e, type_decl_lst')
+              end
+            | LetFunWithType (fun_sig, e, td) ->
+              begin
+               LetFunWithType (rename_funsig fun_sig, rename_expr e, rename_tree old_var new_var td)
+              end
+            | Plus (e1, e2) -> Plus (rename_expr e1, rename_expr e2)
+            | Minus (e1, e2) -> Minus (rename_expr e1, rename_expr e2)
+            | Times (e1, e2) -> Times (rename_expr e1, rename_expr e2)
+            | Divide (e1, e2) -> Divide (rename_expr e1, rename_expr e2)
+            | Modulus (e1, e2) -> Modulus (rename_expr e1, rename_expr e2)
+            | Equal (e1, e2) -> Equal (rename_expr e1, rename_expr e2)
+            | Neq (e1, e2) -> Neq (rename_expr e1, rename_expr e2)
+            | LessThan (e1, e2) -> LessThan (rename_expr e1, rename_expr e2)
+            | Leq (e1, e2) -> Leq (rename_expr e1, rename_expr e2)
+            | GreaterThan (e1, e2) -> GreaterThan (rename_expr e1, rename_expr e2)
+            | Geq (e1, e2) -> Geq (rename_expr e1, rename_expr e2)
+            | And (e1, e2) -> And (rename_expr e1, rename_expr e2)
+            | Or (e1, e2) -> Or (rename_expr e1, rename_expr e2)
+            | Not e -> Not (rename_expr e)
+            | If (e1, e2, e3) -> If (rename_expr e1, rename_expr e2, rename_expr e3)
+            | Record m -> Record (Ident_map.map (fun e -> rename_expr e) m)
+            | RecordProj (e, l) -> RecordProj (rename_expr e, l)
+            | Match (e, pattern_expr_lst) ->
+              let e' = rename_expr e in
+              let pattern_expr_lst' = List.map (fun (pat, expr) -> (pat, rename_expr expr)) pattern_expr_lst in
+              Match (e', pattern_expr_lst')
+            | VariantExpr (lbl, e) -> VariantExpr (lbl, rename_expr e)
+            | List expr_lst -> List (List.map rename_expr expr_lst)
+            | ListCons (e1, e2) -> ListCons (rename_expr e1, rename_expr e2)
+            | Assert e -> Assert (rename_expr e)
+            | Assume e -> Assume (rename_expr e)
+            | Reify te -> semantic_pair_of (rename_tree old_var new_var te) 
+          in Typify (rename_expr t_expr)
+        end
     in
     let fresh_type_var = Ident ("self_" ^ t_var ^ string_of_int (counter := !counter + 1 ; !counter)) in
     (* let _  = print_endline ("******" ^ show_type_decl t' ^ "******") in *)
@@ -307,9 +371,12 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
     in
     let primer_var = Ident "primer" in
     Let (primer_var, Function ([fresh_type_var], Record rec_map), Appl (Var primer_var, Var primer_var))
+  | Typify e ->
+    (* TODO: Add sanity check for record type later on *)
+    typed_non_to_on e
 
-(* TODO: Use the checker/generator pair to perform the checking, which should make things simpler *)
-let rec typed_non_to_on (e : expr) : expr = 
+    (* TODO: Use the checker/generator pair to perform the checking, which should make things simpler *)
+and typed_non_to_on (e : expr) : expr = 
   match e with
   | Int _ | Bool _ | Var _ | Input -> e
   | Function (id_lst, e) -> Function (id_lst, typed_non_to_on e)
@@ -384,6 +451,9 @@ let rec typed_non_to_on (e : expr) : expr =
   | ListCons (e1, e2) -> ListCons (typed_non_to_on e1, typed_non_to_on e2)
   | Assert e -> Assert (typed_non_to_on e)
   | Assume e -> Assume (typed_non_to_on e)
+  | Reify type_expr -> 
+    semantic_pair_of type_expr
+
 
 and transform_funsig (Funsig (fun_name, params, e)) = 
     Funsig (fun_name, params, typed_non_to_on e)

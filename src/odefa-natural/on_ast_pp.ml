@@ -73,6 +73,7 @@ and pp_type_decl formatter type_decl =
   | TypeArrow (t1, t2) -> Format.fprintf formatter "(%a -> %a)" pp_type_decl t1 pp_type_decl t2
   | TypeSet (t, p) -> Format.fprintf formatter "{%a | %a}" pp_type_decl t pp_predicate p
   | TypeRecurse (tvar, t) ->  Format.fprintf formatter "Mu %a.%a" pp_ident tvar pp_type_decl t
+  | Typify e -> Format.fprintf formatter "type_expr : %a" pp_expr e
 
 (* and pp_type_decl_list formatter list =
   Pp_utils.pp_concat_sep
@@ -258,6 +259,8 @@ and pp_expr formatter expr =
       Format.fprintf formatter "assume %a" pp_expr e
     else
       Format.fprintf formatter "assume (%a)" pp_expr e
+  | Reify te ->
+      Format.fprintf formatter "reify (%a)" pp_type_decl te
 ;;
 
 let show_ident = Pp_utils.pp_to_string pp_ident;;

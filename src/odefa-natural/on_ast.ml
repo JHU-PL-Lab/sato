@@ -53,6 +53,7 @@ and type_decl =
   | TypeArrow of type_decl * type_decl
   | TypeSet of type_decl * predicate
   | TypeRecurse of ident * type_decl
+  | Typify of expr
 [@@ deriving eq, ord, show, to_yojson]
 
 and predicate = Predicate of expr
@@ -67,7 +68,7 @@ and pattern = AnyPat | IntPat | BoolPat | FunPat
             | VariantPat of variant_label * ident
             | VarPat of ident
             | EmptyLstPat | LstDestructPat of ident * ident
-            
+
 and expr =
   | Int of int | Bool of bool
   | Var of ident | Function of ident list * expr
@@ -90,6 +91,7 @@ and expr =
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
   | Assert of expr | Assume of expr
+  | Reify of type_decl
   (* | Protected of expr *)
 [@@deriving eq, ord, to_yojson]
 ;;
@@ -121,7 +123,7 @@ let expr_precedence expr =
   | ListCons _ -> 6
   | Plus _ | Minus _ -> 7
   | Times _ | Divide _ | Modulus _ -> 8
-  | Assert _ | Assume _ | VariantExpr _ -> 9
+  | Assert _ | Assume _ | Reify _| VariantExpr _ -> 9
   | Appl _ -> 10
   | RecordProj _ -> 11
   | Int _ | Bool _ | Input | Var _ | List _ | Record _ -> 12

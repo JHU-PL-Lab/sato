@@ -1,0 +1,2 @@
+let test_type = reify(int) in
+let (x : test_type) = 1 in x  

@@ -1,10 +1,10 @@
 # EXPECT-WELL-FORMED
 # EXPECT-NO-TYPE-ERRORS
 
-let rec fold (f : int -> int -> int) (lst : [bool]) (accum : int) : int =
+let real_fold (lst : [int]) : int =
     match lst with
-    | [] -> accum
-    | hd :: tl -> f hd (fold f tl accum)
+        | [] -> false
+        | hd :: tl -> 5
     end
 in
-fold
+real_fold
