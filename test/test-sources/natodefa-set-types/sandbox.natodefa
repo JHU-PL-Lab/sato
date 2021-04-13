@@ -1,6 +1,10 @@
 # EXPECT-WELL-FORMED
 # EXPECT-NO-TYPE-ERRORS
 
-let identity ( x : int || bool ) : ( int || bool ) = x in
-identity 5
+let test_list (list : [int]) : int = 
+    match list with
+    | [] -> false
+    | hd :: tl -> 5
+    end
+in test_list 
 

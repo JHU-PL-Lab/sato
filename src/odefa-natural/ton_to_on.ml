@@ -30,7 +30,7 @@ and isList (t : type_decl) (e : expr) (antimatch : expr) : expr =
   let test_fun_name = Ident ("~testFun" ^ string_of_int (counter := !counter + 1 ; !counter)) in
   let test_list = Ident ("~testList" ^ string_of_int (counter := !counter + 1 ; !counter)) in
   let dummy_var = Ident ("~dummy" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-  let test_fun = Match (Var test_list, 
+  (* let test_fun = Match (Var test_list, 
                         [(EmptyLstPat, Bool true); 
                          (LstDestructPat (Ident "hd", Ident "tl"), 
                             (Let (dummy_var, 
@@ -39,7 +39,8 @@ and isList (t : type_decl) (e : expr) (antimatch : expr) : expr =
                             )
                          )
                         ]
-                       ) in
+                       ) in *)
+  let test_fun = Let (dummy_var, generate_assert t (Var (Ident "hd")) (Assert (Bool false)), Appl (Var test_fun_name, Var (Ident "tl"))) in
   let check_fun = Funsig (test_fun_name, [test_list], test_fun) in
   let check_list_content = LetRecFun ([check_fun], Appl (Var test_fun_name, e)) in
   let discard1 = Ident ("~discard" ^ string_of_int (counter := !counter + 1 ; !counter)) in
