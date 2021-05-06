@@ -176,14 +176,10 @@ let rec on_expr_transformer transformer expr =
   | Function (id_lst, e) -> Function (id_lst, recurse e)
   | Appl (e1, e2) -> Appl (recurse e1, recurse e2)
   | Let (id, e1, e2) -> Let (id, recurse e1, recurse e2)
-  (* TODO: Actually implement this - EW *)
-  | LetWithType _ -> failwith "undefined"
   | LetFun (fs, e) ->
     let Funsig (fs_ident, fs_args, e_body) = fs in
     let fs' = Funsig (fs_ident, fs_args, recurse e_body) in
     LetFun (fs', recurse e)
-  (* TODO: Actually implement this - EW *)
-  | LetFunWithType _ -> failwith "undefined"
   | LetRecFun (fs_lst, e) ->
     let fs_lst' =
       List.map
@@ -191,8 +187,6 @@ let rec on_expr_transformer transformer expr =
         fs_lst
     in
     LetRecFun (fs_lst', recurse e)
-  (* TODO: Actually implement this - EW *)
-  | LetRecFunWithType _ -> failwith "undefined"
   | Plus (e1, e2) -> Plus (recurse e1, recurse e2)
   | Minus (e1, e2) -> Minus (recurse e1, recurse e2)
   | Times (e1, e2) -> Times (recurse e1, recurse e2)
@@ -214,6 +208,9 @@ let rec on_expr_transformer transformer expr =
   | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
   | Assert e -> Assert (recurse e)
   | Assume e -> Assume (recurse e)
+  (* TODO: Throw an exception properly! *)
+  | On_ast.LetFunWithType _ | On_ast.LetRecFunWithType _ | On_ast.LetWithType _ 
+  | On_ast.SetCell _ | On_ast.GetCell _ | On_ast.NewCell _ -> raise @@ Utils.Invariant_failure "Should have been desugared by now!"
 ;;
 
 let get_natodefa_equivalent_expr mappings odefa_ident =

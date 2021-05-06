@@ -1,0 +1,5 @@
+{- STATEFUL -}
+
+let r = {a = false, b = 2} in
+let (x : bool) = r.b in
+x

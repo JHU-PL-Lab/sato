@@ -1,5 +1,28 @@
 # EXPECT-WELL-FORMED
-# EXPECT-NO-TYPE-ERRORS
+{- STATEFUL -}
 
-let neg (x : bool) : int = not x in
+let neg (x : bool) : bool = 
+    not x 
+in
 neg
+
+let ~stateful_user_expr = 
+    let ~normalized_1 = 
+        pure 
+        (fun x ->
+            let ~normalized_6 = pure x in
+            bind ~normalized_6
+                (fun ~pure_arg_7 -> pure (not ~pure_arg_7)) 
+        )
+    in
+    bind ~normalized_1 
+        (fun neg ->
+            let ~test_expr12 = 
+                let ~arg9 = input >= 0 in
+                match neg ~arg9 with 
+                | bool -> true 
+                | any -> assert false 
+                end 
+            in
+            pure neg)
+in ~stateful_user_expr init_state

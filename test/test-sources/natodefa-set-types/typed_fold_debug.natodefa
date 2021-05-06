@@ -1,0 +1,6 @@
+let rec list_maker6 len_arg4 =
+    if len_arg4 == 0 
+    then 0
+    else list_maker6 0
+in
+let list5 = list_maker6 0 in list5

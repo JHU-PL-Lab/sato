@@ -110,8 +110,6 @@ let rec rename_variable
     else
       let new_e2 = recurse e2 in
       Let(id, new_e1, new_e2)
-  (* TODO: Actually implement this - EW *)
-  | LetWithType _ -> failwith "undefined"
   | LetFun (f_sig, e') ->
     let (Funsig(id, id_list, fun_e)) = f_sig in
     (* If old_name is same as the function name, then don't change anything *)
@@ -131,8 +129,6 @@ let rec rename_variable
         LetFun(new_funsig, new_outer_e)
       end
     end
-  (* TODO: Actually implement this - EW *)
-  | LetFunWithType _ -> failwith "undefined"
   | LetRecFun (f_sigs, e') ->
     let function_names =
       f_sigs
@@ -160,8 +156,6 @@ let rec rename_variable
         recurse e'
     in
     LetRecFun(f_sigs', e'')
-  (* TODO: Actually implement this - EW *)
-  | LetRecFunWithType _ -> failwith "undefined"
   | Match (e0, cases) ->
     let e0' = recurse e0 in
     let cases' =
@@ -198,6 +192,9 @@ let rec rename_variable
   | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
   | Assert e -> Assert (recurse e)
   | Assume e -> Assume (recurse e)
+  (* TODO: Throw an exception properly! *)
+  | On_ast.LetFunWithType _ | On_ast.LetRecFunWithType _ | On_ast.LetWithType _ 
+  | On_ast.SetCell _ | On_ast.GetCell _ | On_ast.NewCell _ -> raise @@ Utils.Invariant_failure "Should have been desugared by now!"
 ;;
 
 (** This function alphatizes an entire expression.  If a variable is defined
@@ -276,8 +273,6 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
         in
         let%orzero ([x'], [e1''; e2'']) = (xs, es) in
         return (Let(x', e1'', e2''), seen_declared''')
-      (* TODO: Actually implement this - EW *)
-      | LetWithType _ -> failwith "undefined"
       | LetRecFun (funsigs, expr) ->
         let%bind funsigs'rev, seen_declared' =
           list_fold_left_m
@@ -326,8 +321,6 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
             ([], seen_declared'')
         in
         return (LetRecFun(List.rev funsigs'''_rev, expr'), seen_declared''')
-      (* TODO: Actually implement this - EW *)
-      | LetRecFunWithType _ -> failwith "undefined"
       | LetFun (funsig, expr) ->
         (* FIXME?: assuming that parameters in functions are not duplicated;
                   probably should verify that somewhere *)
@@ -351,8 +344,6 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
           ensure_expr_unique_names params body' seen_declared'''
         in
         return (LetFun(Funsig(name', params', body''), expr''), seen_declared'''')
-      (* TODO: Actually implement this - EW *)
-      | LetFunWithType _ -> failwith "undefined"
       | Plus (e1, e2) ->
         let%bind e1', seen_declared' = walk e1 seen_declared in
         let%bind e2', seen_declared'' = walk e2 seen_declared' in
@@ -473,6 +464,9 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
       | Assume e ->
         let%bind e', seen_declared' = walk e seen_declared in
         return (Assume e', seen_declared')
+          (* TODO: Throw an exception properly! *)
+      | On_ast.LetFunWithType _ | On_ast.LetRecFunWithType _ | On_ast.LetWithType _ 
+      | On_ast.SetCell _ | On_ast.GetCell _ | On_ast.NewCell _ -> raise @@ Utils.Invariant_failure "Should have been desugared by now!"
     in
     return (expr', seen_declared')
   in
@@ -786,8 +780,6 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Var_body(e1_var)) in
     return (e1_clist @ [assignment_clause] @ e2_clist, e2_var)
-  (* TODO: Actually implement this - EW *)
-  | LetWithType _ -> failwith "undefined"
   | LetFun (sign, e) ->
     (* TODO: check for bugs!!! *)
     (* Translating the function signature... *)
@@ -804,13 +796,9 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Var_body(return_var)) in
     return (fun_clauses @ [assignment_clause] @ e_clist, e_var)
-  (* TODO: Actually implement this - EW *)
-  | LetFunWithType _ -> failwith "undefined"
   | LetRecFun (_, _) ->
     raise @@
       Utils.Invariant_failure "LetRecFun should not have been passed to flatten_expr"
-  (* TODO: Actually implement this - EW *)
-  | LetRecFunWithType _ -> failwith "undefined"
   | Plus (e1, e2) ->
     flatten_binop expr e1 e2 Ast.Binary_operator_plus
   | Minus (e1, e2) ->
@@ -959,6 +947,9 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping assume_var expr in
     let new_clause = Ast.Clause(assume_var, Assume_body last_var) in
     return (flattened_exprs @ [new_clause], assume_var)
+  (* TODO: Throw an exception properly! *)
+  | On_ast.LetFunWithType _ | On_ast.LetRecFunWithType _ | On_ast.LetWithType _ 
+  | On_ast.SetCell _ | On_ast.GetCell _ | On_ast.NewCell _ -> raise @@ Utils.Invariant_failure "Should have been desugared by now!"
 ;;
 
 let debug_transform_on

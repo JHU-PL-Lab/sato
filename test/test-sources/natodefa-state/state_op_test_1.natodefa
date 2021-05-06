@@ -1,0 +1,5 @@
+{- STATEFUL -}
+
+let x = ref 0 in
+let (y : bool) = !x in
+y

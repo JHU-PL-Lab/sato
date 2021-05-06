@@ -484,6 +484,10 @@ let rec _add_constraints_and_close
               begin
                 let typ = Symbol_map.Exceptionless.find x'
                   solver.type_constraints_by_symbol in
+                (* TODO: Remove debug prints *)
+                (* let _ = print_endline "---------" in
+                let _ = print_endline (show_symbol x') in
+                let _ = print_endline (show_symbol_type (Option.default BottomSymbol typ)) in *)
                 match typ with
                 | Some (FunctionSymbol) ->
                   Constraint.Set.singleton @@ Constraint_value(x, Bool(true))

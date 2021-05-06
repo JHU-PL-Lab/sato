@@ -7,7 +7,7 @@ module List = BatList;;
 let sep = Odefa_ast.Ast_tools.label_sep;;
 let dup_label_count = ref 0;;
 
-let new_record lbl value =
+let new_record (lbl : label) (value : 'a) =
   let (Label k) = lbl in
   let key = Ident k in
   Ident_map.singleton key value
@@ -44,7 +44,7 @@ let new_fun_with_type
   (Funsig (fun_name, param_list, fun_body), function_type_p)
 ;; 
 
-let add_record_entry lbl value old_record =
+let add_record_entry (lbl : label) (value : 'a) (old_record : 'a Ident_map.t) =
   let (Label k) = lbl in
   let key =
     if Ident_map.mem (Ident k) old_record then
@@ -57,6 +57,8 @@ let add_record_entry lbl value old_record =
   Ident_map.add key value old_record
 ;;
 
+let rec infer_state_mode (expr : expr) : program = 
+  Program (expr, Stateless)
 %}
 
 // %token <string> TYPEVAR
@@ -100,12 +102,17 @@ let add_record_entry lbl value old_record =
 %token END
 %token ASSERT
 %token ASSUME
+%token REF 
+%token STATEFUL
+%token STATELESS
 // %token MU
 %token PLUS
 %token MINUS
 %token ASTERISK
 %token SLASH
 %token PERCENT
+%token BANG
+%token COLON_EQUAL
 %token LESS
 %token LESS_EQUAL
 %token GREATER
@@ -118,9 +125,10 @@ let add_record_entry lbl value old_record =
  */
 %nonassoc prec_let prec_fun   /* Let-ins and functions */
 %nonassoc prec_if             /* Conditionals */
+%right COLON_EQUAL            /* := (assignment) */
 %left OR                      /* Or */
 %left AND                     /* And */
-%right NOT                    /* Not */
+%right NOT REF BANG           /* Not, ref, ! */
 /* == <> < <= > >= */
 %left EQUAL_EQUAL NOT_EQUAL LESS LESS_EQUAL GREATER GREATER_EQUAL
 %right DOUBLE_COLON           /* :: */
@@ -129,23 +137,42 @@ let add_record_entry lbl value old_record =
 %right ASSERT ASSUME prec_variant    /* Asserts, Assumes, and variants */
 %right ARROW                  /* -> for type declaration */
 
-%start <On_ast.expr> prog
-%start <On_ast.expr option> delim_expr
+%start <On_ast.program> prog
+%start <On_ast.program option> delim_expr
 
 
 %%
 
 prog:
-  | expr EOF
-      { $1 }
+  | pragma expr EOF { Program ($2, $1) }
+  | expr EOF { infer_state_mode $1 }
   ;
 
 delim_expr:
   | EOF
       { None }
+  | pragma expr EOF
+      { Some (Program ($2, $1)) }
   | expr EOF
-      { Some ($1) }
+      { Some (infer_state_mode $1) }
   ;
+
+pragma:
+  // | OPEN_BRACE MINUS STATEFUL COLON state_record MINUS CLOSE_BRACE { Stateful $5 }
+  | OPEN_BRACE MINUS STATEFUL MINUS CLOSE_BRACE { Stateful }
+  | OPEN_BRACE MINUS STATELESS MINUS CLOSE_BRACE { Stateless }
+;
+
+// { (x : type_decl) = init_value, ..., (l_n : type_decl) = init_value }
+// state_record:
+//   | OPEN_BRACE state_record_body CLOSE_BRACE { $2 }
+
+// state_record_body:
+//   | OPEN_PAREN label COLON type_decl CLOSE_PAREN EQUALS expr
+//       { new_record $2 ($4, $7) }
+//   | OPEN_PAREN label COLON type_decl CLOSE_PAREN EQUALS expr COMMA state_record_body
+//       { add_record_entry $2 ($4, $7) $9 }
+
 
 /* **** Expressions **** */
 
@@ -156,6 +183,12 @@ expr:
       { Assert($2) }
   | ASSUME expr
       { Assume($2) }
+  | REF expr
+      { NewCell($2) }
+  | BANG expr 
+      { GetCell($2) }
+  | expr COLON_EQUAL expr 
+      { SetCell($1, $3)  }
   | variant_label expr %prec prec_variant
       { VariantExpr($1, $2) }
   | expr ASTERISK expr

@@ -1,0 +1,7 @@
+{- STATEFUL -}
+
+let id = 
+    let id2 (x : int) : bool = x in
+    id2 
+ in
+id

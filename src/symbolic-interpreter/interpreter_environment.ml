@@ -160,7 +160,19 @@ let prepare_environment
 let list_instrument_conditionals (e : expr) : ident list =
   e
   |> enum_all_aborts_in_expr
-  |> Enum.map (fun (_, abort_val) -> abort_val.abort_conditional_ident)
+  (* TODO: Remove debug prints *)
+  |> Enum.map (fun (_, abort_val) -> 
+    (* let _ = print_endline 
+      ("----------------" ^
+      "\n" ^
+      Ast_pp.show_ident abort_val.abort_predicate_ident ^ 
+      "\n" ^ 
+      string_of_bool abort_val.abort_conditional_branch ^
+      "\n" ^
+      Ast_pp.show_ident abort_val.abort_conditional_ident
+      )
+    in  *)
+    abort_val.abort_conditional_ident)
   |> List.of_enum
   |> List.rev
 ;;

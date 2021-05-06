@@ -90,9 +90,15 @@ and expr =
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
   | Assert of expr | Assume of expr
+  | SetCell of expr * expr | GetCell of expr 
+  | NewCell of expr
   (* | Protected of expr *)
 [@@deriving eq, ord, to_yojson]
 ;;
+
+type state_mode = Stateful | Stateless;;
+
+type program = Program of expr * state_mode;;
 
 module Expr = struct
   type t = expr;;
@@ -114,17 +120,18 @@ let expr_precedence expr =
   match expr with
   | Function _ | Let _ | LetFun _ | LetRecFun _ | LetWithType _ | LetFunWithType _ | LetRecFunWithType _ | Match _ -> 0
   | If _ -> 1
-  | Or _ -> 2
-  | And _ -> 3
-  | Not _ -> 4
-  | Equal _ | Neq _ | LessThan _ | Leq _ | GreaterThan _ | Geq _ -> 5
-  | ListCons _ -> 6
-  | Plus _ | Minus _ -> 7
-  | Times _ | Divide _ | Modulus _ -> 8
-  | Assert _ | Assume _ | VariantExpr _ -> 9
-  | Appl _ -> 10
-  | RecordProj _ -> 11
-  | Int _ | Bool _ | Input | Var _ | List _ | Record _ -> 12
+  | SetCell _ -> 2
+  | Or _ -> 3
+  | And _ -> 4
+  | Not _ | GetCell _ | NewCell _ -> 5
+  | Equal _ | Neq _ | LessThan _ | Leq _ | GreaterThan _ | Geq _ -> 6
+  | ListCons _ -> 7
+  | Plus _ | Minus _ -> 8
+  | Times _ | Divide _ | Modulus _ -> 9
+  | Assert _ | Assume _ | VariantExpr _ -> 10
+  | Appl _ -> 11
+  | RecordProj _ -> 12
+  | Int _ | Bool _ | Input | Var _ | List _ | Record _ -> 13
 ;;
 
 (** Takes expressions [e1] and [e2] as arguments.  Returns 0 if the two

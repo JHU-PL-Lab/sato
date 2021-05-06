@@ -1,0 +1,4 @@
+{- STATEFUL -}
+
+let (r : {a = int}) = {a = false, b = 2} in
+r

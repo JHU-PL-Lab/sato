@@ -1,0 +1,154 @@
+___first = {};
+real_fold___14 = fun lst -> (
+
+var___3 = lst;
+m_match_bool___8 = var___3 ~ {__empty};
+m_match_bool___5 = var___3 ~ {__head,  __tail};
+m_match_or___11 = m_match_bool___5 or m_match_bool___8;
+match___12 = m_match_or___11 ? (
+                                    m_match_cond___9 = m_match_bool___8 
+                                    ? (bool___10 = false) : (
+                                                                m_match_cond___6 = m_match_bool___5 
+                                                                ? (
+                                                                hd = var___3.__head;
+                                                                tl = var___3.__tail;
+                                                                int___7 = 5
+                                                                ) : 
+                                                                (
+                                                                ab___4 = abort
+                                                                )
+                                                            )
+                                    ) : (ab___13 = abort)
+);
+real_fold = real_fold___14;
+flatten_fun___50 = fun list_maker6___0 -> (
+
+flatten_fun___49 = fun len_arg4 -> (
+
+    var___15 = list_maker6___0;
+    var___16 = list_maker6___0;
+    m___76 = var___15 ~ fun;
+    appl___17 = m___76 ? (c_appl___77 = var___15 var___16) : (
+                                                                ab___78 = abort
+                                                                );
+    list_maker6 = appl___17;
+    var___18 = len_arg4;
+    int___19 = 0;
+    m_eq_binop_l_int___20 = var___18 ~ int;
+    m_eq_binop_r_int___21 = int___19 ~ int;
+    m_eq_binop_int___22 = m_eq_binop_l_int___20 and m_eq_binop_r_int___21;
+    m_eq_binop_l_bool___23 = var___18 ~ bool;
+    m_eq_binop_r_bool___24 = int___19 ~ bool;
+    m_eq_binop_bool___25 = m_eq_binop_l_bool___23 and m_eq_binop_r_bool___24;
+    m_eq_binop___26 = m_eq_binop_int___22 or m_eq_binop_bool___25;
+    eq_binop___32 = m_eq_binop___26 ? (
+                                        eq_binop_int___31 = m_eq_binop_int___22 
+                                        ? (
+                                            eq_binop_int_inner___30 = var___18 == int___19
+                                            ) : (
+                                                    eq_binop_bool___29 = m_eq_binop_bool___25 
+                                                    ? (
+                                                        eq_binop_bool_inner___28 = var___18 xnor int___19
+                                                        ) : (
+                                                                ab___27 = abort
+                                                            )
+                                                    )
+                                        ) : (ab___33 = abort);
+    m___79 = eq_binop___32 ~ bool;
+    if___48 = m___79 ? (
+                        c_cond___88 = eq_binop___32 ? (
+                                                            record___34 = 
+                                                            {};
+                                                            record___35 = 
+                                                            {
+                                                            __empty=record___34
+                                                            }
+                                                        ) : (
+                                                                input___36 = input;
+                                                                elm = input___36;
+                                                                record___37 = 
+                                                                {};
+                                                                var___38 = elm;
+                                                                var___39 = list_maker6;
+                                                                var___40 = len_arg4;
+                                                                int___41 = 1;
+                                                                m_bl___80 = var___40 ~ int;
+                                                                m_br___81 = int___41 ~ int;
+                                                                m_b___82 = m_bl___80 and m_br___81;
+                                                                binop___42 = m_b___82 
+                                                                ? (
+                                                                c_binop___83 = var___40 - int___41
+                                                                ) : 
+                                                                (
+                                                                ab___84 = abort
+                                                                );
+                                                                m___85 = var___39 ~ fun;
+                                                                appl___43 = m___85 
+                                                                ? (
+                                                                c_appl___86 = var___39 binop___42
+                                                                ) : 
+                                                                (
+                                                                ab___87 = abort
+                                                                );
+                                                                record___44 = 
+                                                                {};
+                                                                record___45 = 
+                                                                {
+                                                                __empty=record___44
+                                                                };
+                                                                record___46 = 
+                                                                {
+                                                                __head=appl___43,
+                                                                __tail=record___45
+                                                                };
+                                                                record___47 = 
+                                                                {
+                                                                __cons=record___37,
+                                                                __head=var___38,
+                                                                __tail=record___46
+                                                                }
+                                                                )
+                        ) : (ab___89 = abort)
+    )
+);
+list_maker6___0___2 = flatten_fun___50;
+var___51 = list_maker6___0___2;
+var___52 = list_maker6___0___2;
+m___90 = var___51 ~ fun;
+appl___53 = m___90 ? (c_appl___91 = var___51 var___52) : (ab___92 = abort);
+list_maker6___1 = appl___53;
+var___54 = list_maker6___1;
+int___55 = 0;
+m___93 = var___54 ~ fun;
+appl___56 = m___93 ? (c_appl___94 = var___54 int___55) : (ab___95 = abort);
+list5 = appl___56;
+var___57 = list5;
+arg1 = var___57;
+var___58 = real_fold;
+var___59 = arg1;
+m___96 = var___58 ~ fun;
+appl___60 = m___96 ? (c_appl___97 = var___58 var___59) : (ab___98 = abort);
+m_match_bool___69 = appl___60 ~ int;
+m_match_bool___62 = appl___60 ~ any;
+m_match_or___72 = m_match_bool___62 or m_match_bool___69;
+match___73 = m_match_or___72 ? (
+                                m_match_cond___70 = m_match_bool___69 
+                                ? (bool___71 = true) : (
+                                                            m_match_cond___63 = m_match_bool___62 ? 
+                                                            ( dummyvarv = appl___60;
+                                                              bool___64 = false;
+                                                              assert_pred___65 = bool___64;
+                                                              m___99 = assert_pred___65 ~ bool;
+                                                              assert_res___66 = m___99 ? 
+                                                              (c_cond___100 = assert_pred___65 ? 
+                                                                (assert_res_true___67 = {}) : 
+                                                                (ab___68 = abort)
+                                                              ) : (ab___101 = abort)) : 
+                                                            (ab___61 = abort)
+                                                            )
+                                ) : (ab___74 = abort);
+test_expr10 = match___73;
+var___75 = real_fold;
+___result = var___75
+
+

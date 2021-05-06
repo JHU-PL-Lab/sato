@@ -228,7 +228,7 @@ and pp_expr formatter expr =
   (* Binary operations *)
   | Plus _ | Minus _ | Times _ | Divide _ | Modulus _
   | Equal _ | Neq _ | LessThan _ | Leq _ | GreaterThan _ | Geq _
-  | And _ | Or _ | ListCons _ ->
+  | And _ | Or _ | ListCons _ | SetCell _ ->
     pp_binop formatter expr
   (* Unary operations *)
   | Not e ->
@@ -236,6 +236,16 @@ and pp_expr formatter expr =
       Format.fprintf formatter "not %a" pp_expr e
     else
       Format.fprintf formatter "not (%a)" pp_expr e
+  | GetCell e ->
+    if expr_precedence_cmp expr e < 0 then
+      Format.fprintf formatter "!%a" pp_expr e
+    else
+      Format.fprintf formatter "!(%a)" pp_expr e
+  | NewCell e ->
+    if expr_precedence_cmp expr e < 0 then
+      Format.fprintf formatter "ref %a" pp_expr e
+    else
+      Format.fprintf formatter "ref (%a)" pp_expr e
   | RecordProj (e, lbl) ->
     if expr_precedence_cmp e expr > 0 then
       Format.fprintf formatter "%a.%a" pp_expr e pp_label lbl

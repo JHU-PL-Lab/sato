@@ -1,0 +1,7 @@
+# let (x : int) = if (0 == 0) then false else 5 in x
+
+not (true)
+
+fun s_0 -> 
+    let (val, s_1) = (fun s_0 -> (true, s_1)) s_0 in
+    (not val, s_1)

@@ -25,7 +25,7 @@ let parse_program
     | ".natodefa" ->
       begin
         let natodefa_ast = File.with_file_in filename On_parse.parse_program in
-        let desugared_typed = typed_non_to_on natodefa_ast in
+        let desugared_typed = translate_typed_prog natodefa_ast in
         let (odefa_ast, on_odefa_maps) =
           On_to_odefa.translate desugared_typed
         in
@@ -106,7 +106,10 @@ let get_target_vars
     begin
       match Interpreter_environment.list_instrument_conditionals expr with
       | [] -> raise NoOperationsInProgram
-      | target_list -> target_list
+      | target_list -> 
+        (* TODO : Remove print statement *)
+        (* let _ = print_endline "Done!" in  *)
+        target_list
     end
 ;;
 
@@ -136,17 +139,26 @@ let run_generation
     let json_list = ref [] in
     let generation_callback
       (type_errors : Ans.t) : unit =
+      (* TODO: Remove debug prints *)
+      (* let _ = print_endline "in generation_callback!" in *)
       if Ans.generation_successful type_errors then begin
+        (* let _ = print_endline "Then case!" in *)
         match args.args_output_format with
         | Standard ->
           let str = Ans.show type_errors in
-          output_string output @@ Printf.sprintf "%s\n" str
+          (* TODO: Remove debug print *)
+          (* let _ = print_endline str in
+          let _ = print_endline "\nend_print!\n" in *)
+          output_string output @@ Printf.sprintf "%s\n" str;
+          (* let _ = print_endline "after output!\n" in *)
+          flush stdout
         | Compact ->
           let str = Ans.show_compact type_errors in
           output_string output @@ Printf.sprintf "%s\n" str
         | JSON ->
           json_list := (Ans.to_yojson type_errors) :: !json_list        
-      end;
+      end
+      (* else print_endline "Else case! WHAT!"; *)
     in
     (* Run generator *)
     let gen_answers =

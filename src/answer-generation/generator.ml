@@ -119,6 +119,11 @@ module Make(Answer : Answer) = struct
         "Remaining filtered target vars: " ^
         "[" ^ (String.join "; " @@ List.map Ident.show x_list_filtered) ^ "]"
       );
+      (* let _ =
+        print_endline @@
+        "Remaining filtered target vars: " ^
+        "[" ^ (String.join "; " @@ List.map Ident.show x_list_filtered) ^ "]"
+      in *)
       (x, x_list_filtered)
   ;;
 
@@ -184,6 +189,8 @@ module Make(Answer : Answer) = struct
             List.iter
               (fun ans ->
                 lazy_logger `trace (fun () -> "Found answer on iteration.");
+                (* TODO: Remove debug print *)
+                (* let _ = print_endline "Found answer on iteration!!!\n" in *)
                 generation_callback ans)
               answers'
         end;

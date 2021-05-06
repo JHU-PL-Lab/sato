@@ -1,0 +1,4 @@
+{- STATEFUL -}
+
+let x = input in
+let (l : [bool]) = [x] in l

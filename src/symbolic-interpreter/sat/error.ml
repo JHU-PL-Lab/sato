@@ -227,6 +227,7 @@ module Make
   ;;
 
   let pp_error_match formatter err =
+    let _ = print_endline "pp_error_match called!" in
       let pp_value formatter err =
       let aliases = err.err_match_aliases in
       let value = err.err_match_val in

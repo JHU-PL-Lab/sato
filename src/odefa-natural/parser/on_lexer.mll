@@ -67,12 +67,17 @@ rule token = parse
 | "end"                { END }
 | "assert"             { ASSERT }
 | "assume"             { ASSUME }
+| "ref"                { REF }
+| "STATEFUL"           { STATEFUL }
+| "STATELESS"          { STATELESS }
 (* | "Mu"                 { MU } *)
 | "+"                  { PLUS }
 | "-"                  { MINUS }
 | "*"                  { ASTERISK }
 | "/"                  { SLASH }
 | "%"                  { PERCENT }
+| "!"                  { BANG }
+| ":="                 { COLON_EQUAL }
 | "=="                 { EQUAL_EQUAL }
 | "<>"                 { NOT_EQUAL }
 | "<"                  { LESS }

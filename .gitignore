@@ -40,3 +40,9 @@
 /translator
 /sandbox
 /type_verifier
+
+# VS collab file
+/.vsls.json
+
+# debug file
+test.sh

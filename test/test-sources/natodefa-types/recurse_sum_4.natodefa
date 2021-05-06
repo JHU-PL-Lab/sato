@@ -1,0 +1,12 @@
+# EXPECT-WELL-FORMED
+# EXPECT-TYPE-ERROR-COUNT 2
+# EXPECT-REQUIRED-INPUT-SEQUENCE-GENERATION-STEPS 25000
+# EXPECT-TYPE-ERROR ~result [0] "n + true" "" "true" "int" "bool"
+# EXPECT-TYPE-ERROR ~result [1] "n * false" "" "false" "int" "bool"
+
+## MAXIMUM-STEPS 10000
+
+let rec sum n =
+    if n == 0 then 0 else true + ( sum ( n - 1 ) ) 
+in
+sum 1

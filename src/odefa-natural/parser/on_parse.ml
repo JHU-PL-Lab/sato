@@ -17,6 +17,7 @@ let handle_parse_error buf f =
 ;;
 
 let parse_program (input : IO.input) =
+  (* let _ = print_endline "parse_program triggered!" in *)
   let buf = Lexing.from_channel input in
   handle_parse_error buf
     (fun () -> On_parser.prog On_lexer.token buf)

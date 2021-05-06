@@ -1,4 +1,5 @@
 open Batteries;;
+open Jhupllib;;
 
 open Odefa_ast;;
 
@@ -253,7 +254,6 @@ let rec m_env_out_transform_expr
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
       return @@ (On_ast.Let(x, e1', e2'), combiner out1 out2)
-    | On_ast.LetWithType _ -> failwith "undefined"
     | On_ast.LetRecFun (funsigs, e1) ->
       let%bind (e1', out1) = recurse env e1 in
       let%bind (funsigs', outs) =
@@ -261,14 +261,10 @@ let rec m_env_out_transform_expr
       in
       let out = List.fold_left combiner out1 outs in
       return @@ (On_ast.LetRecFun(funsigs', e1'), out)
-    (* TODO: Actually implement this - EW *)
-    | On_ast.LetRecFunWithType _ -> failwith "undefined"
     | On_ast.LetFun (funsig, e1) ->
       let%bind (e1', out1) = recurse env e1 in
       let%bind (funsig', out2) = transform_funsig funsig in
       return @@ (On_ast.LetFun(funsig', e1'), combiner out1 out2)
-    (* TODO: Actually implement this - EW *)
-    | On_ast.LetFunWithType _ -> failwith "undefined"
     | On_ast.Plus (e1, e2) ->
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
@@ -384,6 +380,9 @@ let rec m_env_out_transform_expr
     | On_ast.Assume e ->
       let%bind (e', out) = recurse env e in
       return @@ (On_ast.Assume e', out)
+    (* TODO: Throw an exception properly! *)
+    | On_ast.LetFunWithType _ | On_ast.LetRecFunWithType _ | On_ast.LetWithType _ 
+    | On_ast.SetCell _ | On_ast.GetCell _ | On_ast.NewCell _ -> raise @@ Utils.Invariant_failure "Should have been desugared by now!"
   in
   let%bind (e'', out'') = transformer recurse env e' in
   return (e'', combiner out' out'')

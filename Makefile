@@ -1,4 +1,4 @@
-.PHONY: all ddse sato clean repl sandbox test benchmark
+.PHONY: all ddse ddpa sato clean repl sandbox test translator benchmark
 
 all: sato ddse translator
 
