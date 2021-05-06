@@ -44,10 +44,13 @@ where `<filename>` refers to a `.odefa` or `.natodefa` file that Sato will typec
 
 To run tests on Sato (as well as DDPA and DDSE), run the `make test` command.
 
+To specify a test file is using state, add the pragma `{- STATEFUL -}` on the top of the file.
+
 TODOs
 ---
-- [x] Refactor codebase and fix bugs
+- [ ] Refactor codebase and fix bugs
   - [x] Write shared module type sig for odefa and natodefa errors
+  - [ ] Fix buggy behavior in DDSE, where the rule for record projection is incorrect
 - [x] Formalize revised rules
   - [x] Add projection, match, and abort rules
   - [x] Formally incorporate alias-passing (ie. on a = b, return a instead of b)
@@ -55,6 +58,7 @@ TODOs
 - [ ] Continue to write tests
   - [x] Tests that exercise alias passing to test revised rules
   - [ ] More list tests (fold, sort, etc.)
+  - [ ] Many tests for state are not passing due to the bug in DDSE (under natodefa-state: let_fun_test.natodefa, let_fun_test2.natodefa, let_rec_translate_test.natodefa)
 - [x] Write theory that maps errors in original code to aborts in instrumented code
   - [x] Ignore errors in dead odefa code by throwing out aborts/errors encountered after the first one
 - [x] Fix bugs relating to DDPA
@@ -82,8 +86,8 @@ TODOs for 100% coverage algorithm
 
 More TODOs
 ----
-- [ ] Heuristic to identify higher-level errors (as opposed to strictly lower-level ones)
-  - [ ] Incorrect data structures (e.g. using lists wrong)
+- [x] Heuristic to identify higher-level errors (as opposed to strictly lower-level ones)
+  - [x] Incorrect data structures (e.g. using lists wrong)
   - [ ] Applying an incorrect variable to a function
 - [ ] Add undefined value (replaces above bullet point)
 - [x] Heuristic for when to end recursion
