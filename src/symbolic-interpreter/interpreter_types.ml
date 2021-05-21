@@ -62,3 +62,22 @@ type abort_value = {
 }
 [@@ deriving eq, ord, show]
 ;;
+
+(* **** Lookup stack **** *)
+
+(** The type of elements on a lookup stack. The lookup stack is
+    essentially a continuation stack like in DDPA, and for now
+    both variable names and labels can appear on the lookup stack *)
+
+type lookup_stack_element = 
+  | LookupVar of Ident.t
+  | LookupLabel of ident
+[@@ deriving eq, ord, show]
+;;
+(* 
+let pp_lookup_stack_element formatter e = 
+  match e with
+  | LookupVar (Ident x) -> Format.pp_print_string formatter x
+  | LookupLabel (Ident l) -> Format.pp_print_string formatter l
+
+let show_lookup_stack_element = pp_to_string pp_lookup_stack_element;; *)

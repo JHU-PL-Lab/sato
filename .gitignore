@@ -40,3 +40,7 @@
 /translator
 /sandbox
 /type_verifier
+
+# Miscanale
+.vsls.json
+test.sh
