@@ -71,7 +71,7 @@ type abort_value = {
 
 type lookup_stack_element = 
   | LookupVar of Ident.t
-  | LookupLabel of ident
+  | LookupLabel of ident (* .l *)
 [@@ deriving eq, ord, show]
 ;;
 (* 

@@ -121,8 +121,10 @@ let _binop_types (op : binary_operator)
   | Binary_operator_xor -> (BoolSymbol, BoolSymbol, BoolSymbol)
 ;;
 
+(* TODO: This is probably the function we want to look at - EW *)
 let rec _construct_alias_chain solver symbol : ident list =
   let Symbol (x, _) = symbol in
+  let () = print_endline @@ "This is x: " ^ (show_ident x) in
   let alias_opt =
     Symbol_map.Exceptionless.find symbol solver.alias_constraints_by_symbol
   in
@@ -130,6 +132,7 @@ let rec _construct_alias_chain solver symbol : ident list =
   | Some symbol' ->
     (* We want the alias chain to only record chains of distinct symbols *)
     let Symbol (x', _) = symbol' in
+    let () = print_endline @@ "This is x': " ^ (show_ident x') in
     if not @@ equal_ident x x' then
       x :: _construct_alias_chain solver symbol'
     else
@@ -272,7 +275,10 @@ let rec _add_constraints_and_close
           { solver with
             constraints = Constraint.Set.add c solver.constraints;
             alias_constraints_by_symbol =
-              Symbol_map.add x1 x2 solver.alias_constraints_by_symbol
+              if (x1 = x2) 
+              then solver.alias_constraints_by_symbol 
+              else
+                Symbol_map.add x1 x2 solver.alias_constraints_by_symbol
           }
         | Constraint_binop (x1, x2, op, x3) ->
           { solver with

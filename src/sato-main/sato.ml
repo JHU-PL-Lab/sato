@@ -140,7 +140,8 @@ let run_generation
         match args.args_output_format with
         | Standard ->
           let str = Ans.show type_errors in
-          output_string output @@ Printf.sprintf "%s\n" str
+          output_string output @@ Printf.sprintf "%s\n" str;
+          flush stdout
         | Compact ->
           let str = Ans.show_compact type_errors in
           output_string output @@ Printf.sprintf "%s\n" str

@@ -12,6 +12,12 @@ open Interpreter_environment;;
 open Interpreter_types;;
 open Logger_utils;;
 
+let _pp_lookup_stack_element_list formatter lookup_stack_element_list =
+  Pp_utils.pp_concat_sep_delim "[" "]" "," pp_lookup_stack_element formatter @@ List.enum lookup_stack_element_list
+;;
+
+let _show_lookup_stack_element_list = Pp_utils.pp_to_string _pp_lookup_stack_element_list;;
+
 let lazy_logger = make_lazy_logger "Symbolic_interpreter.Interpreter";;
 
 type exploration_policy =
@@ -247,7 +253,7 @@ struct
         Printf.sprintf "Performing %s rule lookup on %s" name (show_ident x)
       )
     in
-    let rule_list = [
+    let rule_list : (symbol list) m list = [
       (* ### Value Discovery rule ### *)
       begin
         (* Lookup stack must be a singleton *)
@@ -377,7 +383,7 @@ struct
         trace_rule "Pattern Match" x;
         let%bind () = record_visited_clause x in
         (* Look up the symbol that is being matched upon *)
-        let%bind symbol_list = recurse ((LookupVar x') :: lookup_stack') acl1 relstack in
+        let%bind symbol_list = recurse (LookupVar x' :: lookup_stack') acl1 relstack in
         let%orzero pat_symbol :: symbol_list' = symbol_list in
         (* Record the constraint associated with the pattern match *)
         let lookup_symbol = Symbol(lookup_var, relstack) in
@@ -396,11 +402,9 @@ struct
       (* ### Value Discard rule ### *)
       begin
         (* Lookup stack must NOT be a singleton *)
-        (* The query element can be 
-           (1) A variable name (function non-local rule)
-           (2) A label in a record (record projection rule)
-        *)
-        let%orzero LookupVar lookup_var :: query_element :: lookup_stack' =
+        (* TODO: verify that this still has the desired intent.  What if
+            query_element isn't a variable? *)
+        let%orzero (LookupVar lookup_var) :: (LookupVar query_element) :: lookup_stack' =
           lookup_stack
         in
         (* This must be a value assignment clause defining that variable. *)
@@ -412,13 +416,14 @@ struct
         trace_rule "Value Discard" x;
         let%bind () = record_visited_clause x in
         (* We found the variable, so toss it and keep going. *)
-        let%bind symbol_list = recurse (query_element :: lookup_stack') acl1 relstack in
+        let%bind symbol_list = recurse (LookupVar query_element :: lookup_stack') acl1 relstack in
         let lookup_symbol = Symbol(lookup_var, relstack) in
         lazy_logger `trace (fun () ->
           Printf.sprintf "Value Discard rule discards %s"
             (show_symbol lookup_symbol));
-        return (lookup_symbol :: symbol_list)  
+        return (lookup_symbol :: symbol_list)
       end;
+
       (* ### Alias rule ### *)
       begin
         (* Grab variable from lookup stack *)
@@ -433,7 +438,7 @@ struct
         trace_rule "Alias" x;
         let%bind () = record_visited_clause x in
         (* Look for the alias now. *)
-        let%bind symbol_list = recurse ((LookupVar x') :: lookup_stack') acl1 relstack in
+        let%bind symbol_list = recurse (LookupVar x' :: lookup_stack') acl1 relstack in
         let%orzero alias_symbol :: symbol_list' = symbol_list in
         (* Add the alias constraint *)
         let lookup_symbol = Symbol (x, relstack) in
@@ -450,7 +455,7 @@ struct
       (* ### Function Enter Parameter rule ### *)
       begin
         (* Grab variable from lookup stack *)
-        let%orzero (LookupVar lookup_var) :: lookup_stack' = lookup_stack in
+        let%orzero (LookupVar lookup_var)  :: lookup_stack' = lookup_stack in
         (* This must be a binding enter clause which defines our lookup
             variable. *)
         let%orzero Binding_enter_clause(Abs_var x, Abs_var x', c) = acl1 in
@@ -696,34 +701,35 @@ struct
 
       (* Record Projection Ends *)
       begin
-        let%orzero (LookupLabel lbl) :: lookup_stack' =
-        lookup_stack
+        let%orzero LookupVar x :: LookupLabel lbl :: lookup_stack' =
+          lookup_stack
         in
         (* This must be a value assignment clause defining a record. *)
         let%orzero Unannotated_clause(
-          Abs_clause (Abs_var x, Abs_value_body _)) = acl1
+          Abs_clause (Abs_var x', Abs_value_body _)) = acl1
         in
+        [%guard equal_ident x x'];
         (* Report Record Projection Ends rule lookup *)
         trace_rule "Record Projection Ends" x;
-        let () = print_endline "Value Discard rule triggered, CP 0" in
         let%orzero (Clause (_, Value_body(v))) =
           Ident_map.find x env.le_clause_mapping
         in
-        let () = print_endline "Value Discard rule triggered, CP 1" in
         match v with
         | Value_record (Record_value m) ->
-          let () = print_endline "Value Discard rule triggered, CP 2" in
           let (Var (lbl_var, _)) = Ident_map.find lbl m in
-          let%bind symbol_list = recurse (LookupVar lbl_var :: lookup_stack') acl1 relstack in
-          let () = print_endline "Value Discard rule triggered, CP 3" in
-          let%orzero var_symbol :: _ = symbol_list in
-          let () = print_endline "Value Discard rule triggered, CP 4" in
+          let%bind var_symbol_list = recurse (LookupVar lbl_var :: lookup_stack') acl1 relstack in
+          let field_symbol = Symbol (lbl_var, relstack) in
+          let record_symbol = Symbol (x, relstack) in
           lazy_logger `trace (fun () ->
-            (* TODO: Fix this later; logging message needs correct info *)
-            Printf.sprintf "Value Discard rule discards %s"
-              (show_symbol var_symbol));
-          let () = print_endline "Value Discard rule triggered, CP 5" in
-          return symbol_list
+            Printf.sprintf "Record Projection Ends rule finds projection: %s.%s = %s"
+              (show_symbol record_symbol)
+              (show_ident lbl)
+              (show_symbol field_symbol)
+              );
+          let%bind () = record_constraint @@
+          Constraint_projection (field_symbol, record_symbol, lbl)
+          in
+          return (record_symbol :: var_symbol_list)
         (* TODO: Error handling code needs to be replaced here *)
         | _ -> failwith "Replace with correct error handling code here!" 
       end;
@@ -739,35 +745,27 @@ struct
             Abs_clause (Abs_var x, Abs_projection_body(Abs_var x', lbl))) =
           acl1
         in
-        let () = print_endline "Record projection rule triggered, CP 0" in
         [%guard equal_ident x lookup_var];
-        let () = print_endline "Record projection rule triggered, CP 1" in
         (* Report Record Projection rule lookup *)
-        trace_rule "Record Projection" lookup_var;
+        trace_rule "Record Projection Starts" lookup_var;
         let%bind () = record_visited_clause x in
         (* Look up the record itself and identify the symbol it uses. *)
-        (* We ignore the stacks here intentionally; see note 1 above. *)
-        let () = print_endline "Record projection rule triggered, CP 1.5" in
-        let%bind symbol_list = recurse ((LookupVar x') :: (LookupLabel lbl) :: lookup_stack') acl1 relstack in
-        let () = print_endline "Record projection rule triggered, CP 2" in
-        let%orzero projected_var_symbol :: symbol_list' = symbol_list in
+        let%bind return_symbol_list = recurse (LookupVar x' :: LookupLabel lbl :: lookup_stack') acl1 relstack in
+        let%orzero _ :: ret_symbol :: symbol_list' = return_symbol_list in
         (* Now record the constraint that the lookup variable must be the
             projection of the label from that record. *)
-        let () = print_endline "Record projection rule triggered, CP 3" in
         let lookup_symbol = Symbol (lookup_var, relstack) in
-        let () = print_endline "Constraint added: " in
-        let () = print_endline @@ show_symbol lookup_symbol ^ "=" ^ show_symbol projected_var_symbol in
+        let record_symbol = Symbol (x', relstack) in
         let%bind () = record_constraint @@
-          Constraint_alias (lookup_symbol, projected_var_symbol)
-          (* Constraint_projection (lookup_symbol, record_symbol, lbl) *)
+          Constraint_projection (lookup_symbol, record_symbol, lbl)
         in
         (* And we're finished. *)
-        (* lazy_logger `trace (fun () ->
-          Printf.sprintf "Record Projection rule completed on %s = %s.%s"
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Record Projection rule starts on %s = %s.%s"
             (show_symbol lookup_symbol)
-            (show_symbol )
-            (show_ident lbl)); *)
-        return (lookup_symbol :: symbol_list')
+            (show_symbol record_symbol)
+            (show_ident lbl));
+        return (ret_symbol :: symbol_list')
       end;
 
       (* Abort (not a written rule) *)
@@ -800,7 +798,7 @@ struct
       begin
         (* Lookup stack needs to be a singleton, since assume doesn't return
            function values (which are the only valid non-bottom elements) *)
-        let%orzero [(LookupVar lookup_var)] = lookup_stack in
+        let%orzero [LookupVar lookup_var] = lookup_stack in
         (* This must be an assume clause assigning to that variable. *)
         let%orzero Unannotated_clause(
             Abs_clause (Abs_var x, Abs_assume_body (Abs_var x'))) =
