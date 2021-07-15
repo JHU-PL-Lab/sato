@@ -149,14 +149,17 @@ let run_generation
           json_list := (Ans.to_yojson type_errors) :: !json_list        
       end;
     in
+    let () = print_endline "CP: 0" in
     (* Run generator *)
     let gen_answers =
       Generator.generate_answers
         ~generation_callback:generation_callback
         gen_params
     in
+    let () = print_endline "CP: 1" in
     (* Finish generation *)
     let is_complete = gen_answers.gen_is_complete in
+    let () = print_endline "CP: 2" in
     begin
       match args.args_output_format with
       | Standard ->

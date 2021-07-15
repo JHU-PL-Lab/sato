@@ -124,7 +124,6 @@ let _binop_types (op : binary_operator)
 (* TODO: This is probably the function we want to look at - EW *)
 let rec _construct_alias_chain solver symbol : ident list =
   let Symbol (x, _) = symbol in
-  let () = print_endline @@ "This is x: " ^ (show_ident x) in
   let alias_opt =
     Symbol_map.Exceptionless.find symbol solver.alias_constraints_by_symbol
   in
@@ -132,7 +131,6 @@ let rec _construct_alias_chain solver symbol : ident list =
   | Some symbol' ->
     (* We want the alias chain to only record chains of distinct symbols *)
     let Symbol (x', _) = symbol' in
-    let () = print_endline @@ "This is x': " ^ (show_ident x') in
     if not @@ equal_ident x x' then
       x :: _construct_alias_chain solver symbol'
     else

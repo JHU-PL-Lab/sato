@@ -712,11 +712,15 @@ struct
         (* Report Record Projection Ends rule lookup *)
         trace_rule "Record Projection Ends" x;
         let%orzero (Clause (_, Value_body(v))) =
+        (* DEBUG: Not this *)
           Ident_map.find x env.le_clause_mapping
         in
         match v with
         | Value_record (Record_value m) ->
+          let () = print_endline "pre-find" in
+          let () = print_endline (show_ident lbl) in
           let (Var (lbl_var, _)) = Ident_map.find lbl m in
+          let () = print_endline "post-find" in
           let%bind var_symbol_list = recurse (LookupVar lbl_var :: lookup_stack') acl1 relstack in
           let field_symbol = Symbol (lbl_var, relstack) in
           let record_symbol = Symbol (x, relstack) in
@@ -814,9 +818,6 @@ struct
         let%bind () = record_constraint @@
           Constraint.Constraint_value (symbol_1, Constraint.Bool true)
         in
-        (* let%bind () = record_constraint @@
-          Constraint.Constraint_value_clause (symbol_1, Constraint.Bool true)
-        in *)
         lazy_logger `trace (fun () ->
           Printf.sprintf "assume rule discovered that %s = true"
             (show_symbol symbol_1));
@@ -888,11 +889,10 @@ struct
       let%bind _ =
         (* We need to start from the successor of the program point, since the
            lookup itself starts at the previous clause.  The successor clause
-           will either be another unannotated clause or a end clause, so only
+           will either be another unannotated clause or an end clause, so only
            a single successor is picked with the same call stack. *)
         let%bind acl' = pick @@ succs acl cfg in
         lookup env [initial_lookup_var] acl' Relative_stack.empty
-        (* lookup env [initial_lookup_var] acl Relative_stack.empty *)
       in
       return ()
     in

@@ -41,6 +41,7 @@
 /sandbox
 /type_verifier
 
-# Miscanale
+# Miscanaleous
 .vsls.json
 test.sh
+/doc

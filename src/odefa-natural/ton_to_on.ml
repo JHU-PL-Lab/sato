@@ -6,22 +6,6 @@ type semantic_type = expr
 
 let counter = ref 0;;
 
-(* May be needed in the future *)
-(* let rec subs (var_replace : ident) (concrete_type : type_decl) (og_type : type_decl) : type_decl = 
-  match og_type with
-  | TypeInt | TypeBool -> og_type 
-  | TypeVar v -> 
-    if (var_replace == v) then concrete_type else og_type
-  | TypeRecord tmap -> TypeRecord (Ident_map.map (subs var_replace concrete_type) tmap)
-  | TypeList t -> TypeList (subs var_replace concrete_type t)
-  | TypeUnion (t1, t2) -> TypeUnion (subs var_replace concrete_type t1, subs var_replace concrete_type t2)
-  | TypeIntersect (t1, t2) -> TypeIntersect (subs var_replace concrete_type t1, subs var_replace concrete_type t2)
-  | TypeArrow (t1, t2) -> TypeArrow (subs var_replace concrete_type t1, subs var_replace concrete_type t2)
-  | TypeSet (t, p) -> TypeSet (subs var_replace concrete_type t, p)
-  | TypeRecurse (t_var', t) ->
-    if (t_var == t_var') then og_type else TypeRecurse (t_var', subs var_replace concrete_type t)
-in *)
-
 (* TODO: Maybe add annotation on the surface level language so that we can avoid certain type checking in sato *)
 
 (* TODO: Finish the semantic translation of types *)
@@ -174,17 +158,6 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       Function ([Ident "~null"], gen_expr)
     in
     let checker = 
-      (* let select_int = Ident ("~select_int" ^ string_of_int (counter := !counter + 1 ; !counter)) in
-      let gate = Ident ("~gate"^ string_of_int (counter := !counter + 1 ; !counter)) in
-      let check1 = Appl (RecordProj (gc_pair1, Label "checker"), Var (Ident "exp")) in
-      let check2 = Appl (RecordProj (gc_pair2, Label "checker"), Var (Ident "exp")) in
-      let assume1 = Let (gate, Assume (check1), check1) in
-      let assume2 = Let (gate, Assume (check2), check2) in
-      let checker1 = If (assume1, Bool true, assume2) in
-      let checker2 = If (assume2, Bool true, assume1) in
-      let branch = If (Geq (Var select_int, Int 0), checker1, checker2) in
-      let fun_body = Let (select_int, Input, branch) in
-      Function ([Ident "exp"], fun_body) *)
       let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
       let select_int = Ident ("~select_int" ^ string_of_int (counter := !counter + 1 ; !counter)) in
       let checker1 = If (Appl (RecordProj (gc_pair1, Label "checker"), Var (Ident exp_str)), Bool true, Appl (RecordProj (gc_pair2, Label "checker"), Var (Ident exp_str))) in
@@ -352,10 +325,7 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
         end
     in
     let fresh_type_var = Ident ("self_" ^ t_var ^ string_of_int (counter := !counter + 1 ; !counter)) in
-    (* let _  = print_endline ("******" ^ show_type_decl t' ^ "******") in *)
-    (* let _ = print_endline ("****** This is old_var: " ^ t_var ^ "******") in *)
     let new_decl = rename_tree (Ident t_var) fresh_type_var t' in
-    (* let _  = print_endline ("******" ^ show_type_decl new_decl ^ "******") in *)
     let gc_pair = semantic_pair_of new_decl in
     let generator = 
       Function ([Ident "~null"], RecordProj (gc_pair, Label "generator"))
@@ -392,6 +362,15 @@ and typed_non_to_on (e : expr) : expr =
       let sig' = transform_funsig fun_sig in
       LetFun (sig', typed_non_to_on e)
     end
+    (* TODO: let (x : a || b) = fun a -> a in 1 + x true *)
+    (* TODO: For union types, we can use runtime checks to differentiate which side of the union we're on, and
+             wrap the variable accordingly
+             If both are functions, check the argument type, which should be the union of two argument types
+    *)
+    (* fun check -> if (code checking check is arg type) then x check else *)
+    (* We can treat all functions as one-argument function and let induction do the work *)
+    (* TODO: let id = let x : [(int -> int)] = [fun a -> a + 1] in hd x in id true*)
+    (* Potential solution: Should we just disallow function type in LetWithType? *)
   | LetWithType (x, e1, e2, type_decl) ->
     begin
       let gc_pair = semantic_pair_of type_decl in
@@ -400,6 +379,7 @@ and typed_non_to_on (e : expr) : expr =
       let test_let = Let (test_ident, test_expr, (typed_non_to_on e2)) in
       Let (x, e1, test_let)
     end
+    (* TODO: This is buggy, fix it! *)
   | LetRecFunWithType (sig_lst, e, type_decl_lst) ->
     begin
       let fun_names = List.map (fun (Funsig (id, _, _)) -> Var id) sig_lst in
@@ -407,7 +387,7 @@ and typed_non_to_on (e : expr) : expr =
       let test_exprs = List.map 
         (fun (f, t) -> 
           let gc_pair = semantic_pair_of t in 
-          Appl (RecordProj (gc_pair, Label "checker"), f)) 
+          If (Appl (RecordProj (gc_pair, Label "checker"), f), Bool true, Assert (Bool false))) 
           combined_lst in
       let test_ident = Ident ("~test_expr" ^ string_of_int (counter := !counter + 1 ; !counter)) in
       let test_lets = List.fold_right 

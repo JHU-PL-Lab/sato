@@ -1,4 +1,4 @@
-let rec f (g : int -> int ) (x : (int -> int) -> int) : int = 
+let rec f (g : int -> int) (x : (int -> int) -> bool) : int = 
     x g
 in
 f
