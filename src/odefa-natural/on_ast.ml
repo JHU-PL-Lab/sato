@@ -48,12 +48,13 @@ and type_decl =
   | TypeBool
   | TypeRecord of type_decl Ident_map.t
   | TypeList of type_decl
+  | TypeArrow of type_decl * type_decl
+  | TypeArrowD of ((ident * type_decl) * type_decl)
+  | TypeSet of type_decl * predicate
   | TypeUnion of type_decl * type_decl
   | TypeIntersect of type_decl * type_decl
-  | TypeArrow of type_decl * type_decl
-  | TypeSet of type_decl * predicate
   | TypeRecurse of ident * type_decl
-  | Typify of expr
+  (* | Typify of expr *)
 [@@ deriving eq, ord, show, to_yojson]
 
 and predicate = Predicate of expr
@@ -91,7 +92,7 @@ and expr =
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
   | Assert of expr | Assume of expr
-  | Reify of type_decl
+  (* | Reify of type_decl *)
   (* | Protected of expr *)
 [@@deriving eq, ord, to_yojson]
 ;;
@@ -123,10 +124,11 @@ let expr_precedence expr =
   | ListCons _ -> 6
   | Plus _ | Minus _ -> 7
   | Times _ | Divide _ | Modulus _ -> 8
-  | Assert _ | Assume _ | Reify _| VariantExpr _ -> 9
+  | Assert _ | Assume _ | VariantExpr _ -> 9
   | Appl _ -> 10
   | RecordProj _ -> 11
   | Int _ | Bool _ | Input | Var _ | List _ | Record _ -> 12
+  (* | Reify _ -> 9 *)
 ;;
 
 (** Takes expressions [e1] and [e2] as arguments.  Returns 0 if the two

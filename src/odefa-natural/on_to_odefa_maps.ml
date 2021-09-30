@@ -214,7 +214,7 @@ let rec on_expr_transformer transformer expr =
   | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
   | Assert e -> Assert (recurse e)
   | Assume e -> Assume (recurse e)
-  | Reify _ -> failwith "Undefined!"
+  (* | Reify _ -> failwith "Undefined!" *)
 ;;
 
 let get_natodefa_equivalent_expr mappings odefa_ident =

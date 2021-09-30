@@ -54,6 +54,7 @@ rule token = parse
 | "then"               { THEN }
 | "else"               { ELSE }
 | "let"                { LET }
+| "letd"               { LET_D }
 | "rec"                { REC }
 | "in"                 { IN }
 | "->"                 { ARROW }
@@ -65,8 +66,8 @@ rule token = parse
 | "assert"             { ASSERT }
 | "assume"             { ASSUME }
 | "Mu"                 { MU }
-| "reify"              { REIFY }
-| "typify"             { TYPIFY }
+(* | "reify"              { REIFY }
+| "typify"             { TYPIFY } *)
 | "+"                  { PLUS }
 | "-"                  { MINUS }
 | "*"                  { ASTERISK }

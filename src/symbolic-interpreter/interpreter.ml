@@ -717,10 +717,13 @@ struct
         in
         match v with
         | Value_record (Record_value m) ->
-          let () = print_endline "pre-find" in
-          let () = print_endline (show_ident lbl) in
+          (* DEBUG: Problem seems to be that if we're projecting from a non-existent lable,
+                    the contradiction was only discovered in the formula solving phase by Z3.
+                    But the thing is we can spot the type error much earlier than that, and
+                    it's in fact unnecessary work on Z3's end. How do we resolve this?
+          *)
+          [%guard Ident_map.mem lbl m];
           let (Var (lbl_var, _)) = Ident_map.find lbl m in
-          let () = print_endline "post-find" in
           let%bind var_symbol_list = recurse (LookupVar lbl_var :: lookup_stack') acl1 relstack in
           let field_symbol = Symbol (lbl_var, relstack) in
           let record_symbol = Symbol (x, relstack) in

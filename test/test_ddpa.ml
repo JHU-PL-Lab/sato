@@ -669,12 +669,12 @@ let tests =
   "Test_source_files" >::: (
     make_tests_from_dir "test/test-sources"
     @ make_tests_from_dir "test/test-sources/odefa-basic"
-    @ make_tests_from_dir "test/test-sources/odefa-fails"
+    (* @ make_tests_from_dir "test/test-sources/odefa-fails"
     @ make_tests_from_dir "test/test-sources/odefa-input"
     @ make_tests_from_dir "test/test-sources/odefa-stack"
     @ make_tests_from_dir "test/test-sources/odefa-types"
     @ make_tests_from_dir "test/test-sources/natodefa-basic"
     @ make_tests_from_dir "test/test-sources/natodefa-types"
-    @ make_tests_from_dir "test/test-sources/natodefa-input"
+    @ make_tests_from_dir "test/test-sources/natodefa-input" *)
   )
 ;;

@@ -164,7 +164,7 @@ let rec env_out_transform_expr
     | On_ast.Assume e ->
       let (e', out) = recurse env e in
       (On_ast.Assume e', out)
-    | On_ast.Reify _ -> failwith "Should have been desugared by now!"
+    (* | On_ast.Reify _ -> failwith "Should have been desugared by now!" *)
   in
   let (e'', out'') = transformer recurse env e' in
   (e'', combiner out' out'')

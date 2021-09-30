@@ -40,7 +40,7 @@ let make_test (in_file, out_file) =
           |> Yojson.Safe.from_string
         in
         assert_equal
-          ~msg:(Printf.sprintf "./type_checker %s%s%s"
+          ~msg:(Printf.sprintf "./sato %s%s%s"
                 (String.join " " args)
                 (if List.length args > 0 then " " else "")
                 in_file)

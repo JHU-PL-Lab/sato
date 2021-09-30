@@ -19,7 +19,7 @@ let new_rec_fun_with_type fun_sig_and_type let_body =
   LetRecFunWithType (fun_sig_list, let_body, fun_type_list)
 ;;
 
-let new_Let_fun_with_type fun_sig_and_type let_body =
+let new_let_fun_with_type fun_sig_and_type let_body =
   let fun_sig, fun_type = fun_sig_and_type in
   LetFunWithType (fun_sig, let_body, fun_type)
 ;;
@@ -43,6 +43,14 @@ let new_fun_with_type
   in
   (Funsig (fun_name, param_list, fun_body), function_type_p)
 ;; 
+
+let new_dependent_fun   
+  (fun_name : ident) 
+  (typed_param : (ident * type_decl)) 
+  (return_type : type_decl)
+  (fun_body : expr) = 
+  let (param, _) = typed_param in
+  (Funsig (fun_name, [param], fun_body), TypeArrowD (typed_param, return_type))
 
 let add_record_entry lbl value old_record =
   let (Label k) = lbl in
@@ -85,6 +93,7 @@ let add_record_entry lbl value old_record =
 %token RECORD
 %token WITH
 %token LET
+%token LET_D
 %token IN
 %token REC
 %token IF
@@ -101,8 +110,8 @@ let add_record_entry lbl value old_record =
 %token ASSERT
 %token ASSUME
 %token MU
-%token REIFY
-%token TYPIFY
+// %token REIFY
+// %token TYPIFY
 %token PLUS
 %token MINUS
 %token ASTERISK
@@ -158,8 +167,8 @@ expr:
       { Assert($2) }
   | ASSUME expr
       { Assume($2) }
-  | REIFY type_decl
-      { Reify($2) }
+  // | REIFY type_decl
+  //     { Reify($2) }
   | variant_label expr %prec prec_variant
       { VariantExpr($1, $2) }
   | expr ASTERISK expr
@@ -200,6 +209,8 @@ expr:
       { LetRecFun($3, $5) }
   | LET REC fun_sig_with_type_list IN expr %prec prec_let 
       { new_rec_fun_with_type $3 $5 }
+  | LET_D REC fun_sig_dependent_list IN expr %prec prec_let 
+      { new_rec_fun_with_type $3 $5 }
   | LET ident_decl EQUALS expr IN expr %prec prec_let
       { Let($2, $4, $6) }
   | LET OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN EQUALS expr IN expr %prec prec_let
@@ -207,7 +218,9 @@ expr:
   | LET fun_sig IN expr %prec prec_fun
       { LetFun($2, $4) }
   | LET fun_sig_with_type IN expr %prec prec_fun
-      { new_Let_fun_with_type $2 $4 }
+      { new_let_fun_with_type $2 $4 }
+  | LET_D fun_sig_dependent IN expr %prec prec_fun
+      { new_let_fun_with_type $2 $4 }
   | MATCH expr WITH PIPE? match_expr_list END
       { Match($2, $5) }
 ;
@@ -225,14 +238,15 @@ type_decl:
   | ident_decl { TypeVar $1 }
   | MU ident_decl DOT type_decl { TypeRecurse ($2, $4) }
   | type_decl ARROW type_decl { TypeArrow ($1, $3) }
+  | OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN ARROW type_decl { TypeArrowD (($2, $4), $7) }
   | OPEN_BRACE basic_types PIPE expr CLOSE_BRACE { TypeSet ($2, Predicate $4) }
+  | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
   | type_decl DOUBLE_PIPE type_decl { TypeUnion ($1, $3) }
   | type_decl DOUBLE_AMPERSAND type_decl { TypeIntersect ($1, $3) }
-  | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
-  | TYPIFY expr { Typify $2 }
+  // | TYPIFY expr { Typify $2 }
 
-type_var:
-  | TYPEVAR { Ident $1 }
+// type_var:
+//   | TYPEVAR { Ident $1 }
 
 record_type:
   | OPEN_BRACE record_type_body CLOSE_BRACE
@@ -262,6 +276,14 @@ fun_sig:
 fun_sig_with_type:
   | ident_decl param_list_with_type COLON type_decl EQUALS expr
       { new_fun_with_type $1 $2 $4 $6 }
+
+fun_sig_dependent_list:
+  | fun_sig_dependent { [$1] }
+  | fun_sig_dependent WITH fun_sig_dependent_list { $1 :: $3 }
+
+fun_sig_dependent:
+  | ident_decl param_with_type COLON type_decl EQUALS expr
+      { new_dependent_fun $1 $2 $4 $6 }
 
 /* let rec foo x y = ... with bar a b = ... in ... */
 fun_sig_list:

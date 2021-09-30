@@ -1,0 +1,7 @@
+let g (x : int) : int = 
+    let f (y : int -> int -> int) : int = 
+        y
+    in
+    f x
+in
+g 
