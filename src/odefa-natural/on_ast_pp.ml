@@ -39,6 +39,18 @@ let pp_ident_map pp_value formatter map =
     (Ident_map.enum map)
 ;;
 
+let pp_ident_map_sp pp_value formatter map =
+  let open Format in
+  Pp_utils.pp_concat_sep_delim
+    "{" ",_}" ","
+    (fun formatter (k,v) ->
+       pp_ident formatter k;
+       pp_print_string formatter " = ";
+       pp_value formatter v)
+    formatter
+    (Ident_map.enum map)
+;;
+
 let pp_ident_list formatter list =
   Pp_utils.pp_concat_sep
     " "
@@ -99,6 +111,8 @@ and pp_pattern formatter pattern =
   | BoolPat -> Format.pp_print_string formatter "bool"
   | FunPat -> Format.pp_print_string formatter "fun"
   | RecPat record ->
+    Format.fprintf formatter "%a" (pp_ident_map_sp pp_ident_option) record
+  | StrictRecPat record ->
     Format.fprintf formatter "%a" (pp_ident_map pp_ident_option) record
   | VariantPat (lbl, var) ->
     Format.fprintf formatter "%a %a" pp_variant_label lbl pp_ident var

@@ -66,6 +66,7 @@ and funsig = Funsig of ident * ident list * expr
 
 and pattern = AnyPat | IntPat | BoolPat | FunPat
             | RecPat of (ident option) Ident_map.t
+            | StrictRecPat of (ident option) Ident_map.t
             | VariantPat of variant_label * ident
             | VarPat of ident
             | EmptyLstPat | LstDestructPat of ident * ident
@@ -92,6 +93,7 @@ and expr =
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
   | Assert of expr | Assume of expr
+  (* | TypeError *)
   (* | Reify of type_decl *)
   (* | Protected of expr *)
 [@@deriving eq, ord, to_yojson]

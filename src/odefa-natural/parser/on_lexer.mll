@@ -48,7 +48,7 @@ rule token = parse
 | "bool"               { BOOL_KEYWORD }
 | "fun"                { FUNCTION }
 | "function"           { FUNCTION }
-| "record"             { RECORD }
+(* | "record"             { RECORD } *)
 | "with"               { WITH }
 | "if"                 { IF }
 | "then"               { THEN }

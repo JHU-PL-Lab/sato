@@ -280,6 +280,19 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
             |> Ident_map.of_enum
           in
           RecPat record'
+        | StrictRecPat record ->
+          let record' =
+            record
+            |> Ident_map.enum
+            |> Enum.map
+              (fun (lbl, x_opt) ->
+                match x_opt with
+                | Some x -> (lbl, Some (find_ident x))
+                | None -> (lbl, None)
+              )
+            |> Ident_map.of_enum
+          in
+          StrictRecPat record'
         | VariantPat (vlbl, x) ->
           VariantPat (vlbl, find_ident x)
         | VarPat x ->

@@ -29,7 +29,7 @@ let rec pat_vars (pat : On_ast.pattern) : On_ast.Ident_set.t =
   match pat with
   | AnyPat | IntPat | BoolPat | FunPat ->
     Ident_set.empty
-  | RecPat record ->
+  | RecPat record | StrictRecPat record->
     record
     |> Ident_map.enum
     |> Enum.fold
@@ -70,6 +70,20 @@ let pat_rename_vars
       |> Ident_map.of_enum
     in
     RecPat record'
+  | StrictRecPat record ->
+    let record' =
+      record
+      |> Ident_map.enum
+      |> Enum.map
+          (fun (lbl, x_opt) ->
+            match x_opt with
+            | Some x ->
+              (lbl, Some (Ident_map.find_default x x name_map))
+            | None -> (lbl, None)
+          )
+      |> Ident_map.of_enum
+    in
+    StrictRecPat record'
   | VariantPat (lbl, x) ->
     let x' = Ident_map.find_default x x name_map in
     VariantPat (lbl, x')
@@ -561,6 +575,33 @@ let flatten_pattern
           []
     in
     return (Ast.Rec_pattern rec_pat', projections)
+  | On_ast.StrictRecPat rec_pat ->
+    let rec_pat' =
+      rec_pat
+      |> On_ast.Ident_map.keys
+      |> Enum.map on_to_odefa_ident
+      |> Ast.Ident_set.of_enum
+    in
+    let%bind projections =
+      rec_pat
+      |> On_ast.Ident_map.enum
+      |> List.of_enum
+      |> list_fold_left_m
+          (fun acc (lbl, var) ->
+            match var with
+            | Some v ->
+              let v' = on_to_odefa_ident v in
+              let lbl' = on_to_odefa_ident lbl in
+              let ast_var = Ast.Var (v', None) in
+              let%bind () = add_odefa_natodefa_mapping ast_var expr in
+              let%bind () = add_instrument_var ast_var in
+              let ast_body = Ast.Projection_body(pat_var, lbl') in
+              return @@ acc @ [(Ast.Clause (ast_var, ast_body))]
+            | None -> return acc
+          )
+          []
+    in
+    return (Ast.Strict_rec_pattern rec_pat', projections)
   | On_ast.VarPat var_pat ->
     let (On_ast.Ident (var_id)) = var_pat in
     let ast_var = Ast.Var (Ident var_id, None) in

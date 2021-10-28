@@ -517,6 +517,27 @@ let rec _add_constraints_and_close
                 | None ->
                   Constraint.Set.empty
               end
+            | Strict_rec_pattern record_pattern ->
+              begin
+                let record_val = Symbol_map.Exceptionless.find x'
+                  solver.value_constraints_by_symbol
+                in
+                match record_val with
+                | Some(Record record_body) ->
+                  let record_lbls =
+                    record_body
+                    |> Ident_map.keys
+                    |> Ident_set.of_enum
+                  in
+                  if Ident_set.equal record_pattern record_lbls then
+                    Constraint.Set.singleton @@ Constraint_value(x, Bool(true))
+                  else
+                    Constraint.Set.singleton @@ Constraint_value(x, Bool(false))
+                | Some _ ->
+                  Constraint.Set.singleton @@ Constraint_value(x, Bool(false))
+                | None ->
+                  Constraint.Set.empty
+              end
           end
         | Constraint_type (_,_) ->
           Constraint.Set.empty
@@ -841,6 +862,7 @@ let rec find_errors solver symbol =
           | Bool_pattern -> Bool_type
           | Fun_pattern -> Fun_type
           | Rec_pattern labels -> Rec_type labels
+          | Strict_rec_pattern labels -> Rec_type labels
           | Any_pattern -> Top_type
         in
         let actual_type = _get_type solver match_symb in

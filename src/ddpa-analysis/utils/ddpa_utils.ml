@@ -215,6 +215,8 @@ let abstract_pattern_match (v : abstract_value) (p : pattern)
     Enum.singleton @@ Abs_value_bool(true)
   | (Abs_value_record _, Rec_pattern _) ->
     List.enum [Abs_value_bool(true); Abs_value_bool(false)]
+  | (Abs_value_record _, Strict_rec_pattern _) ->
+    List.enum [Abs_value_bool(true); Abs_value_bool(false)]
   | _ ->
     Enum.singleton @@ Abs_value_bool(false)
 ;;

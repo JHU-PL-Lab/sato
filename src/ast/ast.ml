@@ -159,6 +159,7 @@ and pattern =
   | Int_pattern
   | Bool_pattern
   | Rec_pattern of Ident_set.t
+  | Strict_rec_pattern of Ident_set.t
   | Any_pattern
 [@@ deriving eq, ord, to_yojson]
 ;;

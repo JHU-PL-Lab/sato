@@ -86,7 +86,7 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       let init_acc = Appl (RecordProj (gc_pair, Label "checker"), RecordProj (Var (Ident exp_str), Label first_lbl)) in
       let fun_body = List.fold_left fold_fun init_acc (List.tl all_bindings) in
       let match_body = Match (Var (Ident exp_str), 
-                              [(RecPat type_dict, fun_body); 
+                              [(StrictRecPat type_dict, fun_body); 
                               (AnyPat, Bool false)]) in
       Function ([Ident exp_str], match_body)
     in

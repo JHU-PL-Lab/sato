@@ -145,6 +145,13 @@ let matches env x p : bool =
           let record_keys = Ident_set.of_enum @@ Ident_map.keys record in
           Enum.for_all (fun ident -> Ident_set.mem ident record_keys) p_enum
         end
+      | (Value_record(Record_value(record)), Strict_rec_pattern p_record) ->
+        begin
+          let () = print_endline "You should be here!" in
+          (* TODO: Check whether it's better to use enum here? *)
+          let record_keys = Ident_set.of_enum @@ Ident_map.keys record in
+          Ident_set.equal p_record record_keys
+        end
       | _ -> false
     end
   (* Since None has "type" of bottom, it cannot match any pattern *)

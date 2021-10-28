@@ -415,7 +415,7 @@ and non_unique_record_labels_clause (clause : clause)
   | Match_body (_, pat) ->
     begin
       match pat with
-      | Rec_pattern lbl_set ->
+      | Rec_pattern lbl_set | Strict_rec_pattern lbl_set ->
         let dup_list =
           lbl_set
           |> Ident_set.elements

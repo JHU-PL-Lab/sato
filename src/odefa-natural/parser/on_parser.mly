@@ -13,6 +13,25 @@ let new_record lbl value =
   Ident_map.singleton key value
 ;;
 
+let add_record_entry lbl value old_record =
+  let (Label k) = lbl in
+  let key =
+    if Ident_map.mem (Ident k) old_record then
+      let key' = Ident (k ^ sep ^ (string_of_int !dup_label_count)) in
+      dup_label_count := !dup_label_count + 1;
+      key'
+    else
+      Ident k
+  in
+  Ident_map.add key value old_record
+;;
+
+let record_from_list pr_list = 
+  pr_list
+  |> List.fold_left 
+     (fun acc (lbl, v) -> add_record_entry lbl v acc)
+     Ident_map.empty
+
 let new_rec_fun_with_type fun_sig_and_type let_body =
   let fun_sig_list = List.map fst fun_sig_and_type in 
   let fun_type_list = List.map snd fun_sig_and_type in
@@ -52,19 +71,6 @@ let new_dependent_fun
   let (param, _) = typed_param in
   (Funsig (fun_name, [param], fun_body), TypeArrowD (typed_param, return_type))
 
-let add_record_entry lbl value old_record =
-  let (Label k) = lbl in
-  let key =
-    if Ident_map.mem (Ident k) old_record then
-      let key' = Ident (k ^ sep ^ (string_of_int !dup_label_count)) in
-      dup_label_count := !dup_label_count + 1;
-      key'
-    else
-      Ident k
-  in
-  Ident_map.add key value old_record
-;;
-
 %}
 
 %token <string> TYPEVAR
@@ -90,7 +96,7 @@ let add_record_entry lbl value old_record =
 %token DOUBLE_PIPE
 %token DOUBLE_AMPERSAND
 %token FUNCTION
-%token RECORD
+// %token RECORD
 %token WITH
 %token LET
 %token LET_D
@@ -395,17 +401,23 @@ pattern:
   | IDENTIFIER { VarPat(Ident($1)) }
   | variant_label ident_decl { VariantPat($1, $2) }
   | variant_label OPEN_PAREN ident_decl CLOSE_PAREN { VariantPat($1, $3) }
-  | OPEN_BRACE rec_pattern_body CLOSE_BRACE { RecPat $2 }
-  | OPEN_BRACE CLOSE_BRACE { RecPat (Ident_map.empty) }
-  | RECORD { RecPat (Ident_map.empty) }
+  | OPEN_BRACE separated_nonempty_trailing_list(COMMA, record_pattern_element) CLOSE_BRACE { StrictRecPat (record_from_list $2) }
+  | OPEN_BRACE separated_nonempty_trailing_list(COMMA, record_pattern_element) UNDERSCORE CLOSE_BRACE { RecPat (record_from_list $2) }
+  | OPEN_BRACE CLOSE_BRACE { StrictRecPat (Ident_map.empty) }
+  | OPEN_BRACE UNDERSCORE CLOSE_BRACE { RecPat (Ident_map.empty) }
   | OPEN_BRACKET CLOSE_BRACKET { EmptyLstPat }
   | ident_decl DOUBLE_COLON ident_decl { LstDestructPat($1, $3) }
   | OPEN_PAREN pattern CLOSE_PAREN { $2 }
 ;
 
-rec_pattern_body:
+record_pattern_element:
   | label EQUALS ident_decl
-      { new_record $1 (Some $3) }
-  | label EQUALS ident_decl COMMA rec_pattern_body
-      { add_record_entry $1 (Some $3) $5 }
+      { ($1, Some $3) }
 ;
+
+separated_nonempty_trailing_list(separator, rule):
+  | nonempty_list(terminated(rule, separator))
+      { $1 }
+  | separated_nonempty_list(separator,rule)
+      { $1 }
+  ;
