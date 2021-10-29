@@ -217,7 +217,14 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       |> Ident_map.add (Ident "generator") generator
       |> Ident_map.add (Ident "checker") checker
     in
-    Record rec_map
+    let gc_pair_pred = semantic_pair_of (TypeArrow (t, TypeBool)) in
+    let check_pred_id = Ident ("~check_pred" ^ string_of_int (counter := !counter + 1 ; !counter)) in
+    let pred_cond = If (Var check_pred_id, Record rec_map, Assert (Bool false)) in
+    let check_pred = Let (check_pred_id,
+                          Appl (RecordProj (gc_pair_pred, Label "checker"), p),
+                          pred_cond)
+    in
+    check_pred
   | TypeUnion (t1, t2) ->
     let gc_pair1 = semantic_pair_of t1 in
     let gc_pair2 = semantic_pair_of t2 in
