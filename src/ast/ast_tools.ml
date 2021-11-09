@@ -465,6 +465,7 @@ and map_value_vars (fn : Var.t -> Var.t) (v : value) : value =
   | Value_function f -> Value_function(map_function_vars fn f)
   | Value_int _ -> v
   | Value_bool _ -> v
+  | Value_untouched _ -> v
 
 and map_function_vars (fn : Var.t -> Var.t) (f : function_value)
   : function_value =
@@ -505,6 +506,7 @@ and transform_exprs_in_value (fn : expr -> expr) (v : value) : value =
   | Value_function f -> Value_function(transform_exprs_in_function fn f)
   | Value_int _ -> v
   | Value_bool _ -> v
+  | Value_untouched _ -> v
 
 and transform_exprs_in_function (fn : expr -> expr) (fv : function_value)
   : function_value =

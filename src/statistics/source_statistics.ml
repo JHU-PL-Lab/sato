@@ -163,7 +163,8 @@ and calc_value (v : value) (db : depth_bindings) : source_statistics =
       ss_num_function_definitions = ss.ss_num_function_definitions + 1
     }
   | Value_int _
-  | Value_bool _ ->
+  | Value_bool _
+  | Value_untouched _ ->
     empty
 
 and calc_function_value (f : function_value) (db : depth_bindings)

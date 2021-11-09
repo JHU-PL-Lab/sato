@@ -1,0 +1,4 @@
+let snd (x : 'a) (y : 'b) : 'b = 
+    y
+in
+snd

@@ -221,6 +221,8 @@ let odefa_to_natodefa_error
     | Ast.Fun_type -> FunType
     | Ast.Rec_type lbls ->
       On_to_odefa_maps.get_type_from_idents odefa_on_maps lbls
+    | Ast.Untouched_type s ->
+      UntouchedType s
     | Ast.Bottom_type ->
       raise @@ Jhupllib.Utils.Invariant_failure
         (Printf.sprintf "Bottom type not in natodefa")

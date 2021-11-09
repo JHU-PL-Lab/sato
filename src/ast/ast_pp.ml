@@ -79,6 +79,7 @@ and pp_value formatter v =
   | Value_function(f) -> pp_function_value formatter f
   | Value_int(n) -> Format.pp_print_int formatter n
   | Value_bool(b) -> Format.pp_print_bool formatter b
+  | Value_untouched(s) -> Format.pp_print_string formatter @@ "'" ^ s
 
 and pp_clause_body formatter b =
   match b with
@@ -128,6 +129,7 @@ and pp_pattern formatter p =
     in
     pp_concat_sep_delim "|{" "}|" ", " pp_element formatter @@ Ident_set.enum els
   | Any_pattern -> Format.pp_print_string formatter "any"
+  | Untouched_pattern s -> Format.pp_print_string formatter @@ "'" ^ s
 ;;
 
 let show_value = pp_to_string pp_value;;
@@ -145,6 +147,8 @@ let pp_type_sig formatter type_sig =
   | Fun_type -> Format.pp_print_string formatter "fun"
   | Rec_type labels ->
     pp_concat_sep_delim "{" "}" "," pp_ident formatter @@ Ident_set.enum labels
+  | Untouched_type s ->
+    Format.pp_print_string formatter @@ "'" ^ s
   | Bottom_type -> Format.pp_print_string formatter "bottom"
 ;;
 

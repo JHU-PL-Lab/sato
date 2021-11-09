@@ -73,7 +73,6 @@ let new_dependent_fun
 
 %}
 
-%token <string> TYPEVAR
 %token <string> IDENTIFIER
 %token <int> INT_LITERAL
 %token <bool> BOOL
@@ -82,6 +81,7 @@ let new_dependent_fun
 %token CLOSE_BRACE
 %token COMMA
 %token BACKTICK
+%token APOSTROPHE
 %token OPEN_PAREN
 %token CLOSE_PAREN
 %token OPEN_BRACKET
@@ -242,6 +242,7 @@ expr:
 type_decl:
   | basic_types { $1 }
   | ident_decl { TypeVar $1 }
+  | type_parameter { $1 }
   | MU ident_decl DOT type_decl { TypeRecurse ($2, $4) }
   | type_decl ARROW type_decl { TypeArrow ($1, $3) }
   | OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN ARROW type_decl { TypeArrowD (($2, $4), $7) }
@@ -251,8 +252,8 @@ type_decl:
   | type_decl DOUBLE_AMPERSAND type_decl { TypeIntersect ($1, $3) }
   // | TYPIFY expr { Typify $2 }
 
-// type_var:
-//   | TYPEVAR { Ident $1 }
+type_parameter:
+  | APOSTROPHE IDENTIFIER { TypeUntouched $2 }
 
 record_type:
   | OPEN_BRACE record_type_body CLOSE_BRACE

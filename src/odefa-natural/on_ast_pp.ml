@@ -86,6 +86,7 @@ and pp_type_decl formatter type_decl =
   | TypeUnion (t1, t2) -> Format.fprintf formatter "%a v %a" pp_type_decl t1 pp_type_decl t2
   | TypeIntersect (t1, t2) -> Format.fprintf formatter "%a ^ %a" pp_type_decl t1 pp_type_decl t2
   | TypeRecurse (tvar, t) ->  Format.fprintf formatter "Mu %a.%a" pp_ident tvar pp_type_decl t
+  | TypeUntouched s -> Format.pp_print_string formatter @@ "'" ^ s
   (* | Typify e -> Format.fprintf formatter "type_expr : %a" pp_expr e *)
 
 (* and pp_type_decl_list formatter list =
@@ -121,6 +122,7 @@ and pp_pattern formatter pattern =
   | LstDestructPat (hd_var, tl_var) ->
     Format.fprintf formatter "%a :: %a"
       pp_ident hd_var pp_ident tl_var
+  | UntouchedPat s -> Format.pp_print_string formatter @@ "'" ^ s
 
 (* Note: For two operators of equal precedence, still wrap parens if the
    operators are right-associative, but not if they're left-associative. *)
@@ -274,6 +276,8 @@ and pp_expr formatter expr =
       Format.fprintf formatter "assume %a" pp_expr e
     else
       Format.fprintf formatter "assume (%a)" pp_expr e
+  | Untouched s ->
+        Format.pp_print_string formatter @@ "'" ^ s 
   (* | Reify te ->
       Format.fprintf formatter "reify (%a)" pp_type_decl te *)
 ;;
@@ -291,6 +295,7 @@ let pp_on_type formatter (on_type : On_ast.type_sig) =
   | ListType -> Format.pp_print_string formatter "List"
   | RecType lbls -> Format.fprintf formatter "Record %a" pp_ident_set lbls
   | VariantType lbl -> Format.fprintf formatter "Variant %a" pp_variant_label lbl
+  | UntouchedType t -> Format.pp_print_string formatter @@ "'" ^ t
 ;;
 
 let show_on_type = Pp_utils.pp_to_string pp_on_type;;

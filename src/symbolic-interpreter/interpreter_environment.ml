@@ -56,7 +56,7 @@ and enum_all_functions_in_value value : function_value Enum.t =
   match value with
   | Value_function(Function_value(_,e) as f) ->
     Enum.append (Enum.singleton f) @@ enum_all_functions_in_expr e
-  | Value_int _ | Value_record _ | Value_bool _ ->
+  | Value_int _ | Value_record _ | Value_bool _ | Value_untouched _ ->
     Enum.empty ()
 ;;
 
@@ -111,7 +111,7 @@ and enum_all_aborts_in_value value : (ident * abort_value) Enum.t =
   match value with
   | Value_function (Function_value (_, e)) ->
     enum_all_aborts_in_expr e
-  | Value_int _ | Value_bool _ | Value_record _ ->
+  | Value_int _ | Value_bool _ | Value_record _ | Value_untouched _ ->
     Enum.empty ()
 ;;
 

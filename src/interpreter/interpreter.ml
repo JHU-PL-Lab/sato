@@ -78,6 +78,7 @@ and var_replace_value fn v =
   | Value_function(f) -> Value_function(var_replace_function_value fn f)
   | Value_int n -> Value_int n
   | Value_bool b -> Value_bool b
+  | Value_untouched s -> Value_untouched s
 
 and var_replace_function_value fn (Function_value(x, e)) =
   Function_value(fn x, var_replace_expr fn e)

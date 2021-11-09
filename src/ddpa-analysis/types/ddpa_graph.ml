@@ -129,6 +129,7 @@ and lift_value v =
   | Value_function f -> Abs_value_function(lift_function_value f)
   | Value_int _ -> Abs_value_int
   | Value_bool b -> Abs_value_bool b
+  | Value_untouched s -> Abs_value_untouched s
 
 and lift_var (Var(i,_)) =
   Abs_var i

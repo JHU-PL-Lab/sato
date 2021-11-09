@@ -177,6 +177,21 @@ let _get_type solver symbol : type_sig =
             (show_value rec_val))
     in
     Rec_type rec_lbls
+  | UntouchedSymbol ->
+    let untouched_val =
+      try 
+        Symbol_map.find symbol solver.value_constraints_by_symbol
+      with Not_found ->
+        raise @@ Utils.Invariant_failure
+          (Printf.sprintf "Symbol %s not found in value constraint set"
+            (show_symbol symbol))
+    in
+    match untouched_val with
+    | Untouched t -> Untouched_type t
+    | _ ->
+      raise @@ Utils.Invariant_failure
+        (Printf.sprintf "Value %s incorrectly typed as untouched!"
+          (show_value untouched_val))
 ;;
 
 let _get_value_def solver symbol : value_def option =
@@ -200,6 +215,7 @@ let _symbolic_to_concrete_value (val_src : value_def) : clause_body =
         |> Ident_map.of_enum
       in
       Value_body (Value_record (Record_value r'))
+    | Untouched s -> Value_body (Value_untouched s)
     end
   | Constraint.Input -> Input_body
   | Constraint.Binop (x1, op, x2) ->
@@ -373,7 +389,7 @@ let rec _add_constraints_and_close
                     | Some x'' ->
                       Constraint_alias(x',x'')
                   )
-              | Int _ | Bool _ | Function _ ->
+              | Int _ | Bool _ | Function _ | Untouched _ ->
                 Enum.empty ()
             in
             let type_constraints =
@@ -383,6 +399,7 @@ let rec _add_constraints_and_close
                 | Bool _ -> BoolSymbol
                 | Record _ -> RecordSymbol
                 | Function _ -> FunctionSymbol
+                | Untouched _ -> UntouchedSymbol
               in
               Enum.singleton (Constraint_type(x,t))
             in
@@ -440,7 +457,7 @@ let rec _add_constraints_and_close
             in
             match record_val with
             | None -> new_const
-            | Some(Int _ | Bool _ | Function _) -> new_const
+            | Some(Int _ | Bool _ | Function _ | Untouched _) -> new_const
             | Some(Record record_body) ->
               match Ident_map.Exceptionless.find lbl record_body with
               | None ->
@@ -538,6 +555,22 @@ let rec _add_constraints_and_close
                 | None ->
                   Constraint.Set.empty
               end
+            | Untouched_pattern s ->
+              begin
+                let untouched_val = Symbol_map.Exceptionless.find x'
+                  solver.value_constraints_by_symbol
+                in
+                match untouched_val with
+                | Some(Untouched s') ->
+                  if (s = s') then
+                    Constraint.Set.singleton @@ Constraint_value(x, Bool(true))
+                  else
+                    Constraint.Set.singleton @@ Constraint_value(x, Bool(false))
+                | Some _ ->
+                  Constraint.Set.singleton @@ Constraint_value(x, Bool(false))
+                | None ->
+                  Constraint.Set.empty
+              end
           end
         | Constraint_type (_,_) ->
           Constraint.Set.empty
@@ -582,6 +615,12 @@ let z3_expr_of_symbol
   | Some FunctionSymbol -> None
   | Some RecordSymbol -> None
   | Some BottomSymbol -> None
+  (* 
+     TODO: This is temporary; I'm assuming all the logic related to type checking
+           untouched can be achieved in this mini-solver without having to call
+           upon Z3. (Earl)
+  *)
+  | Some UntouchedSymbol -> None 
   | None -> None
 ;;
 
@@ -593,7 +632,9 @@ let z3_expr_of_value
    | Constraint.Int n -> Some(Z3.Arithmetic.Integer.mk_numeral_i ctx n)
    | Constraint.Bool b -> Some(Z3.Boolean.mk_val ctx b)
    | Constraint.Function _ -> None
-   | Constraint.Record _ -> None)
+   | Constraint.Record _ -> None
+   | Constraint.Untouched _ -> None
+  )
 ;;
 
 let z3_fn_of_operator
@@ -725,8 +766,26 @@ let solve (solver : t) : solution option =
                 end
               | Some FunctionSymbol -> None
               | Some RecordSymbol ->
+                (* TODO: Think about how we can implement this *)
                 (* TODO: look up the corresponding record *)
                 raise @@ Jhupllib_utils.Not_yet_implemented "solution for record"
+              | Some UntouchedSymbol ->
+                begin
+                let untouched_val =
+                  try 
+                    Symbol_map.find symbol solver.value_constraints_by_symbol
+                  with Not_found ->
+                    raise @@ Utils.Invariant_failure
+                      (Printf.sprintf "Symbol %s not found in value constraint set"
+                        (show_symbol symbol))
+                in
+                match untouched_val with
+                | Untouched t -> Some (Value_untouched t)
+                | _ ->
+                  raise @@ Utils.Invariant_failure
+                    (Printf.sprintf "Value %s incorrectly typed as untouched!"
+                      (show_value untouched_val))
+                end
               | Some BottomSymbol -> None
               | None -> None
             end
@@ -864,6 +923,7 @@ let rec find_errors solver symbol =
           | Rec_pattern labels -> Rec_type labels
           | Strict_rec_pattern labels -> Rec_type labels
           | Any_pattern -> Top_type
+          | Untouched_pattern s -> Untouched_type s
         in
         let actual_type = _get_type solver match_symb in
         let match_val_source =

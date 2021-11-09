@@ -159,7 +159,7 @@ let rec on_expr_transformer transformer expr =
   let recurse = on_expr_transformer transformer in
   let expr' = transformer expr in
   match expr' with
-  | Int _ | Bool _ | Var _ | Input -> expr'
+  | Int _ | Bool _ | Var _ | Input | Untouched _ -> expr'
   | Record record ->
     let record' =
       record
@@ -299,7 +299,7 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
           VarPat (find_ident x)
         | LstDestructPat (x1, x2) ->
           LstDestructPat (find_ident x1, find_ident x2)
-        | AnyPat | IntPat | BoolPat | FunPat | EmptyLstPat -> pat
+        | AnyPat | IntPat | BoolPat | FunPat | EmptyLstPat | UntouchedPat _ -> pat
       in
       let pat_e_list' =
         List.map

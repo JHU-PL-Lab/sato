@@ -33,6 +33,7 @@ rule token = parse
 | "]"                  { CLOSE_BRACKET }
 | ","                  { COMMA }
 | "`"                  { BACKTICK }
+| "'"                  { APOSTROPHE }
 | "="                  { EQUALS }
 | "."                  { DOT }
 | ":"                  { COLON }

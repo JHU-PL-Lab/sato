@@ -18,6 +18,7 @@ type symbol_type =
   | RecordSymbol
   | FunctionSymbol
   | BottomSymbol
+  | UntouchedSymbol
 [@@deriving eq, ord, show, to_yojson]
 ;;
 
@@ -27,6 +28,7 @@ type value =
   | Bool of bool
   | Function of function_value
   | Record of symbol Ident_map.t
+  | Untouched of string
 [@@deriving eq, ord, show, to_yojson]
 ;;
 

@@ -40,6 +40,7 @@ type type_sig =
   | RecType of Ident_set.t
   | ListType
   | VariantType of variant_label
+  | UntouchedType of string
 [@@ deriving eq, ord, show, to_yojson]
 
 and type_decl = 
@@ -54,7 +55,7 @@ and type_decl =
   | TypeUnion of type_decl * type_decl
   | TypeIntersect of type_decl * type_decl
   | TypeRecurse of ident * type_decl
-  (* | Typify of expr *)
+  | TypeUntouched of string  (* | Typify of expr *)
 [@@ deriving eq, ord, show, to_yojson]
 
 and predicate = Predicate of expr
@@ -70,6 +71,7 @@ and pattern = AnyPat | IntPat | BoolPat | FunPat
             | VariantPat of variant_label * ident
             | VarPat of ident
             | EmptyLstPat | LstDestructPat of ident * ident
+            | UntouchedPat of string
 
 and expr =
   | Int of int | Bool of bool
@@ -93,6 +95,7 @@ and expr =
   | VariantExpr of variant_label * expr
   | List of expr list | ListCons of expr * expr
   | Assert of expr | Assume of expr
+  | Untouched of string
   (* | TypeError *)
   (* | Reify of type_decl *)
   (* | Protected of expr *)
@@ -129,7 +132,7 @@ let expr_precedence expr =
   | Assert _ | Assume _ | VariantExpr _ -> 9
   | Appl _ -> 10
   | RecordProj _ -> 11
-  | Int _ | Bool _ | Input | Var _ | List _ | Record _ -> 12
+  | Int _ | Bool _ | Input | Var _ | List _ | Record _ | Untouched _ -> 12
   (* | Reify _ -> 9 *)
 ;;
 

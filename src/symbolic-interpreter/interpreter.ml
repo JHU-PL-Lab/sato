@@ -294,6 +294,7 @@ struct
           | Value_function f -> return @@ Constraint.Function f
           | Value_int n -> return @@ Constraint.Int n
           | Value_bool b -> return @@ Constraint.Bool b
+          | Value_untouched s -> return @@ Constraint.Untouched s
         in
         let%bind () = record_constraint @@
           Constraint.Constraint_value_clause(lookup_symbol, constraint_value)

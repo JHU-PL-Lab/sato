@@ -27,7 +27,7 @@ let lazy_logger = Logger_utils.make_lazy_logger "On_to_odefa";;
 let rec pat_vars (pat : On_ast.pattern) : On_ast.Ident_set.t =
   let open On_ast in
   match pat with
-  | AnyPat | IntPat | BoolPat | FunPat ->
+  | AnyPat | IntPat | BoolPat | FunPat | UntouchedPat _ ->
     Ident_set.empty
   | RecPat record | StrictRecPat record->
     record
@@ -55,7 +55,7 @@ let pat_rename_vars
   : On_ast.pattern =
   let open On_ast in
   match pattern with
-  | AnyPat | IntPat | BoolPat | FunPat -> pattern
+  | AnyPat | IntPat | BoolPat | FunPat | UntouchedPat _ -> pattern
   | RecPat record ->
     let record' =
       record
@@ -109,7 +109,7 @@ let rec rename_variable
      descending into a given subtree, so we can't use it here. *)
   let recurse = rename_variable old_name new_name in
   match e with
-  | Int _ | Bool _ | Input -> e
+  | Int _ | Bool _ | Input | Untouched _ -> e
   | Var (id) ->
     if id = old_name then Var new_name else Var id
   | Function (id_list, e') ->
@@ -268,7 +268,7 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
       match expr with
       (* In leaf cases, no new variables are defined and so we have no work to
         do. *)
-      | Var _ | Input | Int _ | Bool _ ->
+      | Var _ | Input | Int _ | Bool _ | Untouched _ ->
         return (expr, seen_declared)
       | Function (params, body) ->
         (* Recurse on the body to ensure that it is internally alphatized. *)
@@ -548,6 +548,7 @@ let flatten_pattern
   | On_ast.IntPat -> return (Ast.Int_pattern, [])
   | On_ast.BoolPat -> return (Ast.Bool_pattern , [])
   | On_ast.FunPat -> return (Ast.Fun_pattern, [])
+  | On_ast.UntouchedPat s -> return (Ast.Untouched_pattern s, [])
   | On_ast.RecPat rec_pat ->
     let rec_pat' =
       rec_pat
@@ -919,6 +920,11 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping bool_var expr in
     let new_clause = Ast.Clause(bool_var, Ast.Value_body(Ast.Value_bool(b))) in
     return ([new_clause], bool_var)
+  | Untouched t ->
+    let%bind untouched_var = fresh_var "untouched" in
+    let%bind () = add_odefa_natodefa_mapping untouched_var expr in
+    let new_clause = Ast.Clause(untouched_var, Ast.Value_body(Ast.Value_untouched t)) in
+    return ([new_clause], untouched_var)
   | Record (recexpr_map) ->
     (* function for Enum.fold that generates the clause list and the
        id -> var map for Odefa's record *)

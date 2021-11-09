@@ -164,7 +164,7 @@ let encode_pattern (pattern : pattern) : pattern m =
     in
     return @@ RecPat record
   (* All other patterns: don't encode *)
-  | AnyPat | IntPat | BoolPat | FunPat | RecPat _ | StrictRecPat _ | VarPat _ ->
+  | AnyPat | IntPat | BoolPat | FunPat | RecPat _ | StrictRecPat _ | VarPat _ | UntouchedPat _ ->
     return pattern
 ;;
 

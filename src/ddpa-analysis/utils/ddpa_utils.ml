@@ -151,6 +151,7 @@ and _create_end_of_block_map_for_body (b : abstract_clause_body) =
       | Abs_value_function f -> _create_end_of_block_map_for_function f
       | Abs_value_int -> Annotated_clause_map.empty
       | Abs_value_bool _ -> Annotated_clause_map.empty
+      | Abs_value_untouched _ -> Annotated_clause_map.empty
     end
   | Abs_var_body _ -> Annotated_clause_map.empty
   | Abs_input_body -> Annotated_clause_map.empty

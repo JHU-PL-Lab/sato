@@ -129,6 +129,7 @@ and value =
   | Value_function of function_value
   | Value_int of int
   | Value_bool of bool
+  | Value_untouched of string
 [@@deriving eq, ord, to_yojson]
 
 (** A type to represent the bodies of clauses. *)
@@ -161,6 +162,7 @@ and pattern =
   | Rec_pattern of Ident_set.t
   | Strict_rec_pattern of Ident_set.t
   | Any_pattern
+  | Untouched_pattern of string
 [@@ deriving eq, ord, to_yojson]
 ;;
 
@@ -188,6 +190,7 @@ type type_sig =
   | Bool_type
   | Fun_type
   | Rec_type of Ident_set.t
+  | Untouched_type of string
   | Bottom_type
 [@@ deriving eq, ord, to_yojson]
 ;;

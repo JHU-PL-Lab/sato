@@ -281,7 +281,20 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
     let gc_pair = semantic_pair_of t' in
     let self_var = Ident "primer" in
     Let (self_var, Function ([t_var], gc_pair), Appl (Var self_var, Var self_var))
-
+  | TypeUntouched t ->
+    let generator = 
+      Function ([Ident "~null"], Untouched t)
+    in
+    let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
+    let checker = 
+      Function ([Ident exp_str], Match (Var (Ident exp_str), [(UntouchedPat t, Bool true); (AnyPat, Bool false)]))
+    in
+    let rec_map = 
+      Ident_map.empty
+      |> Ident_map.add (Ident "generator") generator
+      |> Ident_map.add (Ident "checker") checker
+    in
+    Record rec_map
   (* | TypeRecurse (Ident t_var, t') ->
     let rec rename_tree (old_var : ident) (new_var : ident) (og_type : type_decl) : type_decl = 
       match og_type with
@@ -388,7 +401,7 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
     (* TODO: Use the checker/generator pair to perform the checking, which should make things simpler *)
 and typed_non_to_on (e : expr) : expr = 
   match e with
-  | Int _ | Bool _ | Var _ | Input -> e
+  | Int _ | Bool _ | Var _ | Input | Untouched _ -> e
   | Function (id_lst, e) -> Function (id_lst, typed_non_to_on e)
   | Appl (e1, e2) -> Appl (typed_non_to_on e1, typed_non_to_on e2) 
   | Let (x, e1, e2) -> Let (x, typed_non_to_on e1, typed_non_to_on e2)

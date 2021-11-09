@@ -13,6 +13,7 @@ type symbol_type =
   | RecordSymbol
   | FunctionSymbol
   | BottomSymbol
+  | UntouchedSymbol
 [@@deriving eq, ord, to_yojson]
 ;;
 
@@ -23,6 +24,7 @@ let pp_symbol_type formatter t =
   | RecordSymbol -> Format.pp_print_string formatter "record"
   | FunctionSymbol -> Format.pp_print_string formatter "function"
   | BottomSymbol -> Format.pp_print_string formatter "bottom"
+  | UntouchedSymbol -> Format.pp_print_string formatter "untouched"
 ;;
 
 let show_symbol_type = Pp_utils.pp_to_string pp_symbol_type;;
@@ -33,6 +35,7 @@ type value =
   | Bool of bool
   | Function of function_value
   | Record of symbol Ident_map.t
+  | Untouched of string
 [@@deriving eq, ord, to_yojson]
 ;;
 
@@ -44,6 +47,9 @@ let pp_value formatter v =
     Format.fprintf formatter "fun %a -> ..." pp_var x
   | Record(m) ->
     Pp_utils.pp_map pp_ident pp_symbol Ident_map.enum formatter m
+  | Untouched s ->
+    Format.pp_print_string formatter @@ "'" ^ s
+
 ;;
 
 let show_value = Pp_utils.pp_to_string pp_value;;
