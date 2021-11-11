@@ -382,6 +382,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Pattern Match rule lookup *)
         trace_rule "Pattern Match" x;
+        (* let () = print_endline @@ "checking pattern " ^ (show_pattern pattern) in  *)
         let%bind () = record_visited_clause x in
         (* Look up the symbol that is being matched upon *)
         let%bind symbol_list = recurse (LookupVar x' :: lookup_stack') acl1 relstack in

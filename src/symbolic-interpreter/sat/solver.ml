@@ -562,6 +562,7 @@ let rec _add_constraints_and_close
                 in
                 match untouched_val with
                 | Some(Untouched s') ->
+                  (* let () = print_endline @@ "pattern " ^ s ^ " and value " ^ s' in *)
                   if (s = s') then
                     Constraint.Set.singleton @@ Constraint_value(x, Bool(true))
                   else
