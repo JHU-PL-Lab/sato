@@ -163,6 +163,7 @@ and pattern =
   | Strict_rec_pattern of Ident_set.t
   | Any_pattern
   | Untouched_pattern of string
+  | Any_untouched_pattern
 [@@ deriving eq, ord, to_yojson]
 ;;
 
@@ -191,6 +192,7 @@ type type_sig =
   | Fun_type
   | Rec_type of Ident_set.t
   | Untouched_type of string
+  | Any_untouched_type
   | Bottom_type
 [@@ deriving eq, ord, to_yojson]
 ;;

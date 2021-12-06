@@ -42,6 +42,9 @@ rule token = parse
 | "|"                  { PIPE }
 | "||"                 { DOUBLE_PIPE }
 | "&&"                 { DOUBLE_AMPERSAND }
+| "$"                  { DOLLAR }
+| "[|"                 { OPEN_OBRACKET }
+| "|]"                 { CLOSE_OBRACKET }
 | "and"                { AND }
 | "or"                 { OR }
 | "not"                { NOT }
@@ -67,8 +70,6 @@ rule token = parse
 | "assert"             { ASSERT }
 | "assume"             { ASSUME }
 | "Mu"                 { MU }
-(* | "reify"              { REIFY }
-| "typify"             { TYPIFY } *)
 | "+"                  { PLUS }
 | "-"                  { MINUS }
 | "*"                  { ASTERISK }

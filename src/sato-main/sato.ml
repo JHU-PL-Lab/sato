@@ -39,7 +39,6 @@ let parse_program
           Odefa_instrumentation.instrument_odefa pre_inst_ast
         in
         Ast_wellformedness.check_wellformed_expr odefa_ast;
-        (* let () = print_endline @@ Ast_pp.show_expr odefa_ast in *)
         (odefa_ast, on_odefa_maps)
       end
     | _ ->

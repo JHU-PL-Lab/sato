@@ -129,6 +129,7 @@ let pp_type_sig formatter type_sig =
     pp_concat_sep_delim "{" "}" "," pp_ident formatter @@ Ident_set.enum labels
   | Untouched_type s ->
     Format.pp_print_string formatter @@ "'" ^ s
+  | Any_untouched_type -> Format.pp_print_string formatter "untouched"
   | Bottom_type -> Format.pp_print_string formatter "bottom"
 ;;
 

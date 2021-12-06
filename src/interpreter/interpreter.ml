@@ -148,16 +148,17 @@ let matches env x p : bool =
         end
       | (Value_record(Record_value(record)), Strict_rec_pattern p_record) ->
         begin
-          let () = print_endline "You should be here!" in
           (* TODO: Check whether it's better to use enum here? *)
           let record_keys = Ident_set.of_enum @@ Ident_map.keys record in
           Ident_set.equal p_record record_keys
         end
       | (Value_untouched s, Untouched_pattern s') -> (s = s')
+      | (Value_untouched _, Any_untouched_pattern) -> 
+        true
       | (Value_int _ | Value_bool _ | Value_record _ | 
          Value_function _ | Value_untouched _),
         (Fun_pattern | Int_pattern | Bool_pattern | Rec_pattern _ |
-         Strict_rec_pattern _ | Untouched_pattern _ ) -> false
+         Strict_rec_pattern _ | Untouched_pattern _ | Any_untouched_pattern) -> false
     end
   (* Since None has "type" of bottom, it cannot match any pattern *)
   | None -> false

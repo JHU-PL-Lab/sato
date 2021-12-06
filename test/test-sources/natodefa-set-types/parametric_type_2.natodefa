@@ -1,3 +1,4 @@
-let point t = reify({x = (typify t), y = (typify t)}) in
-let (p : typify (point (reify int))) = {x = 4, y = 7} in
+let point t = $({x : [|t|]}) in
+let int_point = point ($(int)) in
+let (p : [| int_point |]) = {x = 4} in
 p

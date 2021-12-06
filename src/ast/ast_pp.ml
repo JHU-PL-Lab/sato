@@ -130,6 +130,7 @@ and pp_pattern formatter p =
     pp_concat_sep_delim "|{" "}|" ", " pp_element formatter @@ Ident_set.enum els
   | Any_pattern -> Format.pp_print_string formatter "any"
   | Untouched_pattern s -> Format.pp_print_string formatter @@ "'" ^ s
+  | Any_untouched_pattern -> Format.pp_print_string formatter "untouched"
 ;;
 
 let show_value = pp_to_string pp_value;;
@@ -150,6 +151,7 @@ let pp_type_sig formatter type_sig =
   | Untouched_type s ->
     Format.pp_print_string formatter @@ "'" ^ s
   | Bottom_type -> Format.pp_print_string formatter "bottom"
+  | Any_untouched_type -> Format.pp_print_string formatter "untouched"
 ;;
 
 let show_type_sig = pp_to_string pp_type_sig;;

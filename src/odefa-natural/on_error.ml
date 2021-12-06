@@ -223,6 +223,9 @@ let odefa_to_natodefa_error
       On_to_odefa_maps.get_type_from_idents odefa_on_maps lbls
     | Ast.Untouched_type s ->
       UntouchedType s
+    | Ast.Any_untouched_type ->
+      (* TODO: Very cheap hack; need to change this later *)
+      UntouchedType "non-parametric type"
     | Ast.Bottom_type ->
       raise @@ Jhupllib.Utils.Invariant_failure
         (Printf.sprintf "Bottom type not in natodefa")

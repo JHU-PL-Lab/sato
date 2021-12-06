@@ -385,7 +385,7 @@ let rec m_env_out_transform_expr
       let%bind (e', out) = recurse env e in
       return @@ (On_ast.Assume e', out)
     | On_ast.Untouched s -> return @@ (On_ast.Untouched s, default)
-    (* | On_ast.Reify _ -> failwith "Should have been desugared by now!" *)
+    | On_ast.Reify _ -> failwith "Should have been desugared by now!"
   in
   let%bind (e'', out'') = transformer recurse env e' in
   return (e'', combiner out' out'')

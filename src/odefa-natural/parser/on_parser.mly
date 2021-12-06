@@ -95,6 +95,9 @@ let new_dependent_fun
 %token PIPE
 %token DOUBLE_PIPE
 %token DOUBLE_AMPERSAND
+%token DOLLAR
+%token OPEN_OBRACKET
+%token CLOSE_OBRACKET
 %token FUNCTION
 // %token RECORD
 %token WITH
@@ -116,8 +119,6 @@ let new_dependent_fun
 %token ASSERT
 %token ASSUME
 %token MU
-// %token REIFY
-// %token TYPIFY
 %token PLUS
 %token MINUS
 %token ASTERISK
@@ -173,8 +174,8 @@ expr:
       { Assert($2) }
   | ASSUME expr
       { Assume($2) }
-  // | REIFY type_decl
-  //     { Reify($2) }
+  | DOLLAR OPEN_PAREN type_decl CLOSE_PAREN
+      { Reify($3) }
   | variant_label expr %prec prec_variant
       { VariantExpr($1, $2) }
   | expr ASTERISK expr
@@ -231,7 +232,6 @@ expr:
       { Match($2, $5) }
 ;
 
-/* Question: Can modifier only be placed on first-order types? */
 /* 
    type decl:
    int, bool, etc.
@@ -250,7 +250,7 @@ type_decl:
   | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
   | type_decl DOUBLE_PIPE type_decl { TypeUnion ($1, $3) }
   | type_decl DOUBLE_AMPERSAND type_decl { TypeIntersect ($1, $3) }
-  // | TYPIFY expr { Typify $2 }
+  | OPEN_OBRACKET expr CLOSE_OBRACKET { Typify $2 }
 
 type_parameter:
   | APOSTROPHE IDENTIFIER { TypeUntouched $2 }
@@ -262,9 +262,9 @@ record_type:
       { TypeRecord (Ident_map.empty) }
 
 record_type_body:
-  | label EQUALS type_decl
+  | label COLON type_decl
       { new_record $1 $3 }
-  | label EQUALS type_decl COMMA record_type_body
+  | label COLON type_decl COMMA record_type_body
       { add_record_entry $1 $3 $5 }
 ;
 

@@ -87,7 +87,7 @@ and pp_type_decl formatter type_decl =
   | TypeIntersect (t1, t2) -> Format.fprintf formatter "%a ^ %a" pp_type_decl t1 pp_type_decl t2
   | TypeRecurse (tvar, t) ->  Format.fprintf formatter "Mu %a.%a" pp_ident tvar pp_type_decl t
   | TypeUntouched s -> Format.pp_print_string formatter @@ "'" ^ s
-  (* | Typify e -> Format.fprintf formatter "type_expr : %a" pp_expr e *)
+  | Typify e -> Format.fprintf formatter "[| %a |]" pp_expr e
 
 (* and pp_type_decl_list formatter list =
   Pp_utils.pp_concat_sep
@@ -278,8 +278,8 @@ and pp_expr formatter expr =
       Format.fprintf formatter "assume (%a)" pp_expr e
   | Untouched s ->
         Format.pp_print_string formatter @@ "'" ^ s 
-  (* | Reify te ->
-      Format.fprintf formatter "reify (%a)" pp_type_decl te *)
+  | Reify te ->
+      Format.fprintf formatter "$(%a)" pp_type_decl te
 ;;
 
 let show_ident = Pp_utils.pp_to_string pp_ident;;

@@ -394,9 +394,8 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
     let primer_var = Ident "primer" in
     Let (primer_var, Function ([fresh_type_var], Record rec_map), Appl (Var primer_var, Var primer_var))
     *)
-    (* | Typify e ->
-    (* TODO: Add sanity check for record type later on *)
-    typed_non_to_on e *)
+    (* NOTE (Earl): Assumption here: e is untyped NatOdefa code (for now) *)
+    | Typify e -> e 
 
     (* TODO: Use the checker/generator pair to perform the checking, which should make things simpler *)
 and typed_non_to_on (e : expr) : expr = 
@@ -480,8 +479,8 @@ and typed_non_to_on (e : expr) : expr =
   | ListCons (e1, e2) -> ListCons (typed_non_to_on e1, typed_non_to_on e2)
   | Assert e -> Assert (typed_non_to_on e)
   | Assume e -> Assume (typed_non_to_on e)
-  (* | Reify type_expr -> 
-    semantic_pair_of type_expr *)
+  | Reify type_expr -> 
+    semantic_pair_of type_expr
 
 and transform_funsig (Funsig (fun_name, params, e)) = 
     Funsig (fun_name, params, typed_non_to_on e)

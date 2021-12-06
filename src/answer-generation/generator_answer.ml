@@ -176,7 +176,7 @@ module Type_errors : Answer = struct
 
   let show : t -> string = function
     | Some error ->
-      "** Type Errors **\n" ^
+      "** Odefa Type Errors **\n" ^
       (Printf.sprintf "- Input sequence  : %s\n" (show_input_sequence error.err_input_seq)) ^
       (Printf.sprintf "- Found at clause : %s\n" (Odefa_error_location.show error.err_location)) ^
       (Printf.sprintf "- Found in steps  : %s\n" (string_of_int error.err_steps)) ^
@@ -254,7 +254,7 @@ module Natodefa_type_errors : Answer = struct
 
   let show : t -> string = function
     | Some error ->
-      "** Type Errors **\n" ^
+      "** NatOdefa Type Errors **\n" ^
       (Printf.sprintf "- Input sequence  : %s\n" (show_input_sequence error.err_input_seq)) ^
       (Printf.sprintf "- Found at clause : %s\n" (Natodefa_error_location.show error.err_location)) ^
       (Printf.sprintf "- Found in steps  : %s\n" (string_of_int error.err_steps)) ^
