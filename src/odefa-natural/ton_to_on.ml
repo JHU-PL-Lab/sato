@@ -395,7 +395,7 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
     Let (primer_var, Function ([fresh_type_var], Record rec_map), Appl (Var primer_var, Var primer_var))
     *)
     (* NOTE (Earl): Assumption here: e is untyped NatOdefa code (for now) *)
-    | Typify e -> e 
+    | Typify e -> typed_non_to_on e 
 
     (* TODO: Use the checker/generator pair to perform the checking, which should make things simpler *)
 and typed_non_to_on (e : expr) : expr = 

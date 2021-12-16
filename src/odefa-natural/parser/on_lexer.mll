@@ -70,6 +70,7 @@ rule token = parse
 | "assert"             { ASSERT }
 | "assume"             { ASSUME }
 | "Mu"                 { MU }
+| "List"               { LIST }
 | "+"                  { PLUS }
 | "-"                  { MINUS }
 | "*"                  { ASTERISK }

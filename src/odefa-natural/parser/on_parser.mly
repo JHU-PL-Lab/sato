@@ -95,9 +95,9 @@ let new_dependent_fun
 %token PIPE
 %token DOUBLE_PIPE
 %token DOUBLE_AMPERSAND
-%token DOLLAR
-%token OPEN_OBRACKET
-%token CLOSE_OBRACKET
+// %token DOLLAR
+// %token OPEN_OBRACKET
+// %token CLOSE_OBRACKET
 %token FUNCTION
 // %token RECORD
 %token WITH
@@ -119,6 +119,7 @@ let new_dependent_fun
 %token ASSERT
 %token ASSUME
 %token MU
+%token LIST
 %token PLUS
 %token MINUS
 %token ASTERISK
@@ -130,6 +131,12 @@ let new_dependent_fun
 %token GREATER_EQUAL
 %token EQUAL_EQUAL
 %token NOT_EQUAL
+
+%token TYPEVAR
+%token OPEN_BRACE_SET
+%token CLOSE_BRACE_SET
+%token OPEN_PAREN_TYPE
+%token CLOSE_PAREN_TYPE
 
 /*
  * Precedences and associativities.  Lower precedences come first.
@@ -174,8 +181,8 @@ expr:
       { Assert($2) }
   | ASSUME expr
       { Assume($2) }
-  | DOLLAR OPEN_PAREN type_decl CLOSE_PAREN
-      { Reify($3) }
+  | type_decl
+      { Reify($1) }
   | variant_label expr %prec prec_variant
       { VariantExpr($1, $2) }
   | expr ASTERISK expr
@@ -241,24 +248,25 @@ expr:
 
 type_decl:
   | basic_types { $1 }
-  | ident_decl { TypeVar $1 }
+  | TYPEVAR ident_decl { TypeVar $2 }
   | type_parameter { $1 }
   | MU ident_decl DOT type_decl { TypeRecurse ($2, $4) }
   | type_decl ARROW type_decl { TypeArrow ($1, $3) }
-  | OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN ARROW type_decl { TypeArrowD (($2, $4), $7) }
-  | OPEN_BRACE basic_types PIPE expr CLOSE_BRACE { TypeSet ($2, Predicate $4) }
-  | OPEN_PAREN type_decl CLOSE_PAREN { $2 }
+  | OPEN_PAREN_TYPE ident_decl COLON type_decl CLOSE_PAREN_TYPE ARROW type_decl { TypeArrowD (($2, $4), $7) }
+  | OPEN_BRACE_SET basic_types PIPE expr CLOSE_BRACE_SET { TypeSet ($2, Predicate $4) }
+  | OPEN_PAREN_TYPE type_decl CLOSE_PAREN_TYPE { $2 }
   | type_decl DOUBLE_PIPE type_decl { TypeUnion ($1, $3) }
   | type_decl DOUBLE_AMPERSAND type_decl { TypeIntersect ($1, $3) }
-  | OPEN_OBRACKET expr CLOSE_OBRACKET { Typify $2 }
+  | expr { Typify $1 }
 
 type_parameter:
   | APOSTROPHE IDENTIFIER { TypeUntouched $2 }
 
 record_type:
-  | OPEN_BRACE record_type_body CLOSE_BRACE
-      { TypeRecord $2 }
-  | OPEN_BRACE CLOSE_BRACE
+  | OPEN_BRACE_TYPE record_type_body CLOSE_BRACE GREATER
+      { TypeRecord $3 }
+  // TODO: Distinct surface level syntax?
+  | LESS OPEN_BRACE CLOSE_BRACE GREATER
       { TypeRecord (Ident_map.empty) }
 
 record_type_body:
@@ -272,7 +280,7 @@ basic_types:
   | INT { TypeInt }
   | BOOL_KEYWORD { TypeBool }
   | record_type { $1 }
-  | OPEN_BRACKET type_decl CLOSE_BRACKET { TypeList $2 }
+  | LIST type_decl { TypeList $2 }
 
 /* let foo x = ... */
 fun_sig:
