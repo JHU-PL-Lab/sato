@@ -43,22 +43,6 @@ type type_sig =
   | UntouchedType of string
 [@@ deriving eq, ord, show, to_yojson]
 
-and type_decl = 
-  | TypeVar of ident
-  | TypeInt
-  | TypeBool
-  | TypeRecord of type_decl Ident_map.t
-  | TypeList of type_decl
-  | TypeArrow of type_decl * type_decl
-  | TypeArrowD of ((ident * type_decl) * type_decl)
-  | TypeSet of type_decl * predicate
-  | TypeUnion of type_decl * type_decl
-  | TypeIntersect of type_decl * type_decl
-  | TypeRecurse of ident * type_decl
-  | TypeUntouched of string  
-  | Typify of expr
-[@@ deriving eq, ord, show, to_yojson]
-
 and predicate = Predicate of expr
 [@@ deriving eq, ord, show, to_yojson]
 
@@ -81,9 +65,9 @@ and expr =
   | Appl of expr * expr
   | Let of ident * expr * expr
   | LetRecFun of funsig list * expr | LetFun of funsig * expr
-  | LetWithType of ident * expr * expr * type_decl
-  | LetRecFunWithType of funsig list * expr * type_decl list
-  | LetFunWithType of funsig * expr * type_decl
+  | LetWithType of ident * expr * expr * expr
+  | LetRecFunWithType of funsig list * expr * expr list
+  | LetFunWithType of funsig * expr * expr
   | Plus of expr * expr | Minus of expr * expr
   | Times of expr * expr | Divide of expr * expr | Modulus of expr * expr
   | Equal of expr * expr | Neq of expr * expr
@@ -97,9 +81,19 @@ and expr =
   | List of expr list | ListCons of expr * expr
   | Assert of expr | Assume of expr
   | Untouched of string
-  | Reify of type_decl
-  (* | TypeError *)
-  (* | Protected of expr *)
+  (* Type related expressions *)
+  | TypeVar of ident
+  | TypeInt
+  | TypeBool
+  | TypeRecord of expr Ident_map.t
+  | TypeList of expr
+  | TypeArrow of expr * expr
+  | TypeArrowD of ((ident * expr) * expr)
+  | TypeSet of expr * predicate
+  | TypeUnion of expr * expr
+  | TypeIntersect of expr * expr
+  | TypeRecurse of ident * expr
+  | TypeUntouched of string  
 [@@deriving eq, ord, to_yojson]
 ;;
 
@@ -130,11 +124,15 @@ let expr_precedence expr =
   | ListCons _ -> 6
   | Plus _ | Minus _ -> 7
   | Times _ | Divide _ | Modulus _ -> 8
-  | Assert _ | Assume _ | VariantExpr _ | Reify _ -> 9
+  | Assert _ | Assume _ | VariantExpr _ -> 9
   | Appl _ -> 10
   | RecordProj _ -> 11
   | Int _ | Bool _ | Input | Var _ | List _ | Record _ | Untouched _ -> 12
-  
+  (* TODO: For now, all type expressions will have the lowest precedence coz I'm lazy and don't wanna think about it *)
+  | TypeVar _ | TypeInt | TypeBool | TypeRecord _ | TypeList _
+  | TypeArrow _ | TypeArrowD _ | TypeSet _ | TypeUnion _
+  | TypeIntersect _ | TypeRecurse _ | TypeUntouched _ -> 13
+
 ;;
 
 (** Takes expressions [e1] and [e2] as arguments.  Returns 0 if the two

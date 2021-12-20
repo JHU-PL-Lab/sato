@@ -26,7 +26,9 @@ rule token = parse
 | whitespace           { token lexbuf }
 | newline              { incr_lineno lexbuf; token lexbuf }
 | "{"                  { OPEN_BRACE }
+| "{:"                 { OPEN_BRACE_TYPE }
 | "}"                  { CLOSE_BRACE }
+| ":}"                 { CLOSE_BRACE_TYPE }
 | "("                  { OPEN_PAREN }
 | ")"                  { CLOSE_PAREN }
 | "["                  { OPEN_BRACKET }
@@ -43,8 +45,8 @@ rule token = parse
 | "||"                 { DOUBLE_PIPE }
 | "&&"                 { DOUBLE_AMPERSAND }
 | "$"                  { DOLLAR }
-| "[|"                 { OPEN_OBRACKET }
-| "|]"                 { CLOSE_OBRACKET }
+(* | "[|"                 { OPEN_OBRACKET }
+| "|]"                 { CLOSE_OBRACKET } *)
 | "and"                { AND }
 | "or"                 { OR }
 | "not"                { NOT }

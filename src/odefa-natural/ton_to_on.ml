@@ -8,7 +8,7 @@ let counter = ref 0;;
 
 (* TODO: Maybe add annotation on the surface level language so that we can avoid certain type checking in sato *)
 
-let rec semantic_pair_of (t : type_decl) : semantic_type =
+let rec semantic_pair_of (t : expr) : semantic_type =
   match t with
   | TypeVar tvar -> Appl (Var tvar, Var tvar)
   | TypeInt ->
@@ -295,6 +295,38 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       |> Ident_map.add (Ident "checker") checker
     in
     Record rec_map
+  (* NOTE: Warning! Non-exhaustive pattern match. *)
+  (* All other expressions are homomorphic *)
+  | Appl (e1, e2) -> Appl (semantic_pair_of e1, semantic_pair_of e2) 
+  | Let (x, e1, e2) -> Let (x, semantic_pair_of e1, semantic_pair_of e2)
+  (* let f (x : int) = int in f 1 *)
+  | LetRecFun (sig_lst, e) ->
+    begin
+      let sig_lst' = List.map (transform_funsig typed_non_to_on) sig_lst in 
+      LetRecFun (sig_lst', semantic_pair_of e)
+    end
+  | LetFun (fun_sig, e) ->
+    begin
+      let fun_sig' = (transform_funsig typed_non_to_on) fun_sig in
+      LetFun (fun_sig', semantic_pair_of e)
+    end
+  | If (e1, e2, e3) -> If (semantic_pair_of e1, semantic_pair_of e2, semantic_pair_of e3)      
+  (* let (x : (let (y : int) = input in if y > 0 then int else bool)) = 1 in x*)
+  | LetWithType (x, e1, e2, type_decl) ->
+    begin
+      let let_expr' = typed_non_to_on t in
+      semantic_pair_of let_expr'
+    end
+  | LetRecFunWithType (sig_lst, e, type_decl_lst) ->
+    begin
+      let letrec_expr' = typed_non_to_on t in
+      semantic_pair_of letrec_expr'
+    end
+  | LetFunWithType ((Funsig (f, _, _) as fun_sig), e, type_decl) ->
+    begin
+      
+    end
+  | _ -> t
   (* | TypeRecurse (Ident t_var, t') ->
     let rec rename_tree (old_var : ident) (new_var : ident) (og_type : type_decl) : type_decl = 
       match og_type with
@@ -414,6 +446,7 @@ and typed_non_to_on (e : expr) : expr =
       let sig' = transform_funsig fun_sig in
       LetFun (sig', typed_non_to_on e)
     end
+  
     (* TODO: let (x : a || b) = fun a -> a in 1 + x true *)
     (* TODO: For union types, we can use runtime checks to differentiate which side of the union we're on, and
              wrap the variable accordingly
@@ -479,8 +512,6 @@ and typed_non_to_on (e : expr) : expr =
   | ListCons (e1, e2) -> ListCons (typed_non_to_on e1, typed_non_to_on e2)
   | Assert e -> Assert (typed_non_to_on e)
   | Assume e -> Assume (typed_non_to_on e)
-  | Reify type_expr -> 
-    semantic_pair_of type_expr
 
-and transform_funsig (Funsig (fun_name, params, e)) = 
-    Funsig (fun_name, params, typed_non_to_on e)
+and transform_funsig f (Funsig (fun_name, params, e)) = 
+    Funsig (fun_name, params, f e)

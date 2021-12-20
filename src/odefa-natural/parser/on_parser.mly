@@ -32,44 +32,25 @@ let record_from_list pr_list =
      (fun acc (lbl, v) -> add_record_entry lbl v acc)
      Ident_map.empty
 
-let new_rec_fun_with_type fun_sig_and_type let_body =
-  let fun_sig_list = List.map fst fun_sig_and_type in 
-  let fun_type_list = List.map snd fun_sig_and_type in
-  LetRecFunWithType (fun_sig_list, let_body, fun_type_list)
-;;
+let new_rec_fun_with_type fun_sig_and_type let_body = 
+  failwith "TBI"
 
 let new_let_fun_with_type fun_sig_and_type let_body =
-  let fun_sig, fun_type = fun_sig_and_type in
-  LetFunWithType (fun_sig, let_body, fun_type)
-;;
+  failwith "TBI"
 
 let new_fun_with_type 
   (fun_name : ident) 
-  (typed_param_list : (ident * type_decl) list) 
-  (return_type : type_decl)
+  (typed_param_list : (ident * expr) list) 
+  (return_type : expr)
   (fun_body : expr) = 
-  let param_list = List.map fst typed_param_list in
-  let (type_list : type_decl list) = List.map snd typed_param_list in
-  let function_type_p = 
-    match type_list with
-    | [] -> failwith "undefined"
-    | _ -> 
-      let reversed_list = List.rev type_list in
-      let last_type = List.hd reversed_list in
-      let accumulator = TypeArrow (last_type, return_type) in
-      List.fold_left
-          (fun acc -> fun t -> TypeArrow (t, acc)) accumulator (List.tl reversed_list)
-  in
-  (Funsig (fun_name, param_list, fun_body), function_type_p)
-;; 
+  failwith "TBI"
 
 let new_dependent_fun   
   (fun_name : ident) 
-  (typed_param : (ident * type_decl)) 
-  (return_type : type_decl)
+  (typed_param : (ident * expr)) 
+  (return_type : expr)
   (fun_body : expr) = 
-  let (param, _) = typed_param in
-  (Funsig (fun_name, [param], fun_body), TypeArrowD (typed_param, return_type))
+  failwith "TBI"
 
 %}
 
@@ -95,7 +76,7 @@ let new_dependent_fun
 %token PIPE
 %token DOUBLE_PIPE
 %token DOUBLE_AMPERSAND
-// %token DOLLAR
+%token DOLLAR
 // %token OPEN_OBRACKET
 // %token CLOSE_OBRACKET
 %token FUNCTION
@@ -132,11 +113,11 @@ let new_dependent_fun
 %token EQUAL_EQUAL
 %token NOT_EQUAL
 
-%token TYPEVAR
-%token OPEN_BRACE_SET
-%token CLOSE_BRACE_SET
-%token OPEN_PAREN_TYPE
-%token CLOSE_PAREN_TYPE
+// %token TYPEVAR
+%token OPEN_BRACE_TYPE
+%token CLOSE_BRACE_TYPE
+// %token OPEN_PAREN_TYPE
+// %token CLOSE_PAREN_TYPE
 
 /*
  * Precedences and associativities.  Lower precedences come first.
@@ -156,7 +137,6 @@ let new_dependent_fun
 
 %start <On_ast.expr> prog
 %start <On_ast.expr option> delim_expr
-
 
 %%
 
@@ -181,8 +161,6 @@ expr:
       { Assert($2) }
   | ASSUME expr
       { Assume($2) }
-  | type_decl
-      { Reify($1) }
   | variant_label expr %prec prec_variant
       { VariantExpr($1, $2) }
   | expr ASTERISK expr
@@ -227,7 +205,7 @@ expr:
       { new_rec_fun_with_type $3 $5 }
   | LET ident_decl EQUALS expr IN expr %prec prec_let
       { Let($2, $4, $6) }
-  | LET OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN EQUALS expr IN expr %prec prec_let
+  | LET OPEN_PAREN ident_decl COLON expr CLOSE_PAREN EQUALS expr IN expr %prec prec_let
       { LetWithType($3, $8, $10, $5) }
   | LET fun_sig IN expr %prec prec_fun
       { LetFun($2, $4) }
@@ -237,42 +215,33 @@ expr:
       { new_let_fun_with_type $2 $4 }
   | MATCH expr WITH PIPE? match_expr_list END
       { Match($2, $5) }
-;
-
-/* 
-   type decl:
-   int, bool, etc.
-   int -> int
-   int -> { int | isPositive }
- */
-
-type_decl:
+  // Types expressions
   | basic_types { $1 }
-  | TYPEVAR ident_decl { TypeVar $2 }
   | type_parameter { $1 }
-  | MU ident_decl DOT type_decl { TypeRecurse ($2, $4) }
-  | type_decl ARROW type_decl { TypeArrow ($1, $3) }
-  | OPEN_PAREN_TYPE ident_decl COLON type_decl CLOSE_PAREN_TYPE ARROW type_decl { TypeArrowD (($2, $4), $7) }
-  | OPEN_BRACE_SET basic_types PIPE expr CLOSE_BRACE_SET { TypeSet ($2, Predicate $4) }
-  | OPEN_PAREN_TYPE type_decl CLOSE_PAREN_TYPE { $2 }
-  | type_decl DOUBLE_PIPE type_decl { TypeUnion ($1, $3) }
-  | type_decl DOUBLE_AMPERSAND type_decl { TypeIntersect ($1, $3) }
-  | expr { Typify $1 }
+  | MU ident_decl DOT expr { TypeRecurse ($2, $4) }
+  | expr ARROW expr { TypeArrow ($1, $3) }
+  | OPEN_PAREN ident_decl COLON expr CLOSE_PAREN ARROW expr { TypeArrowD (($2, $4), $7) }
+  // | OPEN_BRACE_SET basic_types PIPE expr CLOSE_BRACE_SET { TypeSet ($2, Predicate $4) } 
+  | expr DOUBLE_PIPE expr { TypeUnion ($1, $3) }
+  | expr DOUBLE_AMPERSAND expr { TypeIntersect ($1, $3) }
+;
 
 type_parameter:
   | APOSTROPHE IDENTIFIER { TypeUntouched $2 }
 
+type_var:
+  | DOLLAR IDENTIFIER { TypeVar $2 }
+
 record_type:
-  | OPEN_BRACE_TYPE record_type_body CLOSE_BRACE GREATER
+  | OPEN_BRACE_TYPE record_type_body CLOSE_BRACE_TYPE
       { TypeRecord $3 }
-  // TODO: Distinct surface level syntax?
-  | LESS OPEN_BRACE CLOSE_BRACE GREATER
+  | OPEN_BRACE_TYPE CLOSE_BRACE CLOSE_BRACE_TYPE
       { TypeRecord (Ident_map.empty) }
 
 record_type_body:
-  | label COLON type_decl
+  | label COLON expr
       { new_record $1 $3 }
-  | label COLON type_decl COMMA record_type_body
+  | label COLON expr COMMA record_type_body
       { add_record_entry $1 $3 $5 }
 ;
 
@@ -280,7 +249,7 @@ basic_types:
   | INT { TypeInt }
   | BOOL_KEYWORD { TypeBool }
   | record_type { $1 }
-  | LIST type_decl { TypeList $2 }
+  | LIST expr { TypeList $2 }
 
 /* let foo x = ... */
 fun_sig:
@@ -289,7 +258,7 @@ fun_sig:
 
 /* let foo (x : int) ... : int = ... */
 fun_sig_with_type:
-  | ident_decl param_list_with_type COLON type_decl EQUALS expr
+  | ident_decl param_list_with_type COLON expr EQUALS expr
       { new_fun_with_type $1 $2 $4 $6 }
 
 fun_sig_dependent_list:
@@ -297,7 +266,7 @@ fun_sig_dependent_list:
   | fun_sig_dependent WITH fun_sig_dependent_list { $1 :: $3 }
 
 fun_sig_dependent:
-  | ident_decl param_with_type COLON type_decl EQUALS expr
+  | ident_decl param_with_type COLON expr EQUALS expr
       { new_dependent_fun $1 $2 $4 $6 }
 
 /* let rec foo x y = ... with bar a b = ... in ... */
@@ -349,7 +318,7 @@ param_list_with_type:
 ;
 
 param_with_type:
-  | OPEN_PAREN ident_decl COLON type_decl CLOSE_PAREN { ($2, $4) }
+  | OPEN_PAREN ident_decl COLON expr CLOSE_PAREN { ($2, $4) }
 ;
 
 param_list:

@@ -165,7 +165,9 @@ let rec env_out_transform_expr
       let (e', out) = recurse env e in
       (On_ast.Assume e', out)
     | On_ast.Untouched s -> (On_ast.Untouched s, default)
-    | On_ast.Reify _ -> failwith "Should have been desugared by now!"
+    | TypeVar _ | TypeInt | TypeBool | TypeRecord _ | TypeList _
+    | TypeArrow _ | TypeArrowD _ | TypeSet _ | TypeUnion _
+    | TypeIntersect _ | TypeRecurse _ | TypeUntouched _ -> failwith "undefined"
   in
   let (e'', out'') = transformer recurse env e' in
   (e'', combiner out' out'')

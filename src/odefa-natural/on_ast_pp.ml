@@ -73,23 +73,7 @@ let pp_type_sig formatter t =
 let rec pp_predicate formatter (Predicate p) = 
   Format.fprintf formatter "%a" pp_expr p
 
-and pp_type_decl formatter type_decl =
-  match type_decl with
-  | TypeVar v -> Format.fprintf formatter "%a" pp_ident v
-  | TypeInt -> Format.pp_print_string formatter "int"
-  | TypeBool -> Format.pp_print_string formatter "bool"
-  | TypeRecord record -> Format.fprintf formatter "%a" (pp_ident_map pp_type_decl) record
-  | TypeList t -> Format.fprintf formatter "[%a]" pp_type_decl t
-  | TypeArrow (t1, t2) -> Format.fprintf formatter "(%a -> %a)" pp_type_decl t1 pp_type_decl t2
-  | TypeArrowD ((x1, t1), t2) -> Format.fprintf formatter "((%a : %a) -> %a)" pp_ident x1 pp_type_decl t1 pp_type_decl t2
-  | TypeSet (t, p) -> Format.fprintf formatter "{%a | %a}" pp_type_decl t pp_predicate p
-  | TypeUnion (t1, t2) -> Format.fprintf formatter "%a v %a" pp_type_decl t1 pp_type_decl t2
-  | TypeIntersect (t1, t2) -> Format.fprintf formatter "%a ^ %a" pp_type_decl t1 pp_type_decl t2
-  | TypeRecurse (tvar, t) ->  Format.fprintf formatter "Mu %a.%a" pp_ident tvar pp_type_decl t
-  | TypeUntouched s -> Format.pp_print_string formatter @@ "'" ^ s
-  | Typify e -> Format.fprintf formatter "[| %a |]" pp_expr e
-
-(* and pp_type_decl_list formatter list =
+  (* and pp_type_decl_list formatter list =
   Pp_utils.pp_concat_sep
     " "
     (fun formatter x -> pp_type_decl formatter x)
@@ -103,7 +87,7 @@ let rec pp_funsig formatter (Funsig (x, ident_list, e)) =
 
 and pp_funsig_with_type formatter (Funsig (x, ident_list, e), type_decl) =
   Format.fprintf formatter "(%a@ : %a) %a =@ @[%a@]"
-    pp_ident x pp_type_decl type_decl pp_ident_list ident_list pp_expr e
+    pp_ident x pp_expr type_decl pp_ident_list ident_list pp_expr e
 
 and pp_pattern formatter pattern =
   match pattern with
@@ -192,7 +176,7 @@ and pp_expr formatter expr =
       pp_ident ident pp_expr e1 pp_expr e2
   | LetWithType (ident, e1, e2, type_decl) ->
     Format.fprintf formatter "let@ (%a : %a) =@ %a@ in@ @[%a@]"
-      pp_ident ident pp_type_decl type_decl pp_expr e1 pp_expr e2
+      pp_ident ident pp_expr type_decl pp_expr e1 pp_expr e2
   | LetRecFun (funsig_lst, e) ->
     let pp_funsig_list formatter funsig_lst =
       Pp_utils.pp_concat_sep
@@ -278,8 +262,18 @@ and pp_expr formatter expr =
       Format.fprintf formatter "assume (%a)" pp_expr e
   | Untouched s ->
         Format.pp_print_string formatter @@ "'" ^ s 
-  | Reify te ->
-      Format.fprintf formatter "$(%a)" pp_type_decl te
+  | TypeVar v -> Format.fprintf formatter "%a" pp_ident v
+  | TypeInt -> Format.pp_print_string formatter "int"
+  | TypeBool -> Format.pp_print_string formatter "bool"
+  | TypeRecord record -> Format.fprintf formatter "%a" (pp_ident_map pp_expr) record
+  | TypeList t -> Format.fprintf formatter "[%a]" pp_expr t
+  | TypeArrow (t1, t2) -> Format.fprintf formatter "(%a -> %a)" pp_expr t1 pp_expr t2
+  | TypeArrowD ((x1, t1), t2) -> Format.fprintf formatter "((%a : %a) -> %a)" pp_ident x1 pp_expr t1 pp_expr t2
+  | TypeSet (t, p) -> Format.fprintf formatter "{%a | %a}" pp_expr t pp_predicate p
+  | TypeUnion (t1, t2) -> Format.fprintf formatter "%a v %a" pp_expr t1 pp_expr t2
+  | TypeIntersect (t1, t2) -> Format.fprintf formatter "%a ^ %a" pp_expr t1 pp_expr t2
+  | TypeRecurse (tvar, t) ->  Format.fprintf formatter "Mu %a.%a" pp_ident tvar pp_expr t
+  | TypeUntouched s -> Format.pp_print_string formatter @@ "'" ^ s
 ;;
 
 let show_ident = Pp_utils.pp_to_string pp_ident;;
