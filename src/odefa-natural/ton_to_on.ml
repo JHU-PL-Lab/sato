@@ -295,106 +295,6 @@ let rec semantic_pair_of (t : type_decl) : semantic_type =
       |> Ident_map.add (Ident "checker") checker
     in
     Record rec_map
-  (* | TypeRecurse (Ident t_var, t') ->
-    let rec rename_tree (old_var : ident) (new_var : ident) (og_type : type_decl) : type_decl = 
-      match og_type with
-      | TypeInt | TypeBool -> og_type 
-      | TypeVar v -> 
-        if (old_var = v) then TypeVar new_var else og_type
-      | TypeRecord tmap -> TypeRecord (Ident_map.map (rename_tree old_var new_var) tmap)
-      | TypeList lt -> TypeList (rename_tree old_var new_var lt)
-      | TypeUnion (t1, t2) -> TypeUnion (rename_tree old_var new_var t1, rename_tree old_var new_var t2)
-      | TypeIntersect (t1, t2) -> TypeIntersect (rename_tree old_var new_var t1, rename_tree old_var new_var t2)
-      | TypeArrow (t1, t2) -> TypeArrow (rename_tree old_var new_var t1, rename_tree old_var new_var t2)
-      | TypeSet (st, p) -> TypeSet (rename_tree old_var new_var st, p)
-      | TypeRecurse (t_var', rt) ->
-        if (old_var == t_var') 
-        then TypeRecurse (new_var, rename_tree old_var new_var rt) 
-        else TypeRecurse (t_var', rename_tree old_var new_var rt)
-      (* | Typify t_expr -> 
-        begin
-          let rec rename_funsig (Funsig (fun_name, params, e)) = 
-            Funsig (fun_name, params, rename_expr e)
-          and rename_expr (e : expr) : expr = 
-            match e with
-            | Int _ | Bool _ | Var _ | Input -> e
-            | Function (id_lst, e) -> Function (id_lst, rename_expr e)
-            | Appl (e1, e2) -> Appl (rename_expr e1, rename_expr e2) 
-            | Let (x, e1, e2) -> Let (x, rename_expr e1, rename_expr e2)
-            | LetRecFun (sig_lst, e) ->
-              begin
-                let sig_lst' = List.map rename_funsig sig_lst in 
-                LetRecFun (sig_lst', rename_expr e)
-              end
-            | LetFun (fun_sig, e) ->
-              begin
-                let sig' = rename_funsig fun_sig in
-                LetFun (sig', rename_expr e)
-              end
-            | LetWithType (x, e1, e2, td) ->
-              begin
-                let td' = rename_tree old_var new_var td in 
-                LetWithType (x, rename_expr e1, rename_expr e2, td')
-              end
-            | LetRecFunWithType (sig_lst, e, type_decl_lst) ->
-              begin
-                let sig_lst' = List.map rename_funsig sig_lst in
-                let type_decl_lst' = List.map (rename_tree old_var new_var) type_decl_lst in
-                LetRecFunWithType (sig_lst', rename_expr e, type_decl_lst')
-              end
-            | LetFunWithType (fun_sig, e, td) ->
-              begin
-               LetFunWithType (rename_funsig fun_sig, rename_expr e, rename_tree old_var new_var td)
-              end
-            | Plus (e1, e2) -> Plus (rename_expr e1, rename_expr e2)
-            | Minus (e1, e2) -> Minus (rename_expr e1, rename_expr e2)
-            | Times (e1, e2) -> Times (rename_expr e1, rename_expr e2)
-            | Divide (e1, e2) -> Divide (rename_expr e1, rename_expr e2)
-            | Modulus (e1, e2) -> Modulus (rename_expr e1, rename_expr e2)
-            | Equal (e1, e2) -> Equal (rename_expr e1, rename_expr e2)
-            | Neq (e1, e2) -> Neq (rename_expr e1, rename_expr e2)
-            | LessThan (e1, e2) -> LessThan (rename_expr e1, rename_expr e2)
-            | Leq (e1, e2) -> Leq (rename_expr e1, rename_expr e2)
-            | GreaterThan (e1, e2) -> GreaterThan (rename_expr e1, rename_expr e2)
-            | Geq (e1, e2) -> Geq (rename_expr e1, rename_expr e2)
-            | And (e1, e2) -> And (rename_expr e1, rename_expr e2)
-            | Or (e1, e2) -> Or (rename_expr e1, rename_expr e2)
-            | Not e -> Not (rename_expr e)
-            | If (e1, e2, e3) -> If (rename_expr e1, rename_expr e2, rename_expr e3)
-            | Record m -> Record (Ident_map.map (fun e -> rename_expr e) m)
-            | RecordProj (e, l) -> RecordProj (rename_expr e, l)
-            | Match (e, pattern_expr_lst) ->
-              let e' = rename_expr e in
-              let pattern_expr_lst' = List.map (fun (pat, expr) -> (pat, rename_expr expr)) pattern_expr_lst in
-              Match (e', pattern_expr_lst')
-            | VariantExpr (lbl, e) -> VariantExpr (lbl, rename_expr e)
-            | List expr_lst -> List (List.map rename_expr expr_lst)
-            | ListCons (e1, e2) -> ListCons (rename_expr e1, rename_expr e2)
-            | Assert e -> Assert (rename_expr e)
-            | Assume e -> Assume (rename_expr e)
-            | Reify te -> semantic_pair_of (rename_tree old_var new_var te) 
-          in Typify (rename_expr t_expr)
-        end *)
-    in
-    let fresh_type_var = Ident ("self_" ^ t_var ^ string_of_int (counter := !counter + 1 ; !counter)) in
-    let new_decl = rename_tree (Ident t_var) fresh_type_var t' in
-    let gc_pair = semantic_pair_of new_decl in
-    let generator = 
-      Function ([Ident "~null"], RecordProj (gc_pair, Label "generator"))
-    in 
-    let exp_str = "exp" ^ string_of_int (counter := !counter + 1 ; !counter) in
-    let checker = 
-      Function ([Ident exp_str], Appl (RecordProj (gc_pair, Label "checker"), Var (Ident exp_str)))
-    in
-    let rec_map = 
-      Ident_map.empty
-      |> Ident_map.add (Ident "generator") generator
-      |> Ident_map.add (Ident "checker") checker
-    in
-    let primer_var = Ident "primer" in
-    Let (primer_var, Function ([fresh_type_var], Record rec_map), Appl (Var primer_var, Var primer_var))
-    *)
-    (* NOTE (Earl): Assumption here: e is untyped NatOdefa code (for now) *)
     | Typify e -> e 
 
     (* TODO: Use the checker/generator pair to perform the checking, which should make things simpler *)
@@ -414,20 +314,12 @@ and typed_non_to_on (e : expr) : expr =
       let sig' = transform_funsig fun_sig in
       LetFun (sig', typed_non_to_on e)
     end
-    (* TODO: let (x : a || b) = fun a -> a in 1 + x true *)
-    (* TODO: For union types, we can use runtime checks to differentiate which side of the union we're on, and
-             wrap the variable accordingly
-             If both are functions, check the argument type, which should be the union of two argument types
-    *)
-    (* fun check -> if (code checking check is arg type) then x check else *)
-    (* We can treat all functions as one-argument function and let induction do the work *)
-    (* TODO: let id = let x : [(int -> int)] = [fun a -> a + 1] in hd x in id true*)
-    (* Potential solution: Should we just disallow function type in LetWithType? *)
   | LetWithType (x, e1, e2, type_decl) ->
     begin
+      let e1' = typed_non_to_on e1 in
       let gc_pair = semantic_pair_of type_decl in
       let test_expr = If (Appl (RecordProj (gc_pair, Label "checker"), Var x), typed_non_to_on e2, Assert (Bool false)) in
-      Let (x, e1, test_expr)
+      Let (x, e1', test_expr)
     end
   | LetRecFunWithType (sig_lst, e, type_decl_lst) ->
     begin
