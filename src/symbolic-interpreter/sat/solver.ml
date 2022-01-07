@@ -962,37 +962,43 @@ let rec find_errors solver symbol =
           []
         end
       | Constraint.Bool true ->
-        (* TODO: This is where we left off -- the special case where the constraint is true 
-                 and an error occurs; we need to make sure that untouched matches are the 
-                 only type error that falls into this category.
+        (* The special case where the constraint is true 
+           and an error occurs; we need to make sure that untouched matches are the 
+           only type error that falls into this category.
         *)
-        let expected_type =
+        (* NOTE: The above statement is not true. If we have bool + 1, the find_error
+           will go down to check the isInt 1 and the constraint will be satisfied.
+        *)
+        let polymorphism_error =
           match pattern with
-          | Any_untouched_pattern -> Any_untouched_type
+          | Any_untouched_pattern -> true
           | Int_pattern | Bool_pattern | Fun_pattern 
           | Rec_pattern _ | Strict_rec_pattern _
           | Any_pattern | Untouched_pattern _-> 
-            raise @@ Utils.Invariant_failure
-            (Printf.sprintf "Does not fit the form of this error!")
+            false
         in
-        let actual_type = _get_type solver match_symb in
-        let match_val_source =
-          match _get_value_def solver match_symb with
-          | Some vs -> _symbolic_to_concrete_value vs
-          | None -> raise @@ Utils.Invariant_failure
-            (Printf.sprintf "%s has no value in constraint set!"
-              (show_symbol match_symb))
-        in
-        let match_error = Odefa_error.Error_match {
-            err_match_aliases = match_aliases;
-            err_match_val = match_val_source;
-            err_match_expected = expected_type;
-            err_match_actual = actual_type;
-        }
-        in
-        lazy_logger `trace (fun () ->
-          Printf.sprintf "Match error:\n%s" (Odefa_error.show match_error));
-        List.singleton match_error
+        if polymorphism_error 
+        then
+          let expected_type = Any_untouched_type in
+          let actual_type = _get_type solver match_symb in
+          let match_val_source =
+            match _get_value_def solver match_symb with
+            | Some vs -> _symbolic_to_concrete_value vs
+            | None -> raise @@ Utils.Invariant_failure
+              (Printf.sprintf "%s has no value in constraint set!"
+                (show_symbol match_symb))
+          in
+          let match_error = Odefa_error.Error_match {
+              err_match_aliases = match_aliases;
+              err_match_val = match_val_source;
+              err_match_expected = expected_type;
+              err_match_actual = actual_type;
+          }
+          in
+          lazy_logger `trace (fun () ->
+            Printf.sprintf "Match error:\n%s" (Odefa_error.show match_error));
+          List.singleton match_error
+        else []
       | _ ->
         raise @@ Utils.Invariant_failure
           (Printf.sprintf "%s is not a boolean value" (show_symbol symbol))
