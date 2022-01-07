@@ -55,20 +55,20 @@ module Ident : (Error_ident with type t = On_ast.ident) = struct
     `String (replace_linebreaks @@ show ident);;
 end;;
 
-module Value : (Error_value with type t = On_ast.expr) = struct
-  type t = On_ast.expr;;
-  let equal = On_ast.equal_expr;;
+module Value : (Error_value with type t = On_ast.core_natodefa) = struct
+  type t = On_ast.core_natodefa;;
+  let equal = On_ast.equal_typed_expr;;
   let pp = On_ast_pp.pp_expr;;
-  let show = On_ast_pp.show_expr;;
+  let show = Pp_utils.pp_to_string pp;;
   let to_yojson value =
     `String (replace_linebreaks @@ show value);;
 end;;
 
-module Binop : (Error_binop with type t = On_ast.expr) = struct
-  type t = On_ast.expr;;
-  let equal = On_ast.equal_expr;;
+module Binop : (Error_binop with type t = On_ast.core_natodefa) = struct
+  type t = On_ast.core_natodefa;;
+  let equal = On_ast.equal_typed_expr;;
   let pp = On_ast_pp.pp_expr;;
-  let show = On_ast_pp.show_expr;;
+  let show = Pp_utils.pp_to_string pp;;
   let to_yojson binop =
     `String (replace_linebreaks @@ show binop);;
 end;;
@@ -164,9 +164,8 @@ let deduplicate_list list =
 
 (* Helper function that returns a natodefa binop, depending on the odefa
    binary operator. *)
-let odefa_to_on_binop
-    (odefa_binop : Ast.binary_operator)
-  : (On_ast.expr -> On_ast.expr -> On_ast.expr) =
+let odefa_to_on_binop 
+  (odefa_binop : Ast.binary_operator) : (On_ast.core_natodefa -> On_ast.core_natodefa -> On_ast.core_natodefa) =
   match odefa_binop with
   | Ast.Binary_operator_plus -> (fun e1 e2 -> On_ast.Plus (e1, e2))
   | Ast.Binary_operator_minus -> (fun e1 e2 -> On_ast.Minus (e1, e2))
@@ -183,7 +182,7 @@ let odefa_to_on_binop
   | Ast.Binary_operator_xnor -> (fun e1 e2 -> On_ast.Equal (e1, e2))
 ;;
 
-let odefa_to_natodefa_error
+let odefa_to_natodefa_error 
     (odefa_on_maps : On_to_odefa_maps.t)
     (odefa_err : Error.Odefa_error.t)
   : On_error.t =
@@ -204,7 +203,7 @@ let odefa_to_natodefa_error
        adjacent duplicates from the alias chain. *)
     |> deduplicate_list
   in
-  let odefa_to_on_value (aliases : Ast.ident list) : On_ast.expr =
+  let odefa_to_on_value (aliases : Ast.ident list) : On_ast.core_natodefa =
     let last_var =
       try
         List.last aliases

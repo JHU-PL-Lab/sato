@@ -4,10 +4,10 @@ open Batteries;;
        support. *** *)
 
 type ('env,'out) env_out_expr_transformer =
-  ('env -> On_ast.expr -> (On_ast.expr * 'out)) ->
+  ('env -> On_ast.core_natodefa -> (On_ast.core_natodefa * 'out)) ->
   'env ->
-  On_ast.expr ->
-  On_ast.expr * 'out
+  On_ast.core_natodefa ->
+    On_ast.core_natodefa * 'out
 ;;
 
 let rec env_out_transform_expr
@@ -15,9 +15,9 @@ let rec env_out_transform_expr
     (combiner : 'out -> 'out -> 'out)
     (default : 'out)
     (env : 'env)
-    (e : On_ast.expr)
-  : On_ast.expr * 'out =
-  let recurse : 'env -> On_ast.expr -> On_ast.expr * 'out =
+    (e : On_ast.core_natodefa)
+  : On_ast.core_natodefa * 'out =
+  let recurse : 'env -> On_ast.core_natodefa -> On_ast.core_natodefa * 'out =
     env_out_transform_expr transformer combiner default
   in
   let transform_funsig (On_ast.Funsig(name,args,body)) =
@@ -25,7 +25,7 @@ let rec env_out_transform_expr
     let (body'',out'') = transformer recurse env body' in
     (On_ast.Funsig(name,args,body''), combiner out' out'')
   in
-  let (e' : On_ast.expr), (out' : 'out) =
+  let (e' : On_ast.core_natodefa), (out' : 'out) =
     match e with
     | On_ast.Var x ->
       (On_ast.Var x, default)
@@ -42,20 +42,15 @@ let rec env_out_transform_expr
       let (e1', out1) = recurse env e1 in
       let (e2', out2) = recurse env e2 in
       (On_ast.Let(x, e1', e2'), combiner out1 out2)
-    | On_ast.LetWithType _ -> failwith "undefined"
     | On_ast.LetRecFun (funsigs, e1) ->
       let (e1', out1) = recurse env e1 in
       let (funsigs', outs) = List.split @@ List.map transform_funsig funsigs in
       let out = List.fold_left combiner out1 outs in
       (On_ast.LetRecFun(funsigs', e1'), out)
-    (* TODO: Actually implement this - EW *)
-    | On_ast.LetRecFunWithType _ -> failwith "undefined"
     | On_ast.LetFun (funsig, e1) ->
       let (e1', out1) = recurse env e1 in
       let (funsig', out2) = transform_funsig funsig in
       (On_ast.LetFun(funsig', e1'), combiner out1 out2)
-    (* TODO: Actually implement this - EW *)
-    | On_ast.LetFunWithType _ -> failwith "undefined"
     | On_ast.Plus (e1, e2) ->
       let (e1', out1) = recurse env e1 in
       let (e2', out2) = recurse env e2 in
@@ -165,28 +160,25 @@ let rec env_out_transform_expr
       let (e', out) = recurse env e in
       (On_ast.Assume e', out)
     | On_ast.Untouched s -> (On_ast.Untouched s, default)
-    | TypeVar _ | TypeInt | TypeBool | TypeRecord _ | TypeList _
-    | TypeArrow _ | TypeArrowD _ | TypeSet _ | TypeUnion _
-    | TypeIntersect _ | TypeRecurse _ | TypeUntouched _ -> failwith "undefined"
   in
   let (e'', out'') = transformer recurse env e' in
   (e'', combiner out' out'')
 ;;
 
 type 'env env_expr_transformer =
-  ('env -> On_ast.expr -> On_ast.expr) -> 'env -> On_ast.expr -> On_ast.expr
+  ('env -> On_ast.core_natodefa -> On_ast.core_natodefa) -> 'env -> On_ast.core_natodefa -> On_ast.core_natodefa
 ;;
 
 let env_transform_expr
     (transformer : 'env env_expr_transformer)
     (env : 'env)
-    (e : On_ast.expr)
-  : On_ast.expr =
+    (e : On_ast.core_natodefa)
+  : On_ast.core_natodefa =
   let transformer'
-      (recurse : 'env -> On_ast.expr -> (On_ast.expr * unit))
+      (recurse : 'env -> On_ast.core_natodefa -> (On_ast.core_natodefa * unit))
       env
-      (e : On_ast.expr)
-    : (On_ast.expr * unit) =
+      (e : On_ast.core_natodefa)
+    : (On_ast.core_natodefa * unit) =
     let recurse' env e =
       let (e'', ()) = recurse env e in e''
     in
@@ -197,14 +189,14 @@ let env_transform_expr
 ;;
 
 type expr_transformer =
-  (On_ast.expr -> On_ast.expr) -> On_ast.expr -> On_ast.expr
+  (On_ast.core_natodefa -> On_ast.core_natodefa) -> On_ast.core_natodefa -> On_ast.core_natodefa
 ;;
 
-let transform_expr (transformer : expr_transformer) (e : On_ast.expr)
-  : On_ast.expr =
+let transform_expr (transformer : expr_transformer) (e : On_ast.core_natodefa)
+  : On_ast.core_natodefa =
   let transformer'
-      (recurse : unit -> On_ast.expr -> On_ast.expr) () (e : On_ast.expr)
-    : On_ast.expr =
+      (recurse : unit -> On_ast.core_natodefa -> On_ast.core_natodefa) () (e : On_ast.core_natodefa)
+    : On_ast.core_natodefa =
     let recurse' e = recurse () e in
     transformer recurse' e
   in

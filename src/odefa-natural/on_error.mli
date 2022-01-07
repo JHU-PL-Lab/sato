@@ -3,8 +3,9 @@ open Odefa_symbolic_interpreter;;
 (* Natodefa modules *)
 
 module Ident : Error.Error_ident with type t = On_ast.ident;;
-module Value : Error.Error_value with type t = On_ast.expr;;
-module Binop : Error.Error_binop with type t = On_ast.expr;;
+(* TODO: This section of error reporting probably needs to be changed *)
+module Value : Error.Error_value with type t = On_ast.core_natodefa;;
+module Binop : Error.Error_binop with type t = On_ast.core_natodefa;;
 module Type : Error.Error_type with type t = On_ast.type_sig;;
 
 (** An error produced by a natodefa program *)

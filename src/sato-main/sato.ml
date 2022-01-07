@@ -25,7 +25,7 @@ let parse_program
     | ".natodefa" ->
       begin
         let natodefa_ast = File.with_file_in filename On_parse.parse_program in
-        let desugared_typed = typed_non_to_on natodefa_ast in
+        let desugared_typed = typed_non_to_on @@ semantic_type_of natodefa_ast in
         let (odefa_ast, on_odefa_maps) =
           On_to_odefa.translate desugared_typed
         in

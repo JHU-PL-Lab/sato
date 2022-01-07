@@ -20,7 +20,7 @@ let lbl_tail_m : Ident.t m = _lbl_m "tail";;
 let lbl_variant_m (s : string) : Ident.t m = _lbl_m ("variant_" ^ s);;
 let lbl_value_m : Ident.t m = _lbl_m "value";;
 
-let list_expr_to_record recurse (expr_lst : expr list) =
+let list_expr_to_record recurse (expr_lst : core_natodefa list) =
   (* Record labels *)
   let%bind lbl_empty = lbl_empty_m in
   let%bind lbl_head = lbl_head_m in
@@ -59,7 +59,7 @@ let list_expr_to_record recurse (expr_lst : expr list) =
     - What if we wish to lazily cons, eg. as part of a freeze Fun x -> x :: [y]
   The latter question should be a non-issue due to the encoding, however. - KQ
 *)
-let list_cons_expr_to_record recurse (expr : expr) (list_expr : expr) =
+let list_cons_expr_to_record recurse (expr : core_natodefa) (list_expr : core_natodefa) =
   (* Record labels *)
   (* Note: We need to add extra cons label to distinguish list cons from regular
      lists *)
@@ -92,8 +92,8 @@ let list_cons_expr_to_record recurse (expr : expr) (list_expr : expr) =
    Record expression. *)
 let variant_expr_to_record recurse
     (v_label : variant_label)
-    (v_expr : expr)
-  : expr m =
+    (v_expr : core_natodefa)
+  : core_natodefa m =
   (* Record labels *)
   let Variant_label v_name = v_label in
   let%bind lbl_variant = lbl_variant_m v_name in
@@ -169,8 +169,8 @@ let encode_pattern (pattern : pattern) : pattern m =
 ;;
 
 let encode_match_exprs recurse
-    (match_expr : expr)
-    (pat_expr_lst : (pattern * expr) list) =
+    (match_expr : core_natodefa)
+    (pat_expr_lst : (pattern * core_natodefa) list) =
   (* Transform first expression *)
   let%bind new_match_expr = recurse match_expr in
   (* Transform pattern-expression pairs *)
@@ -271,7 +271,7 @@ let letrec_expr_to_fun recurse fun_sig_list rec_expr =
   return ret_expr
 ;;
 
-let preliminary_encode_expr (e : expr) : expr m =
+let preliminary_encode_expr (e : core_natodefa) : core_natodefa m =
   let transformer recurse expr =
     match expr with
     | List e_lst ->

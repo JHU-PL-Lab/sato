@@ -6,7 +6,7 @@ open Odefa_ast;;
 (* let lazy_logger = Logger_utils.make_lazy_logger "On_to_odefa_types";; *)
 
 module Expr = struct
-  include On_ast.Expr;;
+  include On_ast.CoreExpr;;
   let pp = On_ast_pp.pp_expr;;
 end;;
 
@@ -154,7 +154,7 @@ let get_pre_inst_equivalent_clause mappings odefa_ident =
     We need a custom transformer function, rather than the one in utils, 
     because we need to first transform the expression, then recurse (whereas
     transform_expr and transform_expr_m do the other way around). *)
-let rec on_expr_transformer transformer expr =
+let rec on_expr_transformer transformer (expr : On_ast.core_natodefa) =
   let open On_ast in
   let recurse = on_expr_transformer transformer in
   let expr' = transformer expr in
@@ -176,14 +176,10 @@ let rec on_expr_transformer transformer expr =
   | Function (id_lst, e) -> Function (id_lst, recurse e)
   | Appl (e1, e2) -> Appl (recurse e1, recurse e2)
   | Let (id, e1, e2) -> Let (id, recurse e1, recurse e2)
-  (* TODO: Actually implement this - EW *)
-  | LetWithType _ -> failwith "undefined"
   | LetFun (fs, e) ->
     let Funsig (fs_ident, fs_args, e_body) = fs in
     let fs' = Funsig (fs_ident, fs_args, recurse e_body) in
     LetFun (fs', recurse e)
-  (* TODO: Actually implement this - EW *)
-  | LetFunWithType _ -> failwith "undefined"
   | LetRecFun (fs_lst, e) ->
     let fs_lst' =
       List.map
@@ -191,8 +187,6 @@ let rec on_expr_transformer transformer expr =
         fs_lst
     in
     LetRecFun (fs_lst', recurse e)
-  (* TODO: Actually implement this - EW *)
-  | LetRecFunWithType _ -> failwith "undefined"
   | Plus (e1, e2) -> Plus (recurse e1, recurse e2)
   | Minus (e1, e2) -> Minus (recurse e1, recurse e2)
   | Times (e1, e2) -> Times (recurse e1, recurse e2)
@@ -214,7 +208,6 @@ let rec on_expr_transformer transformer expr =
   | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
   | Assert e -> Assert (recurse e)
   | Assume e -> Assume (recurse e)
-  | Reify _ -> failwith "Undefined!"
 ;;
 
 let get_natodefa_equivalent_expr mappings odefa_ident =
@@ -239,12 +232,12 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
           (Ast.show_ident odefa_ident'))
   in
   (* Get any original natodefa exprs *)
-  let on_expr_transform expr =
+  let on_expr_transform (expr : On_ast.core_natodefa) =
     match Expr_map.Exceptionless.find expr on_expr_map with
     | Some expr' -> expr'
     | None -> expr
   in
-  let on_ident_transform expr =
+  let on_ident_transform (expr : On_ast.core_natodefa) =
     let open On_ast in
     let find_ident ident =
       Ident_map.find_default ident ident on_ident_map

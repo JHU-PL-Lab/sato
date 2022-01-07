@@ -63,31 +63,33 @@ let pp_variant_label formatter (Variant_label label) =
   Format.fprintf formatter "`%s" label
 ;;
 
-let pp_type_sig formatter t = 
-  match t with
-  | IntType -> Format.pp_print_string formatter "int"
-  | BoolType -> Format.pp_print_string formatter "bool"
-  | _ -> failwith "not yet implemented"
-;;
-
-let rec pp_predicate formatter (Predicate p) = 
-  Format.fprintf formatter "%a" pp_expr p
-
-  (* and pp_type_decl_list formatter list =
-  Pp_utils.pp_concat_sep
-    " "
-    (fun formatter x -> pp_type_decl formatter x)
-    formatter
-    (List.enum list)
-;; *)
-
-let rec pp_funsig formatter (Funsig (x, ident_list, e)) =
+let rec pp_funsig : type a. Format.formatter -> a funsig -> unit =
+ fun formatter (Funsig (x, ident_list, e)) ->
   Format.fprintf formatter "%a@ %a =@ @[%a@]"
     pp_ident x pp_ident_list ident_list pp_expr e
 
-and pp_funsig_with_type formatter (Funsig (x, ident_list, e), type_decl) =
+and pp_funsig_list : type a. Format.formatter -> (a funsig) list -> unit =
+  fun formatter funsig_lst ->
+  Pp_utils.pp_concat_sep
+    " with "
+    pp_funsig
+    formatter
+    (List.enum funsig_lst)
+
+and pp_funsig_with_type 
+  : type a. Format.formatter -> a funsig * a typed_expr -> unit = 
+  fun formatter (Funsig (x, ident_list, e), t) ->
   Format.fprintf formatter "(%a@ : %a) %a =@ @[%a@]"
-    pp_ident x pp_expr type_decl pp_ident_list ident_list pp_expr e
+    pp_ident x pp_expr t pp_ident_list ident_list pp_expr e
+
+and pp_funsig_with_type_list 
+  : type a. Format.formatter -> (a funsig * a typed_expr) list -> unit = 
+  fun formatter funsig_lst ->
+  Pp_utils.pp_concat_sep
+    " with "
+    pp_funsig_with_type
+    formatter
+    (List.enum funsig_lst)
 
 and pp_pattern formatter pattern =
   match pattern with
@@ -111,7 +113,8 @@ and pp_pattern formatter pattern =
 (* Note: For two operators of equal precedence, still wrap parens if the
    operators are right-associative, but not if they're left-associative. *)
 
-and pp_binop formatter expr =
+and pp_binop : type a. Format.formatter -> a typed_expr -> unit =
+  fun formatter expr ->
   let pp_symb formatter expr =
     match expr with
     | Appl _ -> Format.pp_print_string formatter "" (* FIXME: Outputs two spaces! *)
@@ -150,7 +153,9 @@ and pp_binop formatter expr =
       raise @@ Utils.Invariant_failure "Invalid precedence comparison!"
   | _ -> raise @@ Utils.Invariant_failure "Not a binary operator!"
 
-and pp_expr formatter expr =
+and pp_expr : 
+  type a. Format.formatter -> a typed_expr -> unit =
+  fun formatter expr ->
   match expr with
   (* Values *)
   | Int n -> Format.pp_print_int formatter n
@@ -178,32 +183,11 @@ and pp_expr formatter expr =
     Format.fprintf formatter "let@ (%a : %a) =@ %a@ in@ @[%a@]"
       pp_ident ident pp_expr type_decl pp_expr e1 pp_expr e2
   | LetRecFun (funsig_lst, e) ->
-    let pp_funsig_list formatter funsig_lst =
-      Pp_utils.pp_concat_sep
-        " with "
-        pp_funsig
-        formatter
-        (List.enum funsig_lst)
-    in
     Format.fprintf formatter "let rec@ %a@ in@ @[%a@]"
       pp_funsig_list funsig_lst pp_expr e
   | LetRecFunWithType (funsig_lst, e, type_decl_lst) ->
-    let pp_funsig_list formatter funsig_lst_with_type =
-      Pp_utils.pp_concat_sep
-        " with "
-        pp_funsig_with_type
-        formatter
-        (List.enum funsig_lst_with_type)
-    in
-    (* let pp_type_decl_list formatter tyle_decl_lst =
-      Pp_utils.pp_concat_sep
-        " with "
-        pp_type_decl
-        formatter
-        (List.enum tyle_decl_lst)
-    in *)
     Format.fprintf formatter "let rec@ %a@ in@ @[%a@]"
-    pp_funsig_list (List.combine funsig_lst type_decl_lst) pp_expr e
+    pp_funsig_with_type_list (List.combine funsig_lst type_decl_lst) pp_expr e
   | LetFun (funsig, e) ->
     Format.fprintf formatter "let@ %a@ in@ @[%a@]"
       pp_funsig funsig pp_expr e
@@ -269,7 +253,7 @@ and pp_expr formatter expr =
   | TypeList t -> Format.fprintf formatter "[%a]" pp_expr t
   | TypeArrow (t1, t2) -> Format.fprintf formatter "(%a -> %a)" pp_expr t1 pp_expr t2
   | TypeArrowD ((x1, t1), t2) -> Format.fprintf formatter "((%a : %a) -> %a)" pp_ident x1 pp_expr t1 pp_expr t2
-  | TypeSet (t, p) -> Format.fprintf formatter "{%a | %a}" pp_expr t pp_predicate p
+  | TypeSet (t, p) -> Format.fprintf formatter "{%a | %a}" pp_expr t pp_expr p
   | TypeUnion (t1, t2) -> Format.fprintf formatter "%a v %a" pp_expr t1 pp_expr t2
   | TypeIntersect (t1, t2) -> Format.fprintf formatter "%a ^ %a" pp_expr t1 pp_expr t2
   | TypeRecurse (tvar, t) ->  Format.fprintf formatter "Mu %a.%a" pp_ident tvar pp_expr t
@@ -277,7 +261,7 @@ and pp_expr formatter expr =
 ;;
 
 let show_ident = Pp_utils.pp_to_string pp_ident;;
-let show_expr = Pp_utils.pp_to_string pp_expr;;
+(* let show_expr = Pp_utils.pp_to_string pp_expr;; *)
 let show_pattern = Pp_utils.pp_to_string pp_pattern;;
 
 let pp_on_type formatter (on_type : On_ast.type_sig) =

@@ -1,5 +1,5 @@
 # EXPECT-WELL-FORMED
 # EXPECT-NO-TYPE-ERRORS
 
-let neg (x : bool) : bool = not x in
+let neg (x : int) : bool = not x in
 neg

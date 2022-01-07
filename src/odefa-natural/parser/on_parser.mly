@@ -33,25 +33,40 @@ let record_from_list pr_list =
      Ident_map.empty
 
 let new_rec_fun_with_type fun_sig_and_type let_body = 
-  failwith "TBI"
+  let fun_sig_list = List.map fst fun_sig_and_type in 
+  let fun_type_list = List.map snd fun_sig_and_type in
+  LetRecFunWithType (fun_sig_list, let_body, fun_type_list)
 
 let new_let_fun_with_type fun_sig_and_type let_body =
-  failwith "TBI"
+  let fun_sig, fun_type = fun_sig_and_type in
+  LetFunWithType (fun_sig, let_body, fun_type)
 
 let new_fun_with_type 
   (fun_name : ident) 
-  (typed_param_list : (ident * expr) list) 
-  (return_type : expr)
-  (fun_body : expr) = 
-  failwith "TBI"
+  (typed_param_list : (ident * syntactic_only typed_expr) list) 
+  (return_type : syntactic_only typed_expr)
+  (fun_body : syntactic_only typed_expr) = 
+  let param_list = List.map fst typed_param_list in
+  let (type_list : syntactic_only typed_expr list) = List.map snd typed_param_list in
+  let function_type_p = 
+    match type_list with
+    | [] -> failwith "undefined"
+    | _ -> 
+      let reversed_list = List.rev type_list in
+      let last_type = List.hd reversed_list in
+      let accumulator = TypeArrow (last_type, return_type) in
+      List.fold_left
+          (fun acc -> fun t -> TypeArrow (t, acc)) accumulator (List.tl reversed_list)
+  in
+  (Funsig (fun_name, param_list, fun_body), function_type_p)
 
 let new_dependent_fun   
   (fun_name : ident) 
-  (typed_param : (ident * expr)) 
-  (return_type : expr)
-  (fun_body : expr) = 
-  failwith "TBI"
-
+  (typed_param : (ident * syntactic_only typed_expr)) 
+  (return_type : syntactic_only typed_expr)
+  (fun_body : syntactic_only typed_expr) = 
+  let (param, _) = typed_param in
+  (Funsig (fun_name, [param], fun_body), TypeArrowD (typed_param, return_type))
 %}
 
 %token <string> IDENTIFIER
@@ -135,8 +150,8 @@ let new_dependent_fun
 %right ASSERT ASSUME prec_variant    /* Asserts, Assumes, and variants */
 %right ARROW                  /* -> for type declaration */
 
-%start <On_ast.expr> prog
-%start <On_ast.expr option> delim_expr
+%start <On_ast.syntactic_only On_ast.typed_expr> prog
+%start <(On_ast.syntactic_only On_ast.typed_expr) option> delim_expr
 
 %%
 
@@ -234,7 +249,7 @@ type_var:
 
 record_type:
   | OPEN_BRACE_TYPE record_type_body CLOSE_BRACE_TYPE
-      { TypeRecord $3 }
+      { TypeRecord $2 }
   | OPEN_BRACE_TYPE CLOSE_BRACE CLOSE_BRACE_TYPE
       { TypeRecord (Ident_map.empty) }
 

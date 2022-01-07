@@ -46,17 +46,17 @@ module Odefa_error_location
 end;;
 
 module Natodefa_error_location
-  : Error_location with type t = On_ast.expr = struct
-  type t = On_ast.expr;;
-  let show = On_ast_pp.show_expr;;
-  let show_brief = On_ast_pp.show_expr;;
-  let to_yojson expr =
+  : Error_location with type t = On_ast.core_natodefa = struct
+  type t = On_ast.core_natodefa;;
+  let show = Pp_utils.pp_to_string On_ast_pp.pp_expr;;
+  let show_brief = Pp_utils.pp_to_string On_ast_pp.pp_expr;;
+  let to_yojson expr = 
     `String (replace_linebreaks @@ show expr);;
 end;;
 
 (* **** String showing utilities **** *)
 
-let pp_input_sequence formatter (input_seq : int list) =
+let pp_input_sequence  formatter (input_seq : int list) =
   Pp_utils.pp_list Format.pp_print_int formatter input_seq
 ;;
 

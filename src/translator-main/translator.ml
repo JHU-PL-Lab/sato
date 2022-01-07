@@ -33,8 +33,8 @@ let main () : unit =
     begin
       let on_expr = On_parse.parse_program IO.stdin in
       (* print_endline (On_ast_pp.show_expr on_expr); *)
-      print_endline (On_ast_pp.show_expr (typed_non_to_on on_expr));
-      let no_type_on_expr = typed_non_to_on on_expr in
+      let no_type_on_expr = typed_non_to_on @@ semantic_type_of on_expr in
+      let () = print_endline @@ On_to_odefa.show_expr no_type_on_expr in
       let (odefa_expr, _) = On_to_odefa.translate no_type_on_expr in
       let result_expr =
         if options.ta_parseable then

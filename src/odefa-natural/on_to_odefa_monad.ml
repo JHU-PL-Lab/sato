@@ -51,10 +51,10 @@ module TranslationMonad : sig
   val is_instrument_var : Ast.var -> bool m
 
   (** Map an odefa var to a natodefa expression *)
-  val add_odefa_natodefa_mapping : Ast.var -> On_ast.expr -> unit m
+  val add_odefa_natodefa_mapping : Ast.var -> On_ast.core_natodefa -> unit m
 
   (** Map a natodefa expression to another natodefa expression *)
-  val add_natodefa_expr_mapping : On_ast.expr -> On_ast.expr -> unit m
+  val add_natodefa_expr_mapping : On_ast.core_natodefa -> On_ast.core_natodefa -> unit m
 
   (** Map a natodefa ident to another ident. *)
   val add_natodefa_var_mapping : On_ast.ident -> On_ast.ident -> unit m
@@ -220,8 +220,8 @@ let ident_map_map_m
    writer support. *** *)
 
 type ('env, 'out) m_env_out_expr_transformer =
-  ('env -> On_ast.expr -> (On_ast.expr * 'out) TranslationMonad.m) ->
-  'env -> On_ast.expr -> (On_ast.expr * 'out) TranslationMonad.m
+  ('env -> On_ast.core_natodefa -> (On_ast.core_natodefa * 'out) TranslationMonad.m) ->
+  'env -> On_ast.core_natodefa -> (On_ast.core_natodefa * 'out) TranslationMonad.m
 ;;
 
 let rec m_env_out_transform_expr
@@ -229,8 +229,8 @@ let rec m_env_out_transform_expr
     (combiner : 'out -> 'out -> 'out)
     (default : 'out)
     (env : 'env)
-    (e : On_ast.expr)
-  : (On_ast.expr * 'out) TranslationMonad.m =
+    (e : On_ast.core_natodefa)
+  : (On_ast.core_natodefa * 'out) TranslationMonad.m =
   let recurse = m_env_out_transform_expr transformer combiner default in
   let open TranslationMonad in
   let transform_funsig (On_ast.Funsig(name,args,body)) =
@@ -238,7 +238,7 @@ let rec m_env_out_transform_expr
     let%bind (body'', out'') = transformer recurse env body' in
     return @@ (On_ast.Funsig(name,args,body''), combiner out' out'')
   in
-  let%bind ((e' : On_ast.expr), (out' : 'out)) =
+  let%bind ((e' : On_ast.core_natodefa), (out' : 'out)) =
     match e with
     | On_ast.Var x -> return @@ (On_ast.Var x, default)
     | On_ast.Input -> return @@ (On_ast.Input, default)
@@ -253,7 +253,6 @@ let rec m_env_out_transform_expr
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
       return @@ (On_ast.Let(x, e1', e2'), combiner out1 out2)
-    | On_ast.LetWithType _ -> failwith "undefined"
     | On_ast.LetRecFun (funsigs, e1) ->
       let%bind (e1', out1) = recurse env e1 in
       let%bind (funsigs', outs) =
@@ -261,14 +260,10 @@ let rec m_env_out_transform_expr
       in
       let out = List.fold_left combiner out1 outs in
       return @@ (On_ast.LetRecFun(funsigs', e1'), out)
-    (* TODO: Actually implement this - EW *)
-    | On_ast.LetRecFunWithType _ -> failwith "undefined"
     | On_ast.LetFun (funsig, e1) ->
       let%bind (e1', out1) = recurse env e1 in
       let%bind (funsig', out2) = transform_funsig funsig in
       return @@ (On_ast.LetFun(funsig', e1'), combiner out1 out2)
-    (* TODO: Actually implement this - EW *)
-    | On_ast.LetFunWithType _ -> failwith "undefined"
     | On_ast.Plus (e1, e2) ->
       let%bind (e1', out1) = recurse env e1 in
       let%bind (e2', out2) = recurse env e2 in
@@ -385,28 +380,27 @@ let rec m_env_out_transform_expr
       let%bind (e', out) = recurse env e in
       return @@ (On_ast.Assume e', out)
     | On_ast.Untouched s -> return @@ (On_ast.Untouched s, default)
-    | On_ast.Reify _ -> failwith "Should have been desugared by now!"
   in
   let%bind (e'', out'') = transformer recurse env e' in
   return (e'', combiner out' out'')
 ;;
 
 type 'env m_env_expr_transformer =
-  ('env -> On_ast.expr -> On_ast.expr TranslationMonad.m) ->
-  'env -> On_ast.expr -> On_ast.expr TranslationMonad.m
+  ('env -> On_ast.core_natodefa -> On_ast.core_natodefa TranslationMonad.m) ->
+  'env -> On_ast.core_natodefa -> On_ast.core_natodefa TranslationMonad.m
 ;;
 
 let m_env_transform_expr
     (transformer : 'env m_env_expr_transformer)
     (env : 'env)
-    (e : On_ast.expr)
-  : On_ast.expr TranslationMonad.m =
+    (e : On_ast.core_natodefa)
+  : On_ast.core_natodefa TranslationMonad.m =
   let open TranslationMonad in
   let transformer'
-      (recurse : 'env -> On_ast.expr -> (On_ast.expr * unit) m)
+      (recurse : 'env -> On_ast.core_natodefa -> (On_ast.core_natodefa * unit) m)
       env
-      (e : On_ast.expr)
-    : (On_ast.expr * unit) m =
+      (e : On_ast.core_natodefa)
+    : (On_ast.core_natodefa * unit) m =
     let recurse' env e =
       let%bind (e'', ()) = recurse env e in return e''
     in
@@ -420,16 +414,16 @@ let m_env_transform_expr
 ;;
 
 type m_expr_transformer =
-  (On_ast.expr -> On_ast.expr TranslationMonad.m) -> On_ast.expr ->
-  On_ast.expr TranslationMonad.m
+  (On_ast.core_natodefa -> On_ast.core_natodefa TranslationMonad.m) -> On_ast.core_natodefa ->
+  On_ast.core_natodefa TranslationMonad.m
 ;;
 
-let m_transform_expr (transformer : m_expr_transformer) (e : On_ast.expr)
-  : On_ast.expr TranslationMonad.m =
+let m_transform_expr (transformer : m_expr_transformer) (e : On_ast.core_natodefa)
+  : On_ast.core_natodefa TranslationMonad.m =
   let open TranslationMonad in
   let transformer'
-      (recurse : unit -> On_ast.expr -> On_ast.expr m) () (e : On_ast.expr)
-    : On_ast.expr TranslationMonad.m =
+      (recurse : unit -> On_ast.core_natodefa -> On_ast.core_natodefa m) () (e : On_ast.core_natodefa)
+    : On_ast.core_natodefa TranslationMonad.m =
     let recurse' e = recurse () e in
     transformer recurse' e
   in

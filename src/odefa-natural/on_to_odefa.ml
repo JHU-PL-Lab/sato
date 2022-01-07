@@ -21,6 +21,8 @@ open TranslationMonad;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "On_to_odefa";;
 
+let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr;;
+
 (* **** Variable alphatization **** *)
 
 (** Determines all variables contained within a pattern. *)
@@ -101,8 +103,8 @@ let pat_rename_vars
 let rec rename_variable
     (old_name : On_ast.ident)
     (new_name : On_ast.ident)
-    (e : On_ast.expr)
-  : On_ast.expr =
+    (e : On_ast.core_natodefa)
+  : On_ast.core_natodefa =
   let open On_ast in
   (* NOTE: the generic homomorphism routine m_env_transform_expr does not allow
      us to change the environment of the homomorphism as we descend or to block
@@ -124,8 +126,6 @@ let rec rename_variable
     else
       let new_e2 = recurse e2 in
       Let(id, new_e1, new_e2)
-  (* TODO: Actually implement this - EW *)
-  | LetWithType _ -> failwith "undefined"
   | LetFun (f_sig, e') ->
     let (Funsig(id, id_list, fun_e)) = f_sig in
     (* If old_name is same as the function name, then don't change anything *)
@@ -145,8 +145,6 @@ let rec rename_variable
         LetFun(new_funsig, new_outer_e)
       end
     end
-  (* TODO: Actually implement this - EW *)
-  | LetFunWithType _ -> failwith "undefined"
   | LetRecFun (f_sigs, e') ->
     let function_names =
       f_sigs
@@ -174,8 +172,6 @@ let rec rename_variable
         recurse e'
     in
     LetRecFun(f_sigs', e'')
-  (* TODO: Actually implement this - EW *)
-  | LetRecFunWithType _ -> failwith "undefined"
   | Match (e0, cases) ->
     let e0' = recurse e0 in
     let cases' =
@@ -212,13 +208,12 @@ let rec rename_variable
   | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
   | Assert e -> Assert (recurse e)
   | Assume e -> Assume (recurse e)
-  | Reify _ -> failwith "Undefined!"
 ;;
 
 (** This function alphatizes an entire expression.  If a variable is defined
     more than once in the given expression, all but one of the declarations will
     be alpha-renamed to a fresh name. *)
-let alphatize (e : On_ast.expr) : On_ast.expr m =
+let alphatize (e : On_ast.core_natodefa) : On_ast.core_natodefa m =
   let open On_ast in
   (* Given a list of identifiers, a list of expressions, and a list of
      previously declared identifiers, this helper routine renames all previously
@@ -229,9 +224,9 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
      values. *)
   let rec ensure_exprs_unique_names
       (names : Ident.t list)
-      (exprs : expr list)
+      (exprs : core_natodefa list)
       (prev_declared : Ident_set.t)
-    : (Ident.t list * expr list * Ident_set.t * Ident.t Ident_map.t) m =
+    : (Ident.t list * core_natodefa list * Ident_set.t * Ident.t Ident_map.t) m =
     match names with
     | [] ->
       return ([], exprs, prev_declared, Ident_map.empty)
@@ -259,8 +254,8 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
     in
     return (names', List.hd exprs', seen', renaming')
   in
-  let rec walk (expr : expr) (seen_declared : Ident_set.t)
-    : (expr * Ident_set.t) m =
+  let rec walk (expr : core_natodefa) (seen_declared : Ident_set.t)
+    : (core_natodefa * Ident_set.t) m =
     let zero () =
       raise @@ Jhupllib_utils.Invariant_failure "list changed size"
     in
@@ -291,8 +286,6 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
         in
         let%orzero ([x'], [e1''; e2'']) = (xs, es) in
         return (Let(x', e1'', e2''), seen_declared''')
-      (* TODO: Actually implement this - EW *)
-      | LetWithType _ -> failwith "undefined"
       | LetRecFun (funsigs, expr) ->
         let%bind funsigs'rev, seen_declared' =
           list_fold_left_m
@@ -341,8 +334,6 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
             ([], seen_declared'')
         in
         return (LetRecFun(List.rev funsigs'''_rev, expr'), seen_declared''')
-      (* TODO: Actually implement this - EW *)
-      | LetRecFunWithType _ -> failwith "undefined"
       | LetFun (funsig, expr) ->
         (* FIXME?: assuming that parameters in functions are not duplicated;
                   probably should verify that somewhere *)
@@ -366,8 +357,6 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
           ensure_expr_unique_names params body' seen_declared'''
         in
         return (LetFun(Funsig(name', params', body''), expr''), seen_declared'''')
-      (* TODO: Actually implement this - EW *)
-      | LetFunWithType _ -> failwith "undefined"
       | Plus (e1, e2) ->
         let%bind e1', seen_declared' = walk e1 seen_declared in
         let%bind e2', seen_declared'' = walk e2 seen_declared' in
@@ -488,7 +477,6 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
       | Assume e ->
         let%bind e', seen_declared' = walk e seen_declared in
         return (Assume e', seen_declared')
-      | Reify _ -> failwith "Undefined!"
     in
     return (expr', seen_declared')
   in
@@ -499,13 +487,13 @@ let alphatize (e : On_ast.expr) : On_ast.expr m =
 
 (** Create new odefa variable with mapping to natodefa expr *)
 
-let new_odefa_var (expr : On_ast.expr) (var_name : string) : (Ast.var) m =
+let new_odefa_var (expr : On_ast.core_natodefa) (var_name : string) : (Ast.var) m =
   let%bind var = fresh_var var_name in
   let%bind () = add_odefa_natodefa_mapping var expr in
   return var
 ;;
 
-let new_odefa_inst_var (expr : On_ast.expr) (var_name : string) : (Ast.var) m =
+let new_odefa_inst_var (expr : On_ast.core_natodefa) (var_name : string) : (Ast.var) m =
   let%bind var = new_odefa_var expr var_name in
   let%bind () = add_instrument_var var in
   return var
@@ -513,7 +501,7 @@ let new_odefa_inst_var (expr : On_ast.expr) (var_name : string) : (Ast.var) m =
 
 (** Returns the body of a function or conditional with its return variable *)
 let nonempty_body
-    (expr : On_ast.expr)
+    (expr : On_ast.core_natodefa)
     ((body, var) : (Ast.clause list * Ast.var))
   : (Ast.clause list * Ast.var) m =
   match body with
@@ -526,7 +514,7 @@ let nonempty_body
 ;;
 
 (** Create a new abort clause with multiple conditional clause variables *)
-let add_abort_expr (expr : On_ast.expr) (_ : Ast.var list) : Ast.expr m =
+let add_abort_expr (expr : On_ast.core_natodefa) (_ : Ast.var list) : Ast.expr m =
   let%bind abort_var = fresh_var "ab" in
   let%bind () = add_odefa_natodefa_mapping abort_var expr in
   let abort_clause = Ast.Clause(abort_var, Abort_body) in
@@ -539,7 +527,7 @@ let on_to_odefa_ident (On_ast.Ident (id)) = Ast.Ident (id);;
     clauses associated with a record or variable pattern; these will be
     appended to the front of the pattern's expression. *)
 let flatten_pattern
-    (expr : On_ast.expr)
+    (expr : On_ast.core_natodefa)
     (pat_var : Ast.var)
     (pattern : On_ast.pattern)
   : (Ast.pattern * Ast.clause list) m =
@@ -621,7 +609,7 @@ let flatten_pattern
 (** Flatten a function *)
 let flatten_fun
     ?binding_name:(binding_name=(None:On_ast.Ident.t option))
-    (expr : On_ast.expr)
+    (expr : On_ast.core_natodefa)
     (param_names : On_ast.Ident.t list)
     (body : Ast.expr)
   : (Ast.expr * Ast.var) m =
@@ -646,9 +634,9 @@ let flatten_fun
 
 (** Flatten a binary operation *)
 let rec flatten_binop
-    (expr : On_ast.expr)
-    (e1 : On_ast.expr)
-    (e2 : On_ast.expr)
+    (expr : On_ast.core_natodefa)
+    (e1 : On_ast.core_natodefa)
+    (e2 : On_ast.core_natodefa)
     (binop : Ast.binary_operator)
   : (Ast.clause list * Ast.var) m =
   let%bind (e1_clist, e1_var) = flatten_expr e1 in
@@ -662,9 +650,9 @@ let rec flatten_binop
 (** Flatten either the equal or not equal binary operation.
     This involves instrumenting both operations in nested conditionals. *)
 and flatten_eq_binop
-    (expr : On_ast.expr)
-    (e1 : On_ast.expr)
-    (e2 : On_ast.expr)
+    (expr : On_ast.core_natodefa)
+    (e1 : On_ast.core_natodefa)
+    (e2 : On_ast.core_natodefa)
     (binop_int : Ast.binary_operator)
     (binop_bool : Ast.binary_operator)
   : (Ast.clause list * Ast.var) m =
@@ -730,12 +718,12 @@ and flatten_eq_binop
          in the future. In the spec this is supposed to be part of the instrumentation 
          step. *)
 and flatten_pattern_match
-    (expr : On_ast.expr)
+    (expr : On_ast.core_natodefa)
     (subj_var : Ast.var)
-    (pat_e_list : (On_ast.pattern * On_ast.expr) list)
+    (pat_e_list : (On_ast.pattern * On_ast.core_natodefa) list)
   : (Ast.clause list * Ast.var) m =
   let rec convert_match
-      ((pat, e) : On_ast.pattern * On_ast.expr)
+      ((pat, e) : On_ast.pattern * On_ast.core_natodefa)
       (accum : Ast.expr * Ast.clause list)
     : (Ast.expr * Ast.clause list) m =
     (* Conditional expression *)
@@ -824,7 +812,7 @@ and flatten_pattern_match
 
 (** Flatten an entire expression (i.e. convert natodefa into odefa code) *)
 and flatten_expr
-    (expr : On_ast.expr)
+    (expr : On_ast.core_natodefa)
   : (Ast.clause list * Ast.var) m =
   (* let%bind () = update_natodefa_expr exp in *)
   match expr with
@@ -861,8 +849,6 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Var_body(e1_var)) in
     return (e1_clist @ [assignment_clause] @ e2_clist, e2_var)
-  (* TODO: Actually implement this - EW *)
-  | LetWithType _ -> failwith "undefined"
   | LetFun (sign, e) ->
     (* TODO: check for bugs!!! *)
     (* Translating the function signature... *)
@@ -879,13 +865,9 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping lt_var expr in
     let assignment_clause = Ast.Clause(lt_var, Var_body(return_var)) in
     return (fun_clauses @ [assignment_clause] @ e_clist, e_var)
-  (* TODO: Actually implement this - EW *)
-  | LetFunWithType _ -> failwith "undefined"
   | LetRecFun (_, _) ->
     raise @@
       Utils.Invariant_failure "LetRecFun should not have been passed to flatten_expr"
-  (* TODO: Actually implement this - EW *)
-  | LetRecFunWithType _ -> failwith "undefined"
   | Plus (e1, e2) ->
     flatten_binop expr e1 e2 Ast.Binary_operator_plus
   | Minus (e1, e2) ->
@@ -1039,17 +1021,16 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping assume_var expr in
     let new_clause = Ast.Clause(assume_var, Assume_body last_var) in
     return (flattened_exprs @ [new_clause], assume_var)
-  | Reify _ -> failwith "Undefined!"
 ;;
 
 let debug_transform_on
     (trans_name : string)
-    (transform : 'a -> On_ast.expr m)
+    (transform : 'a -> On_ast.core_natodefa m)
     (e : 'a)
-  : On_ast.expr m =
+  : On_ast.core_natodefa m =
   let%bind e' = transform e in
   lazy_logger `debug (fun () ->
-    Printf.sprintf "Result of %s:\n%s" trans_name (On_ast_pp.show_expr e'));
+    Printf.sprintf "Result of %s:\n%s" trans_name (show_expr e'));
   return e'
 ;;
 
@@ -1068,7 +1049,7 @@ let debug_transform_odefa
 let translate
     ?translation_context:(translation_context=None)
     ?is_instrumented:(is_instrumented=true)
-    (e : On_ast.expr)
+    (e : On_ast.core_natodefa)
   : (Ast.expr * On_to_odefa_maps.t) =
   let (e_m_with_info : (Ast.expr * On_to_odefa_maps.t) m) =
     (* Odefa transformations *)
@@ -1089,7 +1070,7 @@ let translate
     in
     (* Translation sequence *)
     lazy_logger `debug (fun () ->
-      Printf.sprintf "Initial program:\n%s" (On_ast_pp.show_expr e));
+      Printf.sprintf "Initial program:\n%s" (show_expr e));
     let%bind translation_result =
       return e
       >>= debug_transform_on "desugaring" preliminary_encode_expr
