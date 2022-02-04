@@ -111,7 +111,7 @@ let rec rename_variable
      descending into a given subtree, so we can't use it here. *)
   let recurse = rename_variable old_name new_name in
   match e with
-  | Int _ | Bool _ | Input | Untouched _ -> e
+  | Int _ | Bool _ | Input | Untouched _ | TypeError _ -> e
   | Var (id) ->
     if id = old_name then Var new_name else Var id
   | Function (id_list, e') ->
@@ -263,7 +263,7 @@ let alphatize (e : On_ast.core_natodefa) : On_ast.core_natodefa m =
       match expr with
       (* In leaf cases, no new variables are defined and so we have no work to
         do. *)
-      | Var _ | Input | Int _ | Bool _ | Untouched _ ->
+      | Var _ | Input | Int _ | Bool _ | Untouched _ | TypeError _ ->
         return (expr, seen_declared)
       | Function (params, body) ->
         (* Recurse on the body to ensure that it is internally alphatized. *)
@@ -938,6 +938,37 @@ and flatten_expr
     let%bind () = add_odefa_natodefa_mapping untouched_var expr in
     let new_clause = Ast.Clause(untouched_var, Ast.Value_body(Ast.Value_untouched t)) in
     return ([new_clause], untouched_var)
+    (* TODO (Earl): This is very funky and probably wrong. Check later *)
+  | TypeError _ ->
+    let%bind error_var = fresh_var "error_var" in
+    let error_clause = Ast.Clause(error_var, Ast.Value_body(Ast.Value_bool false)) in
+    let%bind () = add_odefa_natodefa_mapping error_var expr in
+    (* Helper function *)
+    let add_var var_name =
+      let%bind var = fresh_var var_name in
+      let%bind () = add_odefa_natodefa_mapping var expr in
+      return var
+    in
+    (* Variables *)
+    let%bind assert_pred = add_var "assert_pred" in
+    let%bind assert_result = add_var "assert_res" in
+    let%bind assert_result_inner = add_var "assert_res_true" in
+    (* Clauses *)
+    let alias_clause = Ast.Clause (assert_pred, Var_body error_var) in
+    (* We use an empty record as the result value, since no valid operation can
+       done on it (any projection will fail, and no binop, application, nor
+       conditional will work either).  It's a hack (especially if we match on
+       it), but it will do for now. *)
+    let res_value = Ast.Value_record (Record_value Ast.Ident_map.empty) in
+    let t_path =
+      Ast.Expr [Clause (assert_result_inner, Value_body res_value)]
+    in
+    let%bind f_path = add_abort_expr expr [assert_result] in
+    let cond_clause =
+      Ast.Clause (assert_result, Conditional_body(assert_pred, t_path, f_path))
+    in
+    let all_clauses = ([error_clause] @ [alias_clause; cond_clause]) in
+    return (all_clauses, assert_result)
   | Record (recexpr_map) ->
     (* function for Enum.fold that generates the clause list and the
        id -> var map for Odefa's record *)

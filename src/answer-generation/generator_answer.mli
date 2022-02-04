@@ -25,6 +25,11 @@ module type Answer = sig
       back to natodefa, etc. *)
   val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
 
+(** Set the typed natodefa/natodefa mappings as a global, which will be needed to
+    remove any variables added during instrumentation, convert from odefa
+    back to natodefa, etc. *)
+  val set_ton_on_map : Ton_to_on_maps.t option -> unit;;
+
   (** Convert the answer into a string (e.g. for printing). *)
   val show : t -> string;;
 

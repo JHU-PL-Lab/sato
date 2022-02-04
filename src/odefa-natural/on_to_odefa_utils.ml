@@ -160,6 +160,7 @@ let rec env_out_transform_expr
       let (e', out) = recurse env e in
       (On_ast.Assume e', out)
     | On_ast.Untouched s -> (On_ast.Untouched s, default)
+    | On_ast.TypeError s -> (On_ast.TypeError s, default)
   in
   let (e'', out'') = transformer recurse env e' in
   (e'', combiner out' out'')

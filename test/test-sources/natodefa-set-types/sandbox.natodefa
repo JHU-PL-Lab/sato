@@ -3,3 +3,8 @@
 # EXPECT-EVALUATE
 
 let (x : {a = (int -> (int -> bool))}) = {a = fun x -> (fun y -> not y)} in 0
+
+let f (g : int -> int) : int =
+    (g true)
+in 
+f

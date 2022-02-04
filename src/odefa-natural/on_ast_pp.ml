@@ -77,13 +77,13 @@ and pp_funsig_list : type a. Format.formatter -> (a funsig) list -> unit =
     (List.enum funsig_lst)
 
 and pp_funsig_with_type 
-  : type a. Format.formatter -> a funsig * a typed_expr -> unit = 
+  : type a. Format.formatter -> a funsig * a expr -> unit = 
   fun formatter (Funsig (x, ident_list, e), t) ->
   Format.fprintf formatter "(%a@ : %a) %a =@ @[%a@]"
     pp_ident x pp_expr t pp_ident_list ident_list pp_expr e
 
 and pp_funsig_with_type_list 
-  : type a. Format.formatter -> (a funsig * a typed_expr) list -> unit = 
+  : type a. Format.formatter -> (a funsig * a expr) list -> unit = 
   fun formatter funsig_lst ->
   Pp_utils.pp_concat_sep
     " with "
@@ -113,7 +113,7 @@ and pp_pattern formatter pattern =
 (* Note: For two operators of equal precedence, still wrap parens if the
    operators are right-associative, but not if they're left-associative. *)
 
-and pp_binop : type a. Format.formatter -> a typed_expr -> unit =
+and pp_binop : type a. Format.formatter -> a expr -> unit =
   fun formatter expr ->
   let pp_symb formatter expr =
     match expr with
@@ -154,7 +154,7 @@ and pp_binop : type a. Format.formatter -> a typed_expr -> unit =
   | _ -> raise @@ Utils.Invariant_failure "Not a binary operator!"
 
 and pp_expr : 
-  type a. Format.formatter -> a typed_expr -> unit =
+  type a. Format.formatter -> a expr -> unit =
   fun formatter expr ->
   match expr with
   (* Values *)
@@ -245,7 +245,9 @@ and pp_expr :
     else
       Format.fprintf formatter "assume (%a)" pp_expr e
   | Untouched s ->
-        Format.pp_print_string formatter @@ "'" ^ s 
+    Format.pp_print_string formatter @@ "'" ^ s 
+  | TypeError x ->
+    Format.fprintf formatter "%a" pp_ident x
   | TypeVar v -> Format.fprintf formatter "%a" pp_ident v
   | TypeInt -> Format.pp_print_string formatter "int"
   | TypeBool -> Format.pp_print_string formatter "bool"

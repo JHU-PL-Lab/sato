@@ -16,21 +16,22 @@ exception CommandLineParseFailure of string;;
 exception NoOperationsInProgram;;
 exception TypeCheckComplete;;
 
+(* TODO (Earl): This function should probably also return the ton_to_on_maps. *)
 let parse_program
     (args: Sato_args.type_checker_args) 
-  : (Ast.expr * On_to_odefa_maps.t) =
+  : (Ast.expr * On_to_odefa_maps.t * Ton_to_on_maps.t option) =
   let filename = args.args_filename in
   try
     match Filename.extension filename with
     | ".natodefa" ->
       begin
         let natodefa_ast = File.with_file_in filename On_parse.parse_program in
-        let desugared_typed = typed_non_to_on @@ semantic_type_of natodefa_ast in
+        let (desugared_typed, ton_on_maps) = transform_natodefa natodefa_ast in
         let (odefa_ast, on_odefa_maps) =
           On_to_odefa.translate desugared_typed
         in
         Ast_wellformedness.check_wellformed_expr odefa_ast;
-        (odefa_ast, on_odefa_maps)
+        (odefa_ast, on_odefa_maps, Some ton_on_maps)
       end
     | ".odefa" ->
       begin
@@ -39,7 +40,7 @@ let parse_program
           Odefa_instrumentation.instrument_odefa pre_inst_ast
         in
         Ast_wellformedness.check_wellformed_expr odefa_ast;
-        (odefa_ast, on_odefa_maps)
+        (odefa_ast, on_odefa_maps, None)
       end
     | _ ->
       raise @@ Invalid_argument
@@ -115,10 +116,12 @@ let run_generation
     (module Generator : Generator.Generator)
     (args : Sato_args.type_checker_args)
     (on_odefa_maps : On_to_odefa_maps.t)
+    (ton_on_maps_option : Ton_to_on_maps.t option)
     (expr : Ast.expr)
   : unit =
   let module Ans = Generator.Answer in
   Ans.set_odefa_natodefa_map on_odefa_maps;
+  Ans.set_ton_on_map ton_on_maps_option;
   try
     (* Prepare and create generator *)
     let target_vars = get_target_vars args expr in
@@ -189,7 +192,7 @@ let run_generation
 
 let () =
   let args = Sato_args.parse_args () in
-  let (odefa_expr, on_odefa_maps) = parse_program args in
+  let (odefa_expr, on_odefa_maps, ton_on_maps_option) = parse_program args in
   match args.args_mode with
   | Type_checking ->
     begin
@@ -201,7 +204,7 @@ let () =
           (module Generator.Make(Generator_answer.Type_errors)
             : Generator.Generator)
       in
-      run_generation error_generator args on_odefa_maps odefa_expr
+      run_generation error_generator args on_odefa_maps ton_on_maps_option odefa_expr
     end
   | Test_generation ->
     begin
@@ -214,6 +217,6 @@ let () =
           (module Generator.Make(Generator_answer.Input_sequence)
             : Generator.Generator)
         in
-        run_generation input_generator args on_odefa_maps odefa_expr
+        run_generation input_generator args on_odefa_maps ton_on_maps_option odefa_expr
     end
 ;;

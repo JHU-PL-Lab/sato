@@ -57,7 +57,7 @@ end;;
 
 module Value : (Error_value with type t = On_ast.core_natodefa) = struct
   type t = On_ast.core_natodefa;;
-  let equal = On_ast.equal_typed_expr;;
+  let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = Pp_utils.pp_to_string pp;;
   let to_yojson value =
@@ -66,7 +66,7 @@ end;;
 
 module Binop : (Error_binop with type t = On_ast.core_natodefa) = struct
   type t = On_ast.core_natodefa;;
-  let equal = On_ast.equal_typed_expr;;
+  let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = Pp_utils.pp_to_string pp;;
   let to_yojson binop =

@@ -17,6 +17,7 @@ module type Answer = sig
   val description : string;;
   val answer_from_result : int -> expr -> ident -> evaluation_result -> t;;
   val set_odefa_natodefa_map : On_to_odefa_maps.t -> unit;;
+  val set_ton_on_map : Ton_to_on_maps.t option -> unit;;
   val show : t -> string;;
   val show_compact : t -> string;;
   val count : t -> int;;
@@ -46,8 +47,8 @@ module Odefa_error_location
 end;;
 
 module Natodefa_error_location
-  : Error_location with type t = On_ast.core_natodefa = struct
-  type t = On_ast.core_natodefa;;
+  : Error_location with type t = On_ast.sem_type_natodefa = struct
+  type t = On_ast.sem_type_natodefa;;
   let show = Pp_utils.pp_to_string On_ast_pp.pp_expr;;
   let show_brief = Pp_utils.pp_to_string On_ast_pp.pp_expr;;
   let to_yojson expr = 
@@ -93,6 +94,8 @@ module Input_sequence : Answer = struct
 
   (* Unused for input sequence generation. *)
   let set_odefa_natodefa_map (_ : On_to_odefa_maps.t) = ();;
+
+  let set_ton_on_map (_ : Ton_to_on_maps.t option) = ();;
 
   let show : t -> string = function
     | Some { input_sequence; input_steps } ->
@@ -141,6 +144,8 @@ module Type_errors : Answer = struct
 
   let odefa_on_maps_option_ref = ref None;;
 
+  let ton_on_maps_option_ref = ref None;;
+
   let answer_from_result steps e x result : t =
     let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
@@ -170,6 +175,10 @@ module Type_errors : Answer = struct
 
   let set_odefa_natodefa_map odefa_on_maps : unit =
     odefa_on_maps_option_ref := Some (odefa_on_maps)
+  ;;
+
+  let set_ton_on_map ton_on_maps : unit =
+    ton_on_maps_option_ref := ton_on_maps
   ;;
 
   (* TODO: Pretty-print *)
@@ -222,34 +231,53 @@ module Natodefa_type_errors : Answer = struct
 
   let odefa_on_maps_option_ref = ref None;;
 
+  let ton_on_maps_option_ref = ref None;;
+
+  (* Reporting Natodefa errors. *)
   let answer_from_result steps e x result =
     let (input_seq, error_opt) =
       Generator_utils.input_sequence_from_result e x result
     in
-      match !odefa_on_maps_option_ref with
-      | Some odefa_on_maps ->
+      match (!odefa_on_maps_option_ref, !ton_on_maps_option_ref) with
+      | (Some odefa_on_maps, Some ton_on_maps) ->
         begin
           match error_opt with
           | Some (error_loc, error_lst) ->
+            (* TODO (Earl): This probably should be the place to trace all the way
+               back to the original, user-written Natodefa code.
+               The current issue with how mappings are kept is that the abort vars
+               are bound to the "assert false" statements directly. 
+               Need to find a way to chain up the assert false to the original point of
+               error.
+            *)
             let on_err_loc =
               On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps error_loc
+            in
+            (* TODO (Earl): This is pretty hacky, but it'll do for now *)
+            let actual_err_loc = 
+              Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps on_err_loc
             in
             let on_err_list =
               List.map (On_error.odefa_to_natodefa_error odefa_on_maps) error_lst
             in
             Some {
               err_input_seq = input_seq;
-              err_location = on_err_loc;
+              err_location = actual_err_loc;
               err_errors = on_err_list;
               err_steps = steps;
             }
           | None -> None
         end
-      | None -> failwith "Odefa/natodefa maps were not set!"
+      | None, _ -> failwith "Odefa/natodefa maps were not set!"
+      | _, None -> failwith "typed natodefa/natodefa maps were not set!"
   ;;
 
   let set_odefa_natodefa_map odefa_on_maps =
     odefa_on_maps_option_ref := Some (odefa_on_maps)
+  ;;
+
+  let set_ton_on_map ton_on_maps : unit =
+    ton_on_maps_option_ref := ton_on_maps
   ;;
 
   let show : t -> string = function

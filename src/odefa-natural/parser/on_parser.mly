@@ -43,11 +43,11 @@ let new_let_fun_with_type fun_sig_and_type let_body =
 
 let new_fun_with_type 
   (fun_name : ident) 
-  (typed_param_list : (ident * syntactic_only typed_expr) list) 
-  (return_type : syntactic_only typed_expr)
-  (fun_body : syntactic_only typed_expr) = 
+  (typed_param_list : (ident * syntactic_only expr) list) 
+  (return_type : syntactic_only expr)
+  (fun_body : syntactic_only expr) = 
   let param_list = List.map fst typed_param_list in
-  let (type_list : syntactic_only typed_expr list) = List.map snd typed_param_list in
+  let (type_list : syntactic_only expr list) = List.map snd typed_param_list in
   let function_type_p = 
     match type_list with
     | [] -> failwith "undefined"
@@ -62,9 +62,9 @@ let new_fun_with_type
 
 let new_dependent_fun   
   (fun_name : ident) 
-  (typed_param : (ident * syntactic_only typed_expr)) 
-  (return_type : syntactic_only typed_expr)
-  (fun_body : syntactic_only typed_expr) = 
+  (typed_param : (ident * syntactic_only expr)) 
+  (return_type : syntactic_only expr)
+  (fun_body : syntactic_only expr) = 
   let (param, _) = typed_param in
   (Funsig (fun_name, [param], fun_body), TypeArrowD (typed_param, return_type))
 %}
@@ -150,8 +150,8 @@ let new_dependent_fun
 %right ASSERT ASSUME prec_variant    /* Asserts, Assumes, and variants */
 %right ARROW                  /* -> for type declaration */
 
-%start <On_ast.syntactic_only On_ast.typed_expr> prog
-%start <(On_ast.syntactic_only On_ast.typed_expr) option> delim_expr
+%start <On_ast.syntactic_only On_ast.expr> prog
+%start <(On_ast.syntactic_only On_ast.expr) option> delim_expr
 
 %%
 

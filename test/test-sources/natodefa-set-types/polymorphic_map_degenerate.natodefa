@@ -1,7 +1,0 @@
-let rec map (l : ['a]) (f : 'a -> 'b) : ['a] = 
-    match l with
-    | [] -> []
-    | hd :: tl -> [f hd]
-    end
-in
-map

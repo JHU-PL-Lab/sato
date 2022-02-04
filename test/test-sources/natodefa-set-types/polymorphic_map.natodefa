@@ -1,7 +1,6 @@
-let rec map (l : ['a]) (f : 'a -> 'b) : ['a] = 
+let rec map (mf : 'a -> 'b) (l : List 'a) : List 'b =
     match l with
     | [] -> []
-    | hd :: tl -> (f hd) :: (map tl f)
+    | hd :: tl -> hd :: (map mf tl)
     end
-in
-map
+in map
