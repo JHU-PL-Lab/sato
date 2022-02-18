@@ -254,11 +254,24 @@ module Natodefa_type_errors : Answer = struct
               On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps error_loc
             in
             (* TODO (Earl): This is pretty hacky, but it'll do for now *)
+            (* More hack? Returns a pair to indicate whether we're handling type error here? *)
             let actual_err_loc = 
               Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps on_err_loc
             in
+            (* If type error, pass a special flag to odefa_to_natodefa_error so that it'll handle
+               value error differently.
+            *)
+            let is_type_error = 
+              match on_err_loc with
+              | TypeError _ -> true
+              | _ -> false
+            in
+            let err_loc_option = 
+              if is_type_error then Some actual_err_loc else None
+            in
             let on_err_list =
-              List.map (On_error.odefa_to_natodefa_error odefa_on_maps) error_lst
+              let mapper = (On_error.odefa_to_natodefa_error odefa_on_maps ton_on_maps err_loc_option) in 
+              List.map mapper error_lst
             in
             Some {
               err_input_seq = input_seq;

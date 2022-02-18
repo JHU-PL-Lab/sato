@@ -1,6 +1,2 @@
-# EXPECT-WELL-FORMED
-# EXPECT-NO-TYPE-ERRORS
-
-let g (x : bool) : bool = not x in 
-let f (x : int) : int = g x in
+let f (x : int) : int -> int = fun y -> x + y > 0 in
 f

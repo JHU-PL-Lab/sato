@@ -939,9 +939,11 @@ and flatten_expr
     let new_clause = Ast.Clause(untouched_var, Ast.Value_body(Ast.Value_untouched t)) in
     return ([new_clause], untouched_var)
     (* TODO (Earl): This is very funky and probably wrong. Check later *)
-  | TypeError _ ->
+    (* Note: Can we leave a bread crumb here? Connect the id in typeError *)
+    (* Biggest hurdle *)
+  | TypeError (On_ast.Ident x) ->
     let%bind error_var = fresh_var "error_var" in
-    let error_clause = Ast.Clause(error_var, Ast.Value_body(Ast.Value_bool false)) in
+    let error_clause = Ast.Clause(error_var, Ast.Var_body(Ast.Var (Ast.Ident x, None))) in
     let%bind () = add_odefa_natodefa_mapping error_var expr in
     (* Helper function *)
     let add_var var_name =

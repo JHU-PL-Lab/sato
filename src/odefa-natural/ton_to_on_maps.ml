@@ -54,7 +54,7 @@ let transform_funsig
 let rec sem_natodefa_from_on_err ton_on_maps (on_err : core_natodefa) : sem_type_natodefa = 
   match on_err with
   | TypeError err_id ->
-    let () = print_endline @@ show_ident err_id in
+    (* let () = print_endline @@ show_ident err_id in *)
     let err_expr_op = 
       Ident_map.find_opt err_id ton_on_maps.error_to_natodefa_expr
     in

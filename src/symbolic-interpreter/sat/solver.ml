@@ -1003,6 +1003,9 @@ let rec find_errors solver symbol =
         raise @@ Utils.Invariant_failure
           (Printf.sprintf "%s is not a boolean value" (show_symbol symbol))
     end
+  (* Note (Earl): We probably need another value to represent actual type errors;
+     right now it's confusing asserts with the type errors. 
+  *)
   | Some (Constraint.Value v) ->
     begin
       match v with

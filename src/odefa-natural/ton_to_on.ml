@@ -20,6 +20,21 @@ let transform_funsig
                , checker = fun e -> isInt e
                }
 *)
+(* Each false is a potential place for type error.
+   Issue: There are cases (i.e. union type) where the boolean value
+   is used to check which side of the union we're on. So they're not necessarily 
+   all errors.
+
+   What if each "false" is different?
+
+   We might need to bind the semantic pairs themselves as well--need to
+   connect the syntactic type with the pair so that when we project from
+   them, we can keep track of what type it's supposed to be.
+    --> This will get us the original type.
+
+   How do we keep track of the fail & the original type's relationship?
+
+*)
 let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
   match t with
   | TypeVar tvar -> return @@ Appl (Var tvar, Var tvar)
@@ -29,9 +44,14 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
     in
     let%bind checker =
       let%bind expr_id = fresh_ident "expr" in 
-      return @@ Function ([expr_id], 
-                          Match (Var expr_id, 
-                                 [(IntPat, Bool true); (AnyPat, Bool false)]))
+      let%bind fail_id = fresh_ident "fail" in
+      let check_cls = 
+        Function ([expr_id], 
+          Match (Var expr_id, 
+                [(IntPat, Bool true); (AnyPat, Var fail_id)]))
+      in
+      let fail_cls = Let (fail_id, Bool false, check_cls) in
+      return @@ fail_cls
     in
     let rec_map = 
       Ident_map.empty
@@ -45,9 +65,14 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
     in
     let%bind checker =
       let%bind expr_id = fresh_ident "expr" in 
-      return @@ Function ([expr_id], 
-                          Match (Var expr_id, 
-                                 [(BoolPat, Bool true); (AnyPat, Bool false)]))
+      let%bind fail_id = fresh_ident "fail" in
+      let check_cls = 
+        Function ([expr_id], 
+          Match (Var expr_id, 
+                [(BoolPat, Bool true); (AnyPat, Var fail_id)]))
+      in
+      let fail_cls = Let (fail_id, Bool false, check_cls) in
+      return @@ fail_cls
     in
     let rec_map = 
       Ident_map.empty
@@ -365,9 +390,16 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
     let%bind t' = semantic_type_of t in
+    let%bind () = add_sem_to_syn_mapping (Var x) t in
     return @@ LetWithType (x, e1', e2', t')
   | LetRecFunWithType (sig_lst, e, t_lst) ->
     begin
+      let sig_t_lst = List.combine sig_lst t_lst in
+      let%bind () = sig_t_lst
+        |> list_fold_left_m 
+           (fun () (Funsig (f, _, _), f_t) -> add_sem_to_syn_mapping (Var f) f_t)
+           ()
+      in
       let%bind sig_lst' = 
         sig_lst
         |> List.map (transform_funsig semantic_type_of)
@@ -383,6 +415,8 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
     end
   | LetFunWithType (fun_sig, e, t) -> 
     begin
+      let Funsig (f, _, _) = fun_sig in
+      let%bind () = add_sem_to_syn_mapping (Var f) t in
       let%bind fun_sig' = 
         fun_sig 
         |> transform_funsig semantic_type_of
@@ -541,14 +575,12 @@ and typed_non_to_on (e : sem_type_natodefa) : core_natodefa m =
       let%bind type_decl' = typed_non_to_on type_decl in
       let%bind e1' = typed_non_to_on e1 in
       let%bind e2' = typed_non_to_on e2 in
-      let%bind error_id = fresh_ident "type_error" in
-      let%bind () = add_error_to_natodefa_mapping error_id e1 in
-      let test_expr = 
-        If (Appl (RecordProj (type_decl', Label "checker"), Var x), 
-            e2', 
-            TypeError error_id) 
-      in
-      return @@ Let (x, e1', test_expr)
+      let%bind check_res = fresh_ident "check_res" in
+      let%bind () = add_error_to_natodefa_mapping check_res (Var x) in
+      let res_cls = If (Var check_res, e2', TypeError check_res) in
+      let check_cls = 
+        Let (check_res, Appl (RecordProj (type_decl', Label "checker"), Var x), res_cls) in
+      return @@ Let (x, e1', check_cls)
     end
   | LetRecFunWithType (sig_lst, e, type_decl_lst) ->
     begin
@@ -556,11 +588,12 @@ and typed_non_to_on (e : sem_type_natodefa) : core_natodefa m =
       let combined_lst = List.combine fun_names type_decl_lst in
       let folder (f, t) acc = 
         let%bind t' = typed_non_to_on t in
-        let%bind error_id = fresh_ident "type_error" in
-        let%bind () = add_error_to_natodefa_mapping error_id (Var f) in
-        return @@ If (Appl (RecordProj (t', Label "checker"), Var f), 
-                      acc, 
-                      TypeError error_id)
+        let%bind check_res = fresh_ident "check_res" in
+        let%bind () = add_error_to_natodefa_mapping check_res (Var f) in
+        let res_cls = If (Var check_res, acc, TypeError check_res) in
+        let check_cls = 
+          Let (check_res, Appl (RecordProj (t', Label "checker"), Var f), res_cls) in
+        return check_cls
       in
       let%bind test_exprs = 
         let%bind e' = typed_non_to_on e in
@@ -576,16 +609,15 @@ and typed_non_to_on (e : sem_type_natodefa) : core_natodefa m =
   | LetFunWithType ((Funsig (f, _, _) as fun_sig), e, type_decl) ->
     begin
       let%bind type_decl' = typed_non_to_on type_decl in
-      let%bind error_id = fresh_ident "type_error" in
-      let%bind () = add_error_to_natodefa_mapping error_id (Var f) in
-      let%bind test_expr =
-        let%bind e' = typed_non_to_on e in 
-        return @@ If (Appl (RecordProj (type_decl', Label "checker"), Var f), 
-                      e', 
-                      TypeError error_id) 
+      let%bind e' = typed_non_to_on e in 
+      let%bind check_res = fresh_ident "check_res" in
+      let%bind () = add_error_to_natodefa_mapping check_res (Var f) in
+      let res_cls = If (Var check_res, e', TypeError check_res) in
+      let check_cls = 
+        Let (check_res, Appl (RecordProj (type_decl', Label "checker"), Var f), res_cls) 
       in
       let%bind fun_sig' = (transform_funsig typed_non_to_on) fun_sig in
-      return @@ LetFun (fun_sig', test_expr)
+      return @@ LetFun (fun_sig', check_cls)
     end
   | Plus (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
