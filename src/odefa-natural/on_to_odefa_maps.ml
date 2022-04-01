@@ -71,6 +71,16 @@ type t = {
 [@@ deriving show]
 ;;
 
+let print_natodefa_expr_to_expr mappings = 
+  let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in
+  let () = Expr_map.iter 
+    (fun k v -> 
+      let () = print_endline @@ "Key: " ^ show_expr k in
+      let () = print_endline @@ "Value: " ^ show_expr v in
+      ()) mappings.natodefa_expr_to_expr
+  in
+  ()
+
 let empty is_natodefa = {
   is_natodefa = is_natodefa;
   odefa_instrument_vars_map = Ast.Ident_map.empty;
@@ -107,10 +117,27 @@ let add_odefa_var_on_expr_mapping mappings odefa_ident on_expr =
 ;;
 
 let add_on_expr_to_expr_mapping mappings expr1 expr2 =
+  (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in *)
   let natodefa_expr_map = mappings.natodefa_expr_to_expr in
+  let add' k v m = 
+    if Expr_map.mem k m then 
+      (* let () = print_endline @@ "--------------" in
+      let () = print_endline @@ "Mapping already exists: " in
+      let () = print_endline @@ show_expr k in
+      let () = print_endline @@ show_expr (Expr_map.find k m) in
+      let () = print_endline @@ "--------------" in *)
+      m
+    else 
+      (* let () = print_endline @@ "--------------" in
+      let () = print_endline @@ "Adding Mapping: " in
+      let () = print_endline @@ show_expr k in
+      let () = print_endline @@ show_expr v in
+      let () = print_endline @@ "--------------" in *)
+      Expr_map.add k v m 
+  in
   { mappings with
     natodefa_expr_to_expr =
-      Expr_map.add expr1 expr2 natodefa_expr_map;
+      add' expr1 expr2 natodefa_expr_map;
   }
 ;;
 
@@ -149,15 +176,29 @@ let get_pre_inst_equivalent_clause mappings odefa_ident =
         (Ast.show_ident odefa_ident))
 ;;
 
+
+(* Note (Earl): The problem is with this function. It is trying to reconstruct 
+   the original AST, but we have a match in a let rec that's transformed 
+   separately, and we can only reconstruct one at a time. This causes us to
+   chase our tail around like a stupid dog.
+ *)
 (** Helper function to recursively map natodefa expressions according to
     the expression-to-expression mapping (eg. records to lists or variants).
     We need a custom transformer function, rather than the one in utils, 
     because we need to first transform the expression, then recurse (whereas
     transform_expr and transform_expr_m do the other way around). *)
 let rec on_expr_transformer transformer (expr : On_ast.core_natodefa) =
+  (* let () = print_endline @@ "--------------" in *)
+  (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in *)
+  (* let () = print_endline @@ "Expression in on expr transformer" in *)
+  (* let () = print_endline @@ show_expr expr in  *)
   let open On_ast in
+  (* let () = print_endline @@ "==>" in *)
   let recurse = on_expr_transformer transformer in
   let expr' = transformer expr in
+  (* let () = print_endline @@ "Expression' in on expr transformer" in
+  let () = print_endline @@ show_expr expr' in
+  let () = print_endline @@ "--------------" in *)
   match expr' with
   | Int _ | Bool _ | Var _ | Input | Untouched _ | TypeError _ -> expr'
   | Record record ->
@@ -169,23 +210,61 @@ let rec on_expr_transformer transformer (expr : On_ast.core_natodefa) =
     in
     Record record'
   | Match (e, pat_e_lst) ->
+    (* let () = print_endline "in match" in *)
     let pat_e_lst' =
-      List.map (fun (pat, e) -> (pat, recurse e)) pat_e_lst
+      List.map (fun (pat, e') -> 
+        (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in
+        let () = print_endline "********************" in
+        let () = print_endline @@ "This is in Match" in
+        let () = print_endline @@ show_pattern pat in
+        let () = print_endline " -> " in
+        let () = print_endline @@ show_expr e' in
+        let () = print_endline " =====> " in
+        let () = print_endline @@ show_expr (recurse e') in
+        let () = print_endline "********************" in *)
+        (pat, recurse e')) pat_e_lst
     in
     Match (recurse e, pat_e_lst')
   | Function (id_lst, e) -> Function (id_lst, recurse e)
   | Appl (e1, e2) -> Appl (recurse e1, recurse e2)
-  | Let (id, e1, e2) -> Let (id, recurse e1, recurse e2)
+  | Let (id, e1, e2) -> 
+    (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in
+    let () = print_endline "********************" in
+    let () = print_endline @@ "This is in Let" in
+    let () = print_endline @@ show_ident id in
+    let () = print_endline " = " in
+    let () = print_endline @@ show_expr e1 in
+    let () = print_endline " =====> " in
+    let () = print_endline @@ show_expr (recurse e1) in
+    let () = print_endline "********************" in *)
+    Let (id, recurse e1, recurse e2)
   | LetFun (fs, e) ->
     let Funsig (fs_ident, fs_args, e_body) = fs in
+    (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in
+    let () = print_endline "********************" in
+    let () = print_endline @@ "This is in LetFun" in
+    let () = print_endline @@ show_ident fs_ident in
+    let () = print_endline " = " in
+    let () = print_endline @@ show_expr e_body in
+    let () = print_endline " =====> " in
+    let () = print_endline @@ show_expr (recurse e_body) in
+    let () = print_endline "********************" in *)
     let fs' = Funsig (fs_ident, fs_args, recurse e_body) in
     LetFun (fs', recurse e)
   | LetRecFun (fs_lst, e) ->
+    (* let () = print_endline "in LetRecFun case" in *)
+    (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in *)
+    (* let () = print_endline @@ show_expr expr' in *)
+    (* let () = print_endline @@ show_expr e in *)
+    (* let () = print_endline "Pre list map in LRF case" in *)
     let fs_lst' =
       List.map
-        (fun (Funsig (id, args, e')) -> Funsig (id, args, recurse e'))
+        (fun (Funsig (id, args, e')) -> 
+          (* let () = print_endline @@ show_expr e' in *)
+          Funsig (id, args, recurse e'))
         fs_lst
     in
+    (* let () = print_endline "Post list map in LRF case" in *)
     LetRecFun (fs_lst', recurse e)
   | Plus (e1, e2) -> Plus (recurse e1, recurse e2)
   | Minus (e1, e2) -> Minus (recurse e1, recurse e2)
@@ -211,6 +290,7 @@ let rec on_expr_transformer transformer (expr : On_ast.core_natodefa) =
 ;;
 
 let get_natodefa_equivalent_expr mappings odefa_ident =
+  (* let () = print_endline "In get_natodefa_equivalent_expr" in *)
   let inst_map = mappings.odefa_instrument_vars_map in
   let odefa_on_map = mappings.odefa_var_to_natodefa_expr in
   let on_expr_map = mappings.natodefa_expr_to_expr in
@@ -221,6 +301,7 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
     | Some (Some pre_inst_ident) -> pre_inst_ident
     | Some (None) | None -> odefa_ident
   in
+  (* let () = print_endline "pre-natodefa_expr" in *)
   (* Get natodefa expr from odefa var *)
   let natodefa_expr =
     try
@@ -232,11 +313,21 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
           (Ast.show_ident odefa_ident'))
   in
   (* Get any original natodefa exprs *)
+  (* let () = print_endline "on_expr_transform" in *)
   let on_expr_transform (expr : On_ast.core_natodefa) =
+    (* let () = print_natodefa_expr_to_expr mappings in *)
     match Expr_map.Exceptionless.find expr on_expr_map with
-    | Some expr' -> expr'
+    | Some expr' -> 
+      (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in
+      let () = print_endline "------------------------" in
+      let () = print_endline @@ show_expr expr in
+      let () = print_endline @@ " maps to " in 
+      let () = print_endline @@ show_expr expr' in
+      let () = print_endline "------------------------" in *)
+      expr'
     | None -> expr
   in
+  (* let () = print_endline "pre-on_ident_transform" in *)
   let on_ident_transform (expr : On_ast.core_natodefa) =
     let open On_ast in
     let find_ident ident =
@@ -296,15 +387,25 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
       in
       let pat_e_list' =
         List.map
-          (fun (pat, expr) -> (transform_pattern pat, expr))
+          (fun (pat, match_expr) -> 
+            (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in *)
+            (* let () = print_endline @@ show_expr match_expr in *)
+            (transform_pattern pat, match_expr))
           pat_e_list
       in
       Match (e, pat_e_list')
     | _ -> expr
   in
+  (* let () = print_endline "pre-pipe" in *)
   natodefa_expr
   |> on_expr_transformer on_ident_transform
-  |> on_expr_transformer on_expr_transform
+  |> 
+  (* let () = print_endline "2nd pipe" in  *)
+  let res = on_expr_transformer on_expr_transform in
+  (* let res = on_expr_transform in *)
+  (* let () = print_endline "3rd pipe" in  *)
+  (* let () = print_endline "Finished get_natodefa_equivalent_expr" in *)
+  res
 ;;
 
 let get_type_from_idents mappings odefa_idents =

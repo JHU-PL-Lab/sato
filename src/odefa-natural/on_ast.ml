@@ -244,9 +244,14 @@ and equal_expr: type a. a expr -> a expr -> bool =
   | TypeUntouched s1, TypeUntouched s2 -> s1 = s2
   | _ -> false 
 
+let compare_helper (x : int) (y : int) : int = 
+    if x <> 0 then x else y
+
 let rec compare_funsig: type a. a funsig -> a funsig -> int =
     fun (Funsig (id1, params1, fe1)) (Funsig (id2, params2, fe2)) ->
-    (compare id1 id2) + (List.compare compare_ident params1 params2) + (compare_expr fe1 fe2)
+    (compare id1 id2)
+    |> compare_helper (List.compare compare_ident params1 params2)
+    |> compare_helper (compare_expr fe1 fe2)
 
 and compare_expr : type a. a expr -> a expr -> int = 
   fun e1 e2 ->
@@ -261,35 +266,42 @@ and compare_expr : type a. a expr -> a expr -> int =
       Ident_map.compare compare_expr r1 r2
     | Untouched s1, Untouched s2 -> compare s1 s2
     | Function (id_lst1, fun_body1), Function (id_lst2, fun_body2) -> 
-      (List.compare compare_ident id_lst1 id_lst2) + (compare_expr fun_body1 fun_body2)
+      (List.compare compare_ident id_lst1 id_lst2)
+      |> compare_helper (compare_expr fun_body1 fun_body2)
     | Let (x1, xe1, e1), Let (x2, xe2, e2) ->
-      (compare x1 x2) + (compare_expr xe1 xe2) + (compare_expr e1 e2)
+      (compare x1 x2) 
+      |> compare_helper (compare_expr xe1 xe2)
+      |> compare_helper (compare_expr e1 e2)
     | LetFun (f1, e1), LetFun (f2, e2) -> 
-      (compare_funsig f1 f2) + (compare_expr e1 e2)
+      (compare_funsig f1 f2)
+      |> compare_helper (compare_expr e1 e2)
     | LetRecFun (sig_lst1, e1), LetRecFun (sig_lst2, e2) ->
       (List.compare compare_funsig sig_lst1 sig_lst2) + 
       (compare_expr e1 e2)
     | LetWithType (x1, xe1, e1, t1), LetWithType (x2, xe2, e2, t2) ->
-      (compare x1 x2) + (compare_expr xe1 xe2) + 
-      (compare_expr e1 e2) + (compare_expr t1 t2)
+      (compare x1 x2) 
+      |> compare_helper (compare_expr xe1 xe2)
+      |> compare_helper (compare_expr e1 e2)
+      |> compare_helper (compare_expr t1 t2)
     | LetFunWithType (f1, e1, t1), LetFunWithType (f2, e2, t2) ->
-      (compare_funsig f1 f2) + 
-      (compare_expr e1 e2) + 
-      (compare_expr t1 t2)
+      (compare_funsig f1 f2)
+      |> compare_helper (compare_expr e1 e2)
+      |> compare_helper (compare_expr t1 t2)
     | LetRecFunWithType (sig_lst1, e1, t1), LetRecFunWithType (sig_lst2, e2, t2) ->
-      (List.compare compare_funsig sig_lst1 sig_lst2) + 
-      (compare_expr e1 e2) + 
-      (List.compare compare_expr t1 t2)
+      (List.compare compare_funsig sig_lst1 sig_lst2)
+      |> compare_helper (compare_expr e1 e2) 
+      |> compare_helper (List.compare compare_expr t1 t2)
     | Match (me1, pe_lst1), Match (me2, pe_lst2) ->
       let compare_pe (p1, e1) (p2, e2) = 
-        compare_pattern p1 p2 + compare_expr e1 e2
+        compare_pattern p1 p2
+        |> compare_helper (compare_expr e1 e2)
       in
-      (compare_expr me1 me2) + 
-      List.compare compare_pe pe_lst1 pe_lst2
+      (compare_expr me1 me2)
+      |> compare_helper (List.compare compare_pe pe_lst1 pe_lst2)
     | If (cond1, tb1, fb1), If (cond2, tb2, fb2) ->
-      (compare_expr cond1 cond2) + 
-      (compare_expr tb1 tb2) +
-      (compare_expr fb1 fb2)
+      (compare_expr cond1 cond2)
+      |> compare_helper (compare_expr tb1 tb2)
+      |> compare_helper (compare_expr fb1 fb2)
     | Or (lop1, rop1), Or (lop2, rop2)
     | And (lop1, rop1), And (lop2, rop2)
     | Equal (lop1, rop1), Equal (lop2, rop2)
@@ -305,16 +317,18 @@ and compare_expr : type a. a expr -> a expr -> int =
     | Divide (lop1, rop1), Divide (lop2, rop2) 
     | Modulus (lop1, rop1), Modulus (lop2, rop2) 
     | ListCons (lop1, rop1), ListCons (lop2, rop2) ->
-      (compare_expr lop1 lop2) + 
-      (compare_expr rop1 rop2) 
+      (compare_expr lop1 lop2)
+      |> compare_helper (compare_expr rop1 rop2) 
     | Assert e1, Assert e2
     | Assume e1, Assume e2
     | Not e1, Not e2 ->
       compare_expr e1 e2
     | VariantExpr (l1, e1), VariantExpr (l2, e2) -> 
-      (compare l1 l2) + (compare_expr e1 e2)
+      (compare l1 l2) 
+      |> compare_helper (compare_expr e1 e2)
     | RecordProj (e1, l1), RecordProj (e2, l2) -> 
-      (compare l1 l2) + (compare_expr e1 e2)
+      (compare l1 l2)
+      |> compare_helper (compare_expr e1 e2)
     (* Type expressions *)
     | TypeVar x1, TypeVar x2 -> compare x1 x2
     | TypeInt, TypeInt | TypeBool, TypeBool -> 0 
@@ -328,13 +342,14 @@ and compare_expr : type a. a expr -> a expr -> int =
     | TypeSet (lt1, rt1), TypeSet (lt2, rt2) ->
       (compare_expr lt1 lt2) + (compare_expr rt1 rt2)
     | TypeArrowD ((id1, lt1), rt1), TypeArrowD ((id2, lt2), rt2) ->
-      (compare id1 id2) +
-      (compare_expr lt1 lt2) + 
-      (compare_expr rt1 rt2)
+      (compare id1 id2)
+      |> compare_helper (compare_expr lt1 lt2)
+      |> compare_helper (compare_expr rt1 rt2)
     | TypeRecurse (x1, t1), TypeRecurse (x2, t2) ->
-      (compare x1 x2) + (compare t1 t2)
+      (compare x1 x2) 
+      |> compare_helper (compare t1 t2)
     | TypeUntouched s1, TypeUntouched s2 -> compare s1 s2
-    (* TODO: We might want to change this *)
+    (* TODO: Another potential source for bug *)
     | _ -> 1
 
 module type Expr = sig
@@ -360,6 +375,12 @@ module CoreExpr : (Expr with type t = core_natodefa) = struct
   let equal = equal_expr;;
   let compare = compare_expr;;
 end;; *)
+
+module TypedExpr : (Expr with type t = syn_type_natodefa) = struct
+  type t = syn_type_natodefa;;
+  let equal = equal_expr;;
+  let compare = compare_expr;;
+end;;
 
 module SemanticTypeExpr : (Expr with type t = sem_type_natodefa) = struct
   type t = sem_type_natodefa;;

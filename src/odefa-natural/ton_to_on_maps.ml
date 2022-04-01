@@ -3,9 +3,20 @@ open Jhupllib;;
 
 open On_ast;;
 
+module OriginalExpr = struct
+  include On_ast.TypedExpr;;
+  let pp = On_ast_pp.pp_expr;;
+end;;
+
 module IntermediateExpr = struct
   include On_ast.SemanticTypeExpr;;
   let pp = On_ast_pp.pp_expr;;
+end;;
+
+module OriginalExpr_map = struct
+  module M = Map.Make(IntermediateExpr);;
+  include M;;
+  include Pp_utils.Map_pp(M)(IntermediateExpr);;
 end;;
 
 module IntermediateExpr_map = struct
@@ -14,15 +25,19 @@ module IntermediateExpr_map = struct
   include Pp_utils.Map_pp(M)(IntermediateExpr);;
 end;;
 
+type error_alist = (syn_type_natodefa * (ident list)) list
+
 type t = {
   error_to_natodefa_expr : sem_type_natodefa Ident_map.t;
   sem_to_syn : syn_type_natodefa IntermediateExpr_map.t;
+  natodefa_type_to_error : error_alist OriginalExpr_map.t;
 }
 ;;
 
 let empty = {
   error_to_natodefa_expr = Ident_map.empty;
   sem_to_syn = IntermediateExpr_map.empty;
+  natodefa_type_to_error = OriginalExpr_map.empty;
 }
 ;;
 
@@ -39,6 +54,21 @@ let add_sem_syn_expr_mapping mappings sem syn =
   { mappings with 
     sem_to_syn = 
       IntermediateExpr_map.add sem syn sem_syn_expr_mapping;
+  }
+;;
+
+let add_type_error_mapping mappings t_key t_index idents =
+  let type_error_mapping = mappings.natodefa_type_to_error in
+  let og_v_opt = OriginalExpr_map.find_opt t_key type_error_mapping in
+  let v' = 
+    match og_v_opt with
+    | Some l -> 
+      l @ [(t_index, idents)]
+    | None -> [(t_index, idents)]
+  in
+  { mappings with 
+    natodefa_type_to_error = 
+      OriginalExpr_map.add t_key v' type_error_mapping;
   }
 ;;
 

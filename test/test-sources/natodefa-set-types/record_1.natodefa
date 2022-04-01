@@ -2,5 +2,5 @@
 # EXPECT-NO-TYPE-ERRORS
 
 let create_record (x : int) (y : bool) : {a = int, b = bool} =
-    {a = x, b = not y}
+    {a = x, b = x}
 in create_record

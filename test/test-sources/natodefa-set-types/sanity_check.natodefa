@@ -1,2 +1,0 @@
-let f (x : int) : int -> int = fun y -> x + y > 0 in
-f

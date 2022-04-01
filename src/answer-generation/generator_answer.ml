@@ -243,6 +243,7 @@ module Natodefa_type_errors : Answer = struct
         begin
           match error_opt with
           | Some (error_loc, error_lst) ->
+            (* let () = On_to_odefa_maps.print_natodefa_expr_to_expr odefa_on_maps in *)
             (* TODO (Earl): This probably should be the place to trace all the way
                back to the original, user-written Natodefa code.
                The current issue with how mappings are kept is that the abort vars
@@ -269,10 +270,16 @@ module Natodefa_type_errors : Answer = struct
             let err_loc_option = 
               if is_type_error then Some actual_err_loc else None
             in
+            (* let () = print_endline "before printing list!" in *)
+            (* let () = print_endline @@ string_of_int @@ List.length error_lst in *)
+            (* let () = failwith "SCREAM!" in *)
             let on_err_list =
               let mapper = (On_error.odefa_to_natodefa_error odefa_on_maps ton_on_maps err_loc_option) in 
+              (* let () = print_endline "mapper is fine" in *)
+              (* let () = print_endline @@ string_of_int (List.length error_lst) in *)
               List.map mapper error_lst
             in
+            (* let () = failwith "SCREAM!" in *)
             Some {
               err_input_seq = input_seq;
               err_location = actual_err_loc;

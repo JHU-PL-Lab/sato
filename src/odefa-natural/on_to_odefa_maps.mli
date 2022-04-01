@@ -4,6 +4,8 @@ type t [@@deriving show];;
 
 val empty : bool -> t;;
 
+val print_natodefa_expr_to_expr : t -> unit;;
+
 (* **** Setter functions **** *)
 
 (** Add an mapping from an odefa ident added during instrumentation to an
