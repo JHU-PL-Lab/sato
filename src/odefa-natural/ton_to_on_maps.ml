@@ -25,19 +25,19 @@ module IntermediateExpr_map = struct
   include Pp_utils.Map_pp(M)(IntermediateExpr);;
 end;;
 
-type error_alist = (syn_type_natodefa * (ident list)) list
+(* type error_alist = (syn_type_natodefa * (ident list)) list *)
 
 type t = {
   error_to_natodefa_expr : sem_type_natodefa Ident_map.t;
   sem_to_syn : syn_type_natodefa IntermediateExpr_map.t;
-  natodefa_type_to_error : error_alist OriginalExpr_map.t;
+  (* natodefa_type_to_error : error_alist OriginalExpr_map.t; *)
 }
 ;;
 
 let empty = {
   error_to_natodefa_expr = Ident_map.empty;
   sem_to_syn = IntermediateExpr_map.empty;
-  natodefa_type_to_error = OriginalExpr_map.empty;
+  (* natodefa_type_to_error = OriginalExpr_map.empty; *)
 }
 ;;
 
@@ -57,7 +57,7 @@ let add_sem_syn_expr_mapping mappings sem syn =
   }
 ;;
 
-let add_type_error_mapping mappings t_key t_index idents =
+(* let add_type_error_mapping mappings t_key t_index idents =
   let type_error_mapping = mappings.natodefa_type_to_error in
   let og_v_opt = OriginalExpr_map.find_opt t_key type_error_mapping in
   let v' = 
@@ -70,15 +70,15 @@ let add_type_error_mapping mappings t_key t_index idents =
     natodefa_type_to_error = 
       OriginalExpr_map.add t_key v' type_error_mapping;
   }
-;;
+;; *)
 
 let transform_funsig 
   (f : 'a expr -> 'b expr) 
   (Funsig (fun_name, params, e) : 'a funsig) 
   : 'b funsig
   = 
-  let e' = f e in
-  Funsig (fun_name, params, e')
+  let e' = f e.body in
+  Funsig (fun_name, params, new_expr_desc e')
 ;;
 
 let rec sem_natodefa_from_on_err ton_on_maps (on_err : core_natodefa) : sem_type_natodefa = 
@@ -97,119 +97,129 @@ let rec sem_natodefa_from_on_err ton_on_maps (on_err : core_natodefa) : sem_type
   | Bool b -> Bool b
   | Var x -> Var x
   | Function (id_lst, f_expr) -> 
-    Function (id_lst, sem_natodefa_from_on_err ton_on_maps f_expr) 
+    Function (id_lst, new_expr_desc @@ sem_natodefa_from_on_err ton_on_maps (f_expr.body)) 
   | Input -> Input
   | Appl (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Appl (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Appl (new_expr_desc e1', new_expr_desc e2')
   | Let (x, e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Let (x, e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Let (x, new_expr_desc e1', new_expr_desc e2')
   | LetRecFun (funsig_lst, e) -> 
     let funsig_lst' = 
       funsig_lst  
       |> List.map (transform_funsig (sem_natodefa_from_on_err ton_on_maps))
     in
-    let e' = sem_natodefa_from_on_err ton_on_maps e in
-    LetRecFun (funsig_lst', e')
+    let e' = sem_natodefa_from_on_err ton_on_maps e.body in
+    LetRecFun (funsig_lst', new_expr_desc e')
   | LetFun (funsig, e) -> 
     let funsig' = funsig
       |> transform_funsig (sem_natodefa_from_on_err ton_on_maps)
     in
-    let e' = sem_natodefa_from_on_err ton_on_maps e in
-    LetFun (funsig', e')
+    let e' = sem_natodefa_from_on_err ton_on_maps e.body in
+    LetFun (funsig', new_expr_desc e')
   | Plus (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Plus (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Plus (new_expr_desc e1', new_expr_desc e2')
   | Minus (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Minus (e1', e2')  
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Minus (new_expr_desc e1', new_expr_desc e2')
   | Times (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Times (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Times (new_expr_desc e1', new_expr_desc e2')
   | Divide (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Divide (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Divide (new_expr_desc e1', new_expr_desc e2')
   | Modulus (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Modulus (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Modulus (new_expr_desc e1', new_expr_desc e2')
   | Equal (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Equal (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Equal (new_expr_desc e1', new_expr_desc e2')
   | Neq (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Neq (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Neq (new_expr_desc e1', new_expr_desc e2')
   | LessThan (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    LessThan (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    LessThan (new_expr_desc e1', new_expr_desc e2')
   | Leq (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Leq (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Leq (new_expr_desc e1', new_expr_desc e2')
   | GreaterThan (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    GreaterThan (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    GreaterThan (new_expr_desc e1', new_expr_desc e2')
   | Geq (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Geq (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Geq (new_expr_desc e1', new_expr_desc e2')
   | And (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    And (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    And (new_expr_desc e1', new_expr_desc e2')
   | Or (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    Or (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    Or (new_expr_desc e1', new_expr_desc e2')
   | Not e -> 
-    let e' = sem_natodefa_from_on_err ton_on_maps e in
-    Not e'
+    let e' = sem_natodefa_from_on_err ton_on_maps e.body in
+    Not (new_expr_desc e')
   | If (e1, e2, e3) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    let e3' = sem_natodefa_from_on_err ton_on_maps e3 in
-    If (e1', e2', e3')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    let e3' = sem_natodefa_from_on_err ton_on_maps e3.body in
+    If (new_expr_desc e1', new_expr_desc e2', new_expr_desc e3')
   | Record r -> 
-    let r' = Ident_map.map (sem_natodefa_from_on_err ton_on_maps) r in
+    let r' = r
+      |> Ident_map.map (fun ed -> ed.body)
+      |> Ident_map.map (sem_natodefa_from_on_err ton_on_maps)
+      |> Ident_map.map (fun e -> new_expr_desc e)
+    in
     Record r'
   | RecordProj (e, l) -> 
-    let e' = sem_natodefa_from_on_err ton_on_maps e in
-    RecordProj (e', l)
+    let e' = sem_natodefa_from_on_err ton_on_maps e.body in
+    RecordProj (new_expr_desc e', l)
   | Match (match_e, pat_expr_lst) -> 
-    let match_e' = sem_natodefa_from_on_err ton_on_maps match_e in
+    let match_e' = sem_natodefa_from_on_err ton_on_maps match_e.body in
     let pat_expr_lst' = 
       pat_expr_lst
-      |> List.map (fun (p, e) -> let e' = sem_natodefa_from_on_err ton_on_maps e in (p, e'))
-    in Match (match_e', pat_expr_lst')
+      |> List.map (fun (p, e) -> (p, e.body))
+      |> List.map 
+        (fun (p, e) -> 
+            let e' = sem_natodefa_from_on_err ton_on_maps e in 
+            (p, new_expr_desc e'))
+    in Match (new_expr_desc match_e', pat_expr_lst')
   | VariantExpr (l, e)-> 
-    let e' = sem_natodefa_from_on_err ton_on_maps e in
-    VariantExpr (l, e')
+    let e' = sem_natodefa_from_on_err ton_on_maps e.body in
+    VariantExpr (l, new_expr_desc e')
   | List es ->
     let es' = es
+    |> List.map (fun ed -> ed.body)
     |> List.map (sem_natodefa_from_on_err ton_on_maps)
+    |> List.map (fun e -> new_expr_desc e)
     in
     List es'
   | ListCons (e1, e2) -> 
-    let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-    let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-    ListCons (e1', e2')
+    let e1' = sem_natodefa_from_on_err ton_on_maps e1.body in
+    let e2' = sem_natodefa_from_on_err ton_on_maps e2.body in
+    ListCons (new_expr_desc e1', new_expr_desc e2')
   | Assert e -> 
-    let e' = sem_natodefa_from_on_err ton_on_maps e in
-    Assert e'  
+    let e' = sem_natodefa_from_on_err ton_on_maps e.body in
+    Assert (new_expr_desc e')  
   | Assume e -> 
-    let e' = sem_natodefa_from_on_err ton_on_maps e in
-    Assume e'
+    let e' = sem_natodefa_from_on_err ton_on_maps e.body in
+    Assume (new_expr_desc e')
   | Untouched s -> Untouched s
 ;;
 

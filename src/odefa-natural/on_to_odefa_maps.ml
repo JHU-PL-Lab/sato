@@ -205,7 +205,7 @@ let rec on_expr_transformer transformer (expr : On_ast.core_natodefa) =
     let record' =
       record
       |> On_ast.Ident_map.enum
-      |> Enum.map (fun (lbl, e) -> (lbl, recurse e))
+      |> Enum.map (fun (lbl, e) -> (lbl, new_expr_desc @@ recurse e.body))
       |> On_ast.Ident_map.of_enum
     in
     Record record'
@@ -222,11 +222,20 @@ let rec on_expr_transformer transformer (expr : On_ast.core_natodefa) =
         let () = print_endline " =====> " in
         let () = print_endline @@ show_expr (recurse e') in
         let () = print_endline "********************" in *)
-        (pat, recurse e')) pat_e_lst
+        (pat, new_expr_desc @@ recurse e'.body)) pat_e_lst
     in
-    Match (recurse e, pat_e_lst')
-  | Function (id_lst, e) -> Function (id_lst, recurse e)
-  | Appl (e1, e2) -> Appl (recurse e1, recurse e2)
+    let e' = new_expr_desc @@ recurse e.body in
+    Match (e', pat_e_lst')
+  | Function (id_lst, e) -> 
+    let e_body = e.body in
+    let e' = new_expr_desc @@ recurse e_body in
+    Function (id_lst, e')
+  | Appl (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Appl (e1', e2') 
   | Let (id, e1, e2) -> 
     (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in
     let () = print_endline "********************" in
@@ -237,7 +246,11 @@ let rec on_expr_transformer transformer (expr : On_ast.core_natodefa) =
     let () = print_endline " =====> " in
     let () = print_endline @@ show_expr (recurse e1) in
     let () = print_endline "********************" in *)
-    Let (id, recurse e1, recurse e2)
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Let (id, e1', e2')
   | LetFun (fs, e) ->
     let Funsig (fs_ident, fs_args, e_body) = fs in
     (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in
@@ -249,8 +262,12 @@ let rec on_expr_transformer transformer (expr : On_ast.core_natodefa) =
     let () = print_endline " =====> " in
     let () = print_endline @@ show_expr (recurse e_body) in
     let () = print_endline "********************" in *)
-    let fs' = Funsig (fs_ident, fs_args, recurse e_body) in
-    LetFun (fs', recurse e)
+    let e_body_body = e_body.body in
+    let e_body' = new_expr_desc @@ recurse e_body_body in
+    let fs' = Funsig (fs_ident, fs_args, e_body') in
+    let e_body = e.body in
+    let e' = new_expr_desc @@ recurse e_body in
+    LetFun (fs', e')
   | LetRecFun (fs_lst, e) ->
     (* let () = print_endline "in LetRecFun case" in *)
     (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in *)
@@ -261,32 +278,132 @@ let rec on_expr_transformer transformer (expr : On_ast.core_natodefa) =
       List.map
         (fun (Funsig (id, args, e')) -> 
           (* let () = print_endline @@ show_expr e' in *)
-          Funsig (id, args, recurse e'))
+          let ep_body = e'.body in
+          let e'' = new_expr_desc @@ recurse ep_body in
+          Funsig (id, args, e''))
         fs_lst
     in
     (* let () = print_endline "Post list map in LRF case" in *)
-    LetRecFun (fs_lst', recurse e)
-  | Plus (e1, e2) -> Plus (recurse e1, recurse e2)
-  | Minus (e1, e2) -> Minus (recurse e1, recurse e2)
-  | Times (e1, e2) -> Times (recurse e1, recurse e2)
-  | Divide (e1, e2) -> Divide (recurse e1, recurse e2)
-  | Modulus (e1, e2) -> Modulus (recurse e1, recurse e2)
-  | Equal (e1, e2) -> Equal (recurse e1, recurse e2)
-  | Neq (e1, e2) -> Neq (recurse e1, recurse e2)
-  | LessThan (e1, e2) -> LessThan (recurse e1, recurse e2)
-  | Leq (e1, e2) -> Leq (recurse e1, recurse e2)
-  | GreaterThan (e1, e2) -> GreaterThan (recurse e1, recurse e2)
-  | Geq (e1, e2) -> Geq (recurse e1, recurse e2)
-  | And (e1, e2) -> And (recurse e1, recurse e2)
-  | Or (e1, e2) -> Or (recurse e1, recurse e2)
-  | Not e -> Not (recurse e)
-  | If (e1, e2, e3) -> If (recurse e1, recurse e2, recurse e3)
-  | RecordProj (e, lbl) -> RecordProj (recurse e, lbl)
-  | VariantExpr (vlbl, e) -> VariantExpr (vlbl, recurse e)
-  | List (e_lst) -> List (List.map recurse e_lst)
-  | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
-  | Assert e -> Assert (recurse e)
-  | Assume e -> Assume (recurse e)
+    let e_body = e.body in
+    let e' = new_expr_desc @@ recurse e_body in
+    LetRecFun (fs_lst', e')
+  | Plus (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Plus (e1', e2') 
+  | Minus (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Minus (e1', e2') 
+  | Times (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Times (e1', e2') 
+  | Divide (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Divide (e1', e2') 
+  | Modulus (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Modulus (e1', e2') 
+  | Equal (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Equal (e1', e2') 
+  | Neq (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Neq (e1', e2') 
+  | LessThan (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    LessThan (e1', e2') 
+  | Leq (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Leq (e1', e2') 
+  | GreaterThan (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    GreaterThan (e1', e2') 
+  | Geq (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Geq (e1', e2') 
+  | And (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    And (e1', e2') 
+  | Or (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    Or (e1', e2') 
+  | Not e -> 
+    let e_body = e.body in
+    let e' = new_expr_desc @@ e_body in
+    Not e'
+  | If (e1, e2, e3) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e3_body = e3.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    let e3' = new_expr_desc @@ e3_body in
+    If (e1', e2', e3') 
+  | RecordProj (e, lbl) -> 
+    let e_body = e.body in
+    let e' = new_expr_desc @@ e_body in
+    RecordProj (e', lbl)
+  | VariantExpr (vlbl, e) ->
+    let e_body = e.body in
+    let e' = new_expr_desc @@ e_body in
+    VariantExpr (vlbl, e')
+  | List (e_lst) ->
+    let e_lst' = 
+      List.map (fun ed -> new_expr_desc @@ recurse ed.body) e_lst
+    in 
+    List e_lst'
+  | ListCons (e1, e2) -> 
+    let e1_body = e1.body in
+    let e2_body = e2.body in
+    let e1' = new_expr_desc @@ e1_body in
+    let e2' = new_expr_desc @@ e2_body in
+    ListCons (e1', e2') 
+  | Assert e -> 
+    let e_body = e.body in
+    let e' = new_expr_desc @@ e_body in
+    Assert e'
+  | Assume e -> 
+    let e_body = e.body in
+    let e' = new_expr_desc @@ e_body in
+    Assume e'
 ;;
 
 let get_natodefa_equivalent_expr mappings odefa_ident =

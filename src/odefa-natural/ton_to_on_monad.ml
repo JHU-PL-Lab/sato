@@ -2,6 +2,15 @@ open Batteries;;
 
 open On_ast;;
 
+let counter = ref 0;;
+let fresh_tag () = 
+  let c = !counter in
+  (counter := c - 1); c
+
+let new_expr_desc (e : 'a expr) : 'a expr_desc = 
+  {tag = fresh_tag (); body = e}
+
+
 type translation_context =
   { tc_fresh_suffix_separator : string;
     mutable tc_fresh_name_counter : int;

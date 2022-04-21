@@ -3,6 +3,7 @@ open Jhupllib;;
 
 open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
+open On_ast;;
 
 (* **** Natodefa module signatures **** *)
 
@@ -437,19 +438,19 @@ let deduplicate_list list =
 let odefa_to_on_binop 
   (odefa_binop : Ast.binary_operator) : (On_ast.core_natodefa -> On_ast.core_natodefa -> On_ast.core_natodefa) =
   match odefa_binop with
-  | Ast.Binary_operator_plus -> (fun e1 e2 -> On_ast.Plus (e1, e2))
-  | Ast.Binary_operator_minus -> (fun e1 e2 -> On_ast.Minus (e1, e2))
-  | Ast.Binary_operator_times -> (fun e1 e2 -> On_ast.Times (e1, e2))
-  | Ast.Binary_operator_divide -> (fun e1 e2 -> On_ast.Divide (e1, e2))
-  | Ast.Binary_operator_modulus -> (fun e1 e2 -> On_ast.Modulus (e1, e2))
-  | Ast.Binary_operator_equal_to -> (fun e1 e2 -> On_ast.Equal (e1, e2))
-  | Ast.Binary_operator_not_equal_to -> (fun e1 e2 -> On_ast.Neq (e1, e2))
-  | Ast.Binary_operator_less_than -> (fun e1 e2 -> On_ast.LessThan (e1, e2))
-  | Ast.Binary_operator_less_than_or_equal_to -> (fun e1 e2 -> On_ast.Leq (e1, e2))
-  | Ast.Binary_operator_and -> (fun e1 e2 -> On_ast.And (e1, e2))
-  | Ast.Binary_operator_or -> (fun e1 e2 -> On_ast.Or (e1, e2))
-  | Ast.Binary_operator_xor -> (fun e1 e2 -> On_ast.Neq (e1, e2))
-  | Ast.Binary_operator_xnor -> (fun e1 e2 -> On_ast.Equal (e1, e2))
+  | Ast.Binary_operator_plus -> (fun e1 e2 -> On_ast.Plus (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_minus -> (fun e1 e2 -> On_ast.Minus (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_times -> (fun e1 e2 -> On_ast.Times (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_divide -> (fun e1 e2 -> On_ast.Divide (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_modulus -> (fun e1 e2 -> On_ast.Modulus (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_equal_to -> (fun e1 e2 -> On_ast.Equal (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_not_equal_to -> (fun e1 e2 -> On_ast.Neq (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_less_than -> (fun e1 e2 -> On_ast.LessThan (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_less_than_or_equal_to -> (fun e1 e2 -> On_ast.Leq (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_and -> (fun e1 e2 -> On_ast.And (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_or -> (fun e1 e2 -> On_ast.Or (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_xor -> (fun e1 e2 -> On_ast.Neq (new_expr_desc e1, new_expr_desc e2))
+  | Ast.Binary_operator_xnor -> (fun e1 e2 -> On_ast.Equal (new_expr_desc e1, new_expr_desc e2))
 ;;
 
 let odefa_to_natodefa_error 

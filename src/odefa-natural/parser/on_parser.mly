@@ -32,39 +32,48 @@ let record_from_list pr_list =
      (fun acc (lbl, v) -> add_record_entry lbl v acc)
      Ident_map.empty
 
-let new_rec_fun_with_type fun_sig_and_type let_body = 
+let new_rec_fun_with_type 
+  (fun_sig_and_type : (syntactic_only funsig * syntactic_only expr) list) 
+  (let_body : syntactic_only expr_desc) = 
   let fun_sig_list = List.map fst fun_sig_and_type in 
-  let fun_type_list = List.map snd fun_sig_and_type in
+  let fun_type_list = 
+    fun_sig_and_type 
+    |> List.map (fun p -> new_expr_desc (snd p)) 
+  in
   LetRecFunWithType (fun_sig_list, let_body, fun_type_list)
 
-let new_let_fun_with_type fun_sig_and_type let_body =
+let new_let_fun_with_type 
+  (fun_sig_and_type : (syntactic_only funsig * syntactic_only expr)) 
+  (let_body : syntactic_only expr_desc) =
   let fun_sig, fun_type = fun_sig_and_type in
-  LetFunWithType (fun_sig, let_body, fun_type)
+  LetFunWithType (fun_sig, let_body, (new_expr_desc fun_type))
 
 let new_fun_with_type 
   (fun_name : ident) 
-  (typed_param_list : (ident * syntactic_only expr) list) 
-  (return_type : syntactic_only expr)
-  (fun_body : syntactic_only expr) = 
+  (typed_param_list : (ident * syntactic_only expr_desc) list) 
+  (return_type : syntactic_only expr_desc)
+  (fun_body : syntactic_only expr_desc) = 
   let param_list = List.map fst typed_param_list in
-  let (type_list : syntactic_only expr list) = List.map snd typed_param_list in
+  let (type_list : syntactic_only expr_desc list) = List.map snd typed_param_list in
   let function_type_p = 
     match type_list with
+    (* Please throw the correct exception here! *)
     | [] -> failwith "undefined"
     | _ -> 
       let reversed_list = List.rev type_list in
       let last_type = List.hd reversed_list in
       let accumulator = TypeArrow (last_type, return_type) in
       List.fold_left
-          (fun acc -> fun t -> TypeArrow (t, acc)) accumulator (List.tl reversed_list)
+          (fun acc -> fun t -> TypeArrow (t, (new_expr_desc acc))) accumulator 
+          (List.tl reversed_list)
   in
   (Funsig (fun_name, param_list, fun_body), function_type_p)
 
 let new_dependent_fun   
   (fun_name : ident) 
-  (typed_param : (ident * syntactic_only expr)) 
-  (return_type : syntactic_only expr)
-  (fun_body : syntactic_only expr) = 
+  (typed_param : (ident * syntactic_only expr_desc)) 
+  (return_type : syntactic_only expr_desc)
+  (fun_body : syntactic_only expr_desc) = 
   let (param, _) = typed_param in
   (Funsig (fun_name, [param], fun_body), TypeArrowD (typed_param, return_type))
 %}
@@ -173,72 +182,72 @@ expr:
   | appl_expr /* Includes primary expressions */
       { $1 }
   | ASSERT expr
-      { Assert($2) }
+      { Assert(new_expr_desc $2) }
   | ASSUME expr
-      { Assume($2) }
+      { Assume(new_expr_desc $2) }
   | variant_label expr %prec prec_variant
-      { VariantExpr($1, $2) }
+      { VariantExpr($1, new_expr_desc $2) }
   | expr ASTERISK expr
-      { Times($1, $3) }
+      { Times(new_expr_desc $1, new_expr_desc $3) }
   | expr SLASH expr
-      { Divide($1, $3) }
+      { Divide(new_expr_desc $1, new_expr_desc $3) }
   | expr PERCENT expr
-      { Modulus($1, $3) }
+      { Modulus(new_expr_desc $1, new_expr_desc $3) }
   | expr PLUS expr
-      { Plus($1, $3) }
+      { Plus(new_expr_desc $1, new_expr_desc $3) }
   | expr MINUS expr
-      { Minus($1, $3) }
+      { Minus(new_expr_desc $1, new_expr_desc $3) }
   | expr DOUBLE_COLON expr
-      { ListCons($1, $3) }
+      { ListCons(new_expr_desc $1, new_expr_desc $3) }
   | expr EQUAL_EQUAL expr
-      { Equal($1, $3) }
+      { Equal(new_expr_desc $1, new_expr_desc $3) }
   | expr NOT_EQUAL expr
-      { Neq($1, $3) }
+      { Neq(new_expr_desc $1, new_expr_desc $3) }
   | expr GREATER expr
-      { GreaterThan($1, $3) }
+      { GreaterThan(new_expr_desc $1, new_expr_desc $3) }
   | expr GREATER_EQUAL expr
-      { Geq($1, $3) }
+      { Geq(new_expr_desc $1, new_expr_desc $3) }
   | expr LESS expr
-      { LessThan($1, $3) }
+      { LessThan(new_expr_desc $1, new_expr_desc $3) }
   | expr LESS_EQUAL expr
-      { Leq($1, $3) }
+      { Leq(new_expr_desc $1, new_expr_desc $3) }
   | NOT expr
-      { Not($2) }
+      { Not(new_expr_desc $2) }
   | expr AND expr
-      { And($1, $3) }
+      { And(new_expr_desc $1, new_expr_desc $3) }
   | expr OR expr
-      { Or($1, $3) }
+      { Or(new_expr_desc $1, new_expr_desc $3) }
   | IF expr THEN expr ELSE expr %prec prec_if
-      { If($2, $4, $6) }
+      { If(new_expr_desc $2, new_expr_desc $4, new_expr_desc $6) }
   | FUNCTION param_list ARROW expr %prec prec_fun
-      { Function($2, $4) }
+      { Function($2, new_expr_desc $4) }
   | LET REC fun_sig_list IN expr %prec prec_fun
-      { LetRecFun($3, $5) }
+      { LetRecFun($3, new_expr_desc $5) }
   | LET REC fun_sig_with_type_list IN expr %prec prec_let 
-      { new_rec_fun_with_type $3 $5 }
+      { new_rec_fun_with_type $3 (new_expr_desc $5) }
   | LET_D REC fun_sig_dependent_list IN expr %prec prec_let 
-      { new_rec_fun_with_type $3 $5 }
+      { new_rec_fun_with_type $3 (new_expr_desc $5) }
   | LET ident_decl EQUALS expr IN expr %prec prec_let
-      { Let($2, $4, $6) }
+      { Let($2, new_expr_desc $4, new_expr_desc $6) }
   | LET OPEN_PAREN ident_decl COLON expr CLOSE_PAREN EQUALS expr IN expr %prec prec_let
-      { LetWithType($3, $8, $10, $5) }
+      { LetWithType($3, new_expr_desc $8, new_expr_desc $10, new_expr_desc $5) }
   | LET fun_sig IN expr %prec prec_fun
-      { LetFun($2, $4) }
+      { LetFun($2, new_expr_desc $4) }
   | LET fun_sig_with_type IN expr %prec prec_fun
-      { new_let_fun_with_type $2 $4 }
+      { new_let_fun_with_type $2 (new_expr_desc $4) }
   | LET_D fun_sig_dependent IN expr %prec prec_fun
-      { new_let_fun_with_type $2 $4 }
+      { new_let_fun_with_type $2 (new_expr_desc $4) }
   | MATCH expr WITH PIPE? match_expr_list END
-      { Match($2, $5) }
+      { Match(new_expr_desc $2, $5) }
   // Types expressions
   | basic_types { $1 }
   | type_parameter { $1 }
-  | MU ident_decl DOT expr { TypeRecurse ($2, $4) }
-  | expr ARROW expr { TypeArrow ($1, $3) }
-  | OPEN_PAREN ident_decl COLON expr CLOSE_PAREN ARROW expr { TypeArrowD (($2, $4), $7) }
+  | MU ident_decl DOT expr { TypeRecurse ($2, new_expr_desc $4) }
+  | expr ARROW expr { TypeArrow (new_expr_desc $1, new_expr_desc $3) }
+  | OPEN_PAREN ident_decl COLON expr CLOSE_PAREN ARROW expr { TypeArrowD (($2, new_expr_desc $4), new_expr_desc $7) }
   // | OPEN_BRACE_SET basic_types PIPE expr CLOSE_BRACE_SET { TypeSet ($2, Predicate $4) } 
-  | expr DOUBLE_PIPE expr { TypeUnion ($1, $3) }
-  | expr DOUBLE_AMPERSAND expr { TypeIntersect ($1, $3) }
+  | expr DOUBLE_PIPE expr { TypeUnion (new_expr_desc $1, new_expr_desc $3) }
+  | expr DOUBLE_AMPERSAND expr { TypeIntersect (new_expr_desc $1, new_expr_desc $3) }
 ;
 
 type_parameter:
@@ -255,26 +264,26 @@ record_type:
 
 record_type_body:
   | label COLON expr
-      { new_record $1 $3 }
+      { new_record $1 (new_expr_desc $3) }
   | label COLON expr COMMA record_type_body
-      { add_record_entry $1 $3 $5 }
+      { add_record_entry $1 (new_expr_desc $3) $5 }
 ;
 
 basic_types:
   | INT { TypeInt }
   | BOOL_KEYWORD { TypeBool }
   | record_type { $1 }
-  | LIST expr { TypeList $2 }
+  | LIST expr { TypeList (new_expr_desc $2) }
 
 /* let foo x = ... */
 fun_sig:
   | ident_decl param_list EQUALS expr
-      { Funsig ($1, $2, $4) }
+      { Funsig ($1, $2, new_expr_desc $4) }
 
 /* let foo (x : int) ... : int = ... */
 fun_sig_with_type:
   | ident_decl param_list_with_type COLON expr EQUALS expr
-      { new_fun_with_type $1 $2 $4 $6 }
+      { new_fun_with_type $1 $2 (new_expr_desc $4) (new_expr_desc $6) }
 
 fun_sig_dependent_list:
   | fun_sig_dependent { [$1] }
@@ -282,7 +291,7 @@ fun_sig_dependent_list:
 
 fun_sig_dependent:
   | ident_decl param_with_type COLON expr EQUALS expr
-      { new_dependent_fun $1 $2 $4 $6 }
+      { new_dependent_fun $1 $2 (new_expr_desc $4) (new_expr_desc $6) }
 
 /* let rec foo x y = ... with bar a b = ... in ... */
 fun_sig_list:
@@ -296,7 +305,7 @@ fun_sig_with_type_list:
 
 /* (fun x -> x) y */
 appl_expr:
-  | appl_expr primary_expr { Appl($1, $2) }
+  | appl_expr primary_expr { Appl((new_expr_desc $1), (new_expr_desc $2)) }
   | primary_expr { $1 }
 ;
 
@@ -322,7 +331,7 @@ primary_expr:
   | OPEN_PAREN expr CLOSE_PAREN
       { $2 }
   | primary_expr DOT label
-      { RecordProj($1, $3) }
+      { RecordProj((new_expr_desc $1), $3) }
 ;
 
 /* **** Idents + labels **** */
@@ -333,7 +342,7 @@ param_list_with_type:
 ;
 
 param_with_type:
-  | OPEN_PAREN ident_decl COLON expr CLOSE_PAREN { ($2, $4) }
+  | OPEN_PAREN ident_decl COLON expr CLOSE_PAREN { ($2, (new_expr_desc $4)) }
 ;
 
 param_list:
@@ -358,15 +367,15 @@ ident_decl:
 /* {x = 1, y = 2, z = 3} */
 record_body:
   | label EQUALS expr
-      { new_record $1 $3 }
+      { new_record $1 (new_expr_desc $3) }
   | label EQUALS expr COMMA record_body
-      { add_record_entry $1 $3 $5 }
+      { add_record_entry $1 (new_expr_desc $3) $5 }
 ;
 
 /* [1, 2, true] (Unlike ocaml, natodefa lists can be heterogenous) */
 list_body:
-  | expr COMMA list_body { $1 :: $3 }
-  | expr { [$1] }
+  | expr COMMA list_body { (new_expr_desc $1) :: $3 }
+  | expr { [new_expr_desc $1] }
 ;
 
 /* `Variant 2 */
@@ -384,7 +393,7 @@ match_expr_list:
 
 match_expr:
   | pattern ARROW expr
-      { ($1, $3) }
+      { ($1, (new_expr_desc $3)) }
 
 pattern:
   | UNDERSCORE { AnyPat }
