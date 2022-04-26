@@ -2,14 +2,6 @@ open Batteries;;
 
 open On_ast;;
 
-let counter = ref 0;;
-let fresh_tag () = 
-  let c = !counter in
-  (counter := c - 1); c
-
-let new_expr_desc (e : 'a expr) : 'a expr_desc = 
-  {tag = fresh_tag (); body = e}
-
 
 type translation_context =
   { tc_fresh_suffix_separator : string;
@@ -46,6 +38,9 @@ module TonTranslationMonad : sig
 
   (** Map a semantic natodefa expression to the syntactic natodefa type it has **)
   val add_sem_to_syn_mapping : sem_type_natodefa -> syn_type_natodefa -> unit m
+
+  (** Map a semantic natodefa expression to the syntactic natodefa type it has **)
+  val add_error_to_tag_mapping : ident -> int -> unit m
 
   (** Retrieve the typed natodefa to natodefa maps from the monad *)
   val ton_to_on_maps : Ton_to_on_maps.t m
@@ -98,6 +93,11 @@ end = struct
     ctx.tc_ton_to_on_mappings
       <- Ton_to_on_maps.add_sem_syn_expr_mapping ton_on_maps sem_expr syn_expr 
   ;;
+
+  let add_error_to_tag_mapping err_id expr_tag ctx = 
+    let ton_on_maps = ctx.tc_ton_to_on_mappings in
+    ctx.tc_ton_to_on_mappings
+      <- Ton_to_on_maps.add_error_expr_tag_mapping ton_on_maps err_id expr_tag
 
   let ton_to_on_maps ctx = 
     ctx.tc_ton_to_on_mappings

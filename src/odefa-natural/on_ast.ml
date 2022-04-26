@@ -34,6 +34,10 @@ type variant_label = Variant_label of string [@@deriving eq, ord, show, to_yojso
 
 type syntactic_only = [ `Syntactic ]
 
+type semantic_only = [ `Semantic ]
+
+type core_only = [ `Core ]
+
 type 'a syntactic_and_semantic = [< `Syntactic | `Semantic ] as 'a 
 
 type 'a core_and_semantic = [< `Core | `Semantic ] as 'a 

@@ -1,4 +1,5 @@
 open Batteries;;
+open Jhupllib;;
 
 open On_ast;;
 (* open Ton_to_on_maps;; *)
@@ -6,14 +7,15 @@ open Ton_to_on_monad;;
 
 open TonTranslationMonad;;
 
+let lazy_logger = Logger_utils.make_lazy_logger "Ton_to_on";;
+
 let transform_funsig 
-  (f : 'a expr -> 'b expr m) 
+  (f : 'a expr_desc -> 'b expr_desc m) 
   (Funsig (fun_name, params, e) : 'a funsig) 
   : 'b funsig m
   = 
-  let e_body = e.body in
-  let%bind e' = f e_body in
-  return @@ Funsig (fun_name, params, new_expr_desc e')
+  let%bind e' = f e in
+  return @@ Funsig (fun_name, params, e')
 ;;
 (* Phase one of transformation: turning all syntactic types into its
    semantic correspondence.
@@ -47,10 +49,12 @@ let transform_funsig
 
 *)
 
-let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
+let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only expr_desc m =
+  let t = e_desc.body in
+  let _tag = e_desc.tag in
   match t with
   | TypeVar tvar -> 
-    return @@ Appl (new_expr_desc (Var tvar), new_expr_desc (Var tvar))
+    return @@ new_expr_desc @@ Appl (new_expr_desc (Var tvar), new_expr_desc (Var tvar))
   | TypeInt ->
     let generator =
       Function ([Ident "~null"], new_expr_desc Input)
@@ -75,7 +79,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ Record rec_map
+    return @@ new_expr_desc @@ Record rec_map
   | TypeBool ->
     let generator =
       Function ([Ident "~null"], 
@@ -102,7 +106,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ Record rec_map
+    return @@ new_expr_desc @@ Record rec_map
   | TypeRecord r ->
     let%bind generator = 
       let all_bindings = Ident_map.bindings r in
@@ -127,14 +131,13 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       in
       let folder' acc (_, lbl_var, cur_t) = 
         (* TODO: Might want to add an old -> new mapping here *)
-        let cur_t_expr = cur_t.body in
-        let%bind gc_pair = semantic_type_of cur_t_expr in
+        let%bind gc_pair = semantic_type_of cur_t in
         let res = new_expr_desc @@
           Let (lbl_var, 
                new_expr_desc @@
                Appl (
                 new_expr_desc @@ 
-                  RecordProj (new_expr_desc gc_pair, Label "generator"), 
+                  RecordProj (gc_pair, Label "generator"), 
                 new_expr_desc @@ Int 0), 
                acc) 
         in return res 
@@ -157,14 +160,13 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       let fold_fun expr_a (Ident lbl, t) = 
         let%bind lbl_check_id = fresh_ident "lbl_check" in
         (* TODO: Might want to add an old -> new mapping here *)
-        let t_expr = t.body in
-        let%bind cur_gc_pair = semantic_type_of t_expr in
+        let%bind cur_gc_pair = semantic_type_of t in
         return @@
         (Let (lbl_check_id, 
               new_expr_desc @@
               Appl (
                 new_expr_desc @@ 
-                RecordProj (new_expr_desc @@ cur_gc_pair, Label "checker"), 
+                RecordProj (cur_gc_pair, Label "checker"), 
                 new_expr_desc @@ 
                 RecordProj (new_expr_desc @@ Var expr_id, Label lbl)),
               new_expr_desc @@ 
@@ -176,15 +178,14 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       let%bind lbl_check_fst = fresh_ident "lbl_check" in
       let%bind gc_pair_fst = 
         (* TODO: Might want to add an old -> new mapping here *)
-        let first_t_expr = first_type.body in
-        semantic_type_of first_t_expr 
+        semantic_type_of first_type
       in
       let init_acc = 
         Let (lbl_check_fst, 
             new_expr_desc @@ 
             Appl (
               new_expr_desc @@ 
-              RecordProj (new_expr_desc @@ gc_pair_fst, Label "checker"), 
+              RecordProj (gc_pair_fst, Label "checker"), 
               new_expr_desc @@ 
               RecordProj (new_expr_desc @@ Var expr_id, Label first_lbl)), 
             new_expr_desc @@
@@ -220,11 +221,10 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ Record rec_map
+    return @@ new_expr_desc @@ Record rec_map
   | TypeList l ->
     (* TODO: Might need the tag here as well; add mapping*)
-    let l_t = l.body in
-    let%bind gc_pair = semantic_type_of l_t in
+    let%bind gc_pair = semantic_type_of l in
     let%bind generator = 
       let%bind len_id = fresh_ident "len" in
       let%bind list_id = fresh_ident "list" in
@@ -235,7 +235,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
               new_expr_desc @@
               Appl (
                 new_expr_desc @@
-                RecordProj (new_expr_desc gc_pair, Label "generator"), 
+                RecordProj (gc_pair, Label "generator"), 
                 new_expr_desc @@
                 Int 0), 
               new_expr_desc @@
@@ -291,7 +291,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
               new_expr_desc @@
               Appl (
                 new_expr_desc @@
-                RecordProj (new_expr_desc gc_pair, Label "checker"), 
+                RecordProj (gc_pair, Label "checker"), 
                 new_expr_desc @@ Var (Ident "hd")), 
               new_expr_desc @@
               If (new_expr_desc @@ Var elm_check_id, 
@@ -334,23 +334,21 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ Record rec_map
+    return @@ new_expr_desc @@ Record rec_map
   | TypeArrow (t1, t2) ->
     (* TODO: Mapping *)
-    let t1_t = t1.body in
-    let t2_t = t2.body in
-    let%bind gc_pair_dom = semantic_type_of t1_t in
-    let%bind gc_pair_cod = semantic_type_of t2_t in
+    let%bind gc_pair_dom = semantic_type_of t1 in
+    let%bind gc_pair_cod = semantic_type_of t2 in
     let%bind generator = 
       let%bind arg_assume = fresh_ident "arg_assume" in
       let inner_expr = 
         If (new_expr_desc @@
           Appl (new_expr_desc @@ 
-            RecordProj (new_expr_desc gc_pair_dom, Label "checker"), 
+            RecordProj (gc_pair_dom, Label "checker"), 
               new_expr_desc @@ Var arg_assume), 
           new_expr_desc @@
           Appl (new_expr_desc @@ 
-            RecordProj (new_expr_desc gc_pair_cod, Label "generator"), 
+            RecordProj (gc_pair_cod, Label "generator"), 
               new_expr_desc @@ Int 0), 
           new_expr_desc @@ 
             Assert (new_expr_desc @@ Bool false)) in 
@@ -365,7 +363,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
         Let (codom_check_id, 
           new_expr_desc @@
           Appl (new_expr_desc @@
-            RecordProj (new_expr_desc gc_pair_cod, Label "checker"), 
+            RecordProj (gc_pair_cod, Label "checker"), 
           new_expr_desc @@
           Appl (new_expr_desc @@ Var expr_id, new_expr_desc @@ Var arg_assert)), 
           new_expr_desc @@ 
@@ -375,7 +373,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
         Let (arg_assert, 
              new_expr_desc @@ 
              Appl (new_expr_desc @@ 
-              RecordProj (new_expr_desc gc_pair_dom, Label "generator"), 
+              RecordProj (gc_pair_dom, Label "generator"), 
                 new_expr_desc @@ Int 0), 
              new_expr_desc codom_check) in
       return @@ Function ([expr_id], new_expr_desc fun_body)
@@ -385,23 +383,21 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ Record rec_map
+    return @@ new_expr_desc @@ Record rec_map
   | TypeArrowD ((x1, t1), t2) ->
     (* TODO: Mapping *)
-    let t1_t = t1.body in
-    let t2_t = t2.body in
-    let%bind gc_pair_dom = semantic_type_of t1_t in
-    let%bind gc_pair_cod = semantic_type_of t2_t in
+    let%bind gc_pair_dom = semantic_type_of t1 in
+    let%bind gc_pair_cod = semantic_type_of t2 in
     let mk_gc_pair_cod arg = 
       Appl (new_expr_desc @@ 
-        Function ([x1], new_expr_desc gc_pair_cod), new_expr_desc @@ Var arg) 
+        Function ([x1], gc_pair_cod), new_expr_desc @@ Var arg) 
     in
     let%bind generator = 
       let%bind arg_assume = fresh_ident "arg_assume" in
       let inner_expr = 
         If (new_expr_desc @@
             Appl (new_expr_desc @@
-              RecordProj (new_expr_desc gc_pair_dom, Label "checker"), 
+              RecordProj (gc_pair_dom, Label "checker"), 
                 new_expr_desc @@ Var arg_assume), 
             new_expr_desc @@
             Appl (new_expr_desc @@ 
@@ -435,7 +431,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
         Let (arg_assert, 
              new_expr_desc @@
              Appl (new_expr_desc @@
-               RecordProj (new_expr_desc gc_pair_dom, Label "generator"), 
+               RecordProj (gc_pair_dom, Label "generator"), 
                new_expr_desc @@ Int 0), 
              new_expr_desc codom_check) in
       return @@ Function ([expr_id], new_expr_desc fun_body)
@@ -445,17 +441,15 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ Record rec_map
+    return @@ new_expr_desc @@ Record rec_map
   | TypeSet (t, p) ->
-    let t_t = t.body in
-    let p_t = p.body in
-    let%bind gc_pair = semantic_type_of t_t in
-    let%bind p' = semantic_type_of p_t in
+    let%bind gc_pair = semantic_type_of t in
+    let%bind p' = semantic_type_of p in
     let%bind generator = 
       let%bind candidate = fresh_ident "candidate" in
       let pred_check = 
         If (new_expr_desc @@ 
-          Appl (new_expr_desc p', new_expr_desc @@ Var candidate), 
+          Appl (p', new_expr_desc @@ Var candidate), 
           new_expr_desc @@ Var candidate, 
           new_expr_desc @@ Assume (new_expr_desc @@ Bool false)) 
       in
@@ -463,7 +457,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
                           new_expr_desc @@ 
                           Appl (new_expr_desc @@ 
                             RecordProj 
-                              (new_expr_desc gc_pair, 
+                              (gc_pair, 
                                Label "generator"), 
                             new_expr_desc @@ Int 0), 
                           new_expr_desc @@ pred_check) in
@@ -476,18 +470,18 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       let check_pred = 
         Let (pred_check_id, 
              new_expr_desc @@ 
-             Appl (new_expr_desc p', new_expr_desc @@ Var expr_id),
+             Appl (p', new_expr_desc @@ Var expr_id),
              new_expr_desc @@ Var pred_check_id)
       in
       let check_type_body = 
         If (new_expr_desc @@ 
             Appl (new_expr_desc @@
-                  RecordProj (new_expr_desc gc_pair, Label "checker"), 
+                  RecordProj (gc_pair, Label "checker"), 
                   new_expr_desc @@ Var expr_id),
             new_expr_desc @@ check_pred,
             new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-                  RecordProj (new_expr_desc gc_pair, Label "checker"), 
+                  RecordProj (gc_pair, Label "checker"), 
                   new_expr_desc @@ Var expr_id))
       in
       let check_type = 
@@ -510,12 +504,10 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
                           Appl (RecordProj (gc_pair_pred, Label "checker"), p'),
                           pred_cond)
     in *)
-    return @@ Record rec_map
+    return @@ new_expr_desc @@ Record rec_map
   | TypeUnion (t1, t2) ->
-    let t1_t = t1.body in
-    let t2_t = t2.body in
-    let%bind gc_pair1 = semantic_type_of t1_t in
-    let%bind gc_pair2 = semantic_type_of t2_t in
+    let%bind gc_pair1 = semantic_type_of t1 in
+    let%bind gc_pair2 = semantic_type_of t2 in
     let%bind generator = 
       let%bind select_int = fresh_ident "select_int" in
       let branch = If (new_expr_desc @@ 
@@ -524,12 +516,12 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
                             new_expr_desc @@ Int 0), 
                        new_expr_desc @@ 
                        Appl (new_expr_desc @@ 
-                         RecordProj (new_expr_desc gc_pair1, Label "generator"), 
+                         RecordProj (gc_pair1, Label "generator"), 
                          new_expr_desc @@ Int 0), 
                        new_expr_desc @@ 
                        Appl (new_expr_desc @@ 
                              RecordProj 
-                              (new_expr_desc gc_pair2, Label "generator"), 
+                              (gc_pair2, Label "generator"), 
                               new_expr_desc @@ Int 0)) in
       let gen_expr = 
         Let (select_int, new_expr_desc Input, new_expr_desc branch) 
@@ -543,7 +535,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       let checker1_inner = 
         If (new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-                  RecordProj (new_expr_desc gc_pair2, Label "checker"), 
+                  RecordProj (gc_pair2, Label "checker"), 
                   new_expr_desc @@ Var expr_id),
             new_expr_desc @@ Bool true,
             new_expr_desc @@ Var fail_id)
@@ -551,7 +543,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       let checker1 = 
         If (new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-                  RecordProj (new_expr_desc gc_pair1, Label "checker"), 
+                  RecordProj (gc_pair1, Label "checker"), 
                   new_expr_desc @@ Var expr_id), 
             new_expr_desc @@ Bool true, 
             new_expr_desc @@ checker1_inner) 
@@ -559,7 +551,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       let checker2_inner = 
         If (new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-              RecordProj (new_expr_desc gc_pair1, Label "checker"), 
+              RecordProj (gc_pair1, Label "checker"), 
               new_expr_desc @@ Var expr_id),
             new_expr_desc @@ Bool true,
             new_expr_desc @@ Var fail_id)
@@ -567,7 +559,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       let checker2 = 
         If (new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-                  RecordProj (new_expr_desc gc_pair2, Label "checker"), 
+                  RecordProj (gc_pair2, Label "checker"), 
                   new_expr_desc @@ Var expr_id), 
             new_expr_desc @@ Bool true, 
             new_expr_desc @@ checker2_inner) 
@@ -590,18 +582,16 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ Record rec_map
+    return @@ new_expr_desc @@ Record rec_map
   | TypeIntersect (t1, t2) -> 
-    let t1_t = t1.body in
-    let t2_t = t2.body in
-    let%bind gc_pair1 = semantic_type_of t1_t in
-    let%bind gc_pair2 = semantic_type_of t2_t in
+    let%bind gc_pair1 = semantic_type_of t1 in
+    let%bind gc_pair2 = semantic_type_of t2 in
     let%bind generator = 
       let%bind candidate_var = fresh_ident "candidate" in
       let validate = 
         If (new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-              RecordProj (new_expr_desc gc_pair2, Label "checker"), 
+              RecordProj (gc_pair2, Label "checker"), 
               new_expr_desc @@ (Var candidate_var)), 
             new_expr_desc @@ Var candidate_var, 
             new_expr_desc @@ Assume (new_expr_desc @@ Bool false)) 
@@ -610,7 +600,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
         Let (candidate_var, 
              new_expr_desc @@ 
              Appl (new_expr_desc @@ 
-               RecordProj (new_expr_desc gc_pair1, Label "generator"), 
+               RecordProj (gc_pair1, Label "generator"), 
                new_expr_desc @@ Int 0), 
              new_expr_desc @@ validate) 
       in
@@ -623,7 +613,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
         If (new_expr_desc @@ Var fail_id,
             new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-              RecordProj (new_expr_desc gc_pair2, Label "checker"), 
+              RecordProj (gc_pair2, Label "checker"), 
               new_expr_desc @@ Var expr_id), 
             new_expr_desc @@ Var fail_id) 
       in
@@ -631,7 +621,7 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
         Let (fail_id, 
              new_expr_desc @@ 
              Appl (new_expr_desc @@ 
-               RecordProj (new_expr_desc gc_pair1, Label "checker"), 
+               RecordProj (gc_pair1, Label "checker"), 
                new_expr_desc @@ Var expr_id), 
              new_expr_desc @@ fun_body_inner)
       in
@@ -642,13 +632,13 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ Record rec_map
+    return @@ new_expr_desc @@ Record rec_map
   | TypeRecurse (t_var, t') ->
-    let t_t = t'.body in
-    let%bind gc_pair = semantic_type_of t_t in
+    let%bind gc_pair = semantic_type_of t' in
     let%bind primer_id = fresh_ident "primer" in
-    return @@ Let (primer_id, 
-                   new_expr_desc @@ Function ([t_var], new_expr_desc gc_pair), 
+    return @@ 
+    new_expr_desc @@ Let (primer_id, 
+                   new_expr_desc @@ Function ([t_var], gc_pair), 
                    new_expr_desc @@ 
                    Appl (new_expr_desc @@ Var primer_id, 
                      new_expr_desc @@ Var primer_id))
@@ -674,32 +664,27 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ Record rec_map
+    return @@ new_expr_desc @@ Record rec_map
   (* These are constant functions that only modify the types *)
-  | Int n -> return @@ Int n
-  | Bool b -> return @@ Bool b
-  | Var x -> return @@ Var x
-  | Input -> return @@ Input
-  | Untouched s -> return @@ Untouched s
-  | TypeError x -> return @@ TypeError x
+  | Int n -> return @@ new_expr_desc @@ Int n
+  | Bool b -> return @@ new_expr_desc @@ Bool b
+  | Var x -> return @@ new_expr_desc @@ Var x
+  | Input -> return @@ new_expr_desc @@ Input
+  | Untouched s -> return @@ new_expr_desc @@ Untouched s
+  | TypeError x -> return @@ new_expr_desc @@ TypeError x
   (* All other expressions are homomorphic *)
   (* TODO: Add mappings here *)
   | Function (id_lst, f_expr) -> 
-    let f_expr_e = f_expr.body in
-    let%bind f_expr' = semantic_type_of f_expr_e in
-    return @@ Function (id_lst, new_expr_desc f_expr')
+    let%bind f_expr' = semantic_type_of f_expr in
+    return @@ new_expr_desc @@ Function (id_lst, f_expr')
   | Appl (e1, e2) -> 
-    let e1_e = e1.body in
-    let e2_e = e2.body in
-    let%bind e1' = semantic_type_of e1_e in
-    let%bind e2' = semantic_type_of e2_e in
-    return @@ Appl (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Appl (e1', e2')
   | Let (x, e1, e2) -> 
-    let e1_e = e1.body in
-    let e2_e = e2.body in
-    let%bind e1' = semantic_type_of e1_e in
-    let%bind e2' = semantic_type_of e2_e in
-    return @@ Let (x, new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Let (x, e1', e2')
   | LetRecFun (sig_lst, e) ->
     begin
       let%bind sig_lst' = 
@@ -707,9 +692,8 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
         |> List.map (transform_funsig semantic_type_of) 
         |> sequence 
       in 
-      let e_body = e.body in
-      let%bind e' = semantic_type_of e_body in
-      return @@ LetRecFun (sig_lst', new_expr_desc e')
+      let%bind e' = semantic_type_of e in
+      return @@ new_expr_desc @@ LetRecFun (sig_lst', e')
     end
   | LetFun (fun_sig, e) ->
     begin
@@ -717,21 +701,18 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
         fun_sig
         |> transform_funsig semantic_type_of
       in
-      let e_body = e.body in
-      let%bind e' = semantic_type_of e_body in
-      return @@ LetFun (fun_sig', new_expr_desc e')
+      let%bind e' = semantic_type_of e in
+      return @@ new_expr_desc @@ LetFun (fun_sig', e')
     end
   | LetWithType (x, e1, e2, t) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let t_body = t.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    let%bind t' = semantic_type_of t_body in
-    let%bind () = add_sem_to_syn_mapping (Var x) t_body in
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    let%bind t' = semantic_type_of t in
+    let%bind () = add_sem_to_syn_mapping (Var x) t.body in
     (* let%bind () = add_natodefa_expr_error_structure_mapping (Var x) ? in *)
     return @@ 
-      LetWithType (x, new_expr_desc e1', new_expr_desc e2', new_expr_desc t')
+    new_expr_desc @@ 
+      LetWithType (x, e1', e2', t')
   | LetRecFunWithType (sig_lst, e, t_lst) ->
     begin
       let sig_t_lst = List.combine sig_lst t_lst in
@@ -749,18 +730,13 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       in
       let%bind t_lst' =
         t_lst 
-        |> List.map (fun ed -> ed.body)
         |> List.map semantic_type_of
         |> sequence
       in 
-      let t_lst'' = 
-        t_lst'
-        |> List.map (fun e -> new_expr_desc e)
-      in
-      let e_body = e.body in
-      let%bind e' = semantic_type_of e_body in
+      let%bind e' = semantic_type_of e in
       return @@ 
-        LetRecFunWithType (sig_lst', new_expr_desc e', t_lst'')
+      new_expr_desc @@ 
+        LetRecFunWithType (sig_lst', e', t_lst')
     end
   | LetFunWithType (fun_sig, e, t) -> 
     begin
@@ -770,115 +746,81 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
         fun_sig 
         |> transform_funsig semantic_type_of
       in
-      let e_body = e.body in
-      let t_body = t.body in
-      let%bind e' = semantic_type_of e_body in
-      let%bind t' = semantic_type_of t_body in
-      return @@ LetFunWithType (fun_sig', new_expr_desc e', new_expr_desc t')
+      let%bind e' = semantic_type_of e in
+      let%bind t' = semantic_type_of t in
+      return @@
+      new_expr_desc @@ LetFunWithType (fun_sig', e', t')
     end
   | Plus (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ Plus (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Plus (e1', e2')
   | Minus (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ Minus (new_expr_desc e1', new_expr_desc e2')
-  | Times (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ Times (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Minus (e1', e2')
+  | Times (e1, e2) ->
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Times (e1', e2')
   | Divide (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ Divide (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Divide (e1', e2')
   | Modulus (e1, e2) ->
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ Modulus (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Modulus (e1', e2')
   | Equal (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ Equal (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Equal (e1', e2')
   | Neq (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ Neq (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Neq (e1', e2')
   | LessThan (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ LessThan (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ LessThan (e1', e2')
   | Leq (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ Leq (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Leq (e1', e2')
   | GreaterThan (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ GreaterThan (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ GreaterThan (e1', e2')
   | Geq (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ Geq (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Geq (e1', e2')
   | And (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ And (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ And (e1', e2')
   | Or (e1, e2) ->
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ Or (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ Or (e1', e2')
   | Not e -> 
-    let e_body = e.body in
-    let%bind e' = semantic_type_of e_body in
-    return @@ Not (new_expr_desc e')
+    let%bind e' = semantic_type_of e in
+    return @@ new_expr_desc @@ Not e'
   | If (e1, e2, e3) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let e3_body = e3.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    let%bind e3' = semantic_type_of e3_body in
-    return @@ If (new_expr_desc e1', new_expr_desc e2', new_expr_desc e3')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    let%bind e3' = semantic_type_of e3 in
+    return @@ new_expr_desc @@ If (e1', e2', e3')
   | Record m -> 
-    let%bind m' = ident_map_map_m (fun e -> semantic_type_of e.body) m in
-    let m'' = Ident_map.map (fun t -> new_expr_desc t) m' in
-    return @@ Record m''
+    let%bind m' = ident_map_map_m semantic_type_of m in
+    return @@ new_expr_desc @@ Record m'
   | RecordProj (e, l) ->
-    let e_body = e.body in
-    let%bind e' = semantic_type_of e_body in
-    return @@ RecordProj (new_expr_desc e', l)
+    let%bind e' = semantic_type_of e in
+    return @@ new_expr_desc @@ RecordProj (e', l)
   | Match (e, pattern_expr_lst) ->
-    let e_body = e.body in
-    let%bind e' = semantic_type_of e_body in
+    let%bind e' = semantic_type_of e in
     let mapper (pat, expr) =
-      let%bind expr' = semantic_type_of expr.body in 
+      let%bind expr' = semantic_type_of expr in 
       return @@ (pat, expr') 
     in
     let%bind pattern_expr_lst' = 
@@ -886,39 +828,27 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
       |> List.map mapper 
       |> sequence
     in
-    let pattern_expr_lst'' = 
-      List.map (fun (p, e) -> (p, new_expr_desc e)) pattern_expr_lst'
-    in
-    return @@ Match (new_expr_desc e', pattern_expr_lst'')
+    return @@ new_expr_desc @@ Match (e', pattern_expr_lst')
   | VariantExpr (lbl, e) -> 
-    let e_body = e.body in
-    let%bind e' = semantic_type_of e_body in
-    return @@ VariantExpr (lbl, new_expr_desc e')
+    let%bind e' = semantic_type_of e in
+    return @@ new_expr_desc @@ VariantExpr (lbl, e')
   | List expr_lst -> 
     let%bind expr_lst' = 
       expr_lst
-      |> List.map (fun ed -> ed.body)
       |> List.map semantic_type_of
       |> sequence
     in
-    let expr_lst'' = 
-      List.map (fun e -> new_expr_desc e) expr_lst'
-    in
-    return @@ List expr_lst''
+    return @@ new_expr_desc @@ List expr_lst'
   | ListCons (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = semantic_type_of e1_body in
-    let%bind e2' = semantic_type_of e2_body in
-    return @@ ListCons (new_expr_desc e1', new_expr_desc e2')
+    let%bind e1' = semantic_type_of e1 in
+    let%bind e2' = semantic_type_of e2 in
+    return @@ new_expr_desc @@ ListCons (e1', e2')
   | Assert e ->
-    let e_body = e.body in
-    let%bind e' = semantic_type_of e_body in
-    return @@ Assert (new_expr_desc e')
+    let%bind e' = semantic_type_of e in
+    return @@ new_expr_desc @@ Assert e'
   | Assume e -> 
-    let e_body = e.body in
-    let%bind e' = semantic_type_of e_body in
-    return @@ Assume (new_expr_desc e')
+    let%bind e' = semantic_type_of e in
+    return @@ new_expr_desc @@ Assume e'
 
 (* Phase two of the transformation: erasing all type signatures from 
    the code. By the end of this phase, there should no longer be any
@@ -927,31 +857,28 @@ let rec semantic_type_of (t : syn_type_natodefa) : sem_type_natodefa m =
 (* Note (Earl): Will have to have a separate variable for each "assert false".
    Can't tell the origin of error otherwise.
 *)
-and typed_non_to_on (e : sem_type_natodefa) : core_natodefa m = 
+and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m = 
+  let e = e_desc.body in
+  let _tag = e_desc.tag in
   match e with
-  | Int n -> return @@ Int n
-  | Bool b -> return @@ Bool b
-  | Var x -> return @@ Var x
-  | Input -> return @@ Input
-  | Untouched s -> return @@ Untouched s
+  | Int n -> return @@ new_expr_desc @@ Int n
+  | Bool b -> return @@ new_expr_desc @@ Bool b
+  | Var x -> return @@ new_expr_desc @@ Var x
+  | Input -> return @@ new_expr_desc @@ Input
+  | Untouched s -> return @@ new_expr_desc @@ Untouched s
   (* TODO (Earl): Come back to here to add mappings to dictionary *)
-  | TypeError x -> return @@ TypeError x
+  | TypeError x -> return @@ new_expr_desc @@ TypeError x
   | Function (id_lst, e) -> 
-    let e_body = e.body in
-    let%bind e' = typed_non_to_on e_body in
-    return @@ Function (id_lst, new_expr_desc e')
+    let%bind e' = typed_non_to_on e in
+    return @@ new_expr_desc @@ Function (id_lst, e')
   | Appl (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Appl (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Appl (e1', e2') 
   | Let (x, e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Let (x, new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@  Let (x, e1', e2') 
   | LetRecFun (sig_lst, e) ->
     begin
       let%bind sig_lst' = 
@@ -959,9 +886,8 @@ and typed_non_to_on (e : sem_type_natodefa) : core_natodefa m =
         |> List.map (transform_funsig typed_non_to_on)
         |> sequence
       in
-      let e_body = e.body in
-      let%bind e' = typed_non_to_on e_body in
-      return @@ LetRecFun (sig_lst', new_expr_desc e')
+      let%bind e' = typed_non_to_on e in
+      return @@ new_expr_desc @@ LetRecFun (sig_lst', e')
     end
   | LetFun (fun_sig, e) ->
     begin
@@ -969,60 +895,57 @@ and typed_non_to_on (e : sem_type_natodefa) : core_natodefa m =
         fun_sig  
         |> (transform_funsig typed_non_to_on) 
       in
-      let e_body = e.body in
-      let%bind e' = typed_non_to_on e_body in
-      return @@ LetFun (sig', new_expr_desc e')
+      let%bind e' = typed_non_to_on e in
+      return @@ new_expr_desc @@ LetFun (sig', e')
     end
   | LetWithType (x, e1, e2, type_decl) ->
     begin
-      let type_decl_body = type_decl.body in
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind type_decl' = typed_non_to_on type_decl_body in
-      let%bind e1' = typed_non_to_on e1_body in
-      let%bind e2' = typed_non_to_on e2_body in
+      let%bind type_decl' = typed_non_to_on type_decl in
+      let%bind e1' = typed_non_to_on e1 in
+      let%bind e2' = typed_non_to_on e2 in
       let%bind check_res = fresh_ident "check_res" in
       let%bind () = add_error_to_natodefa_mapping check_res (Var x) in
       let res_cls = 
         If (new_expr_desc @@ Var check_res, 
-            new_expr_desc e2', 
+            e2', 
             new_expr_desc @@ TypeError check_res) 
       in
       let check_cls = 
         Let (check_res, 
              new_expr_desc @@ 
              Appl (new_expr_desc @@ 
-               RecordProj (new_expr_desc type_decl', Label "checker"), 
+               RecordProj (type_decl', Label "checker"), 
                new_expr_desc @@ Var x), 
              new_expr_desc @@ res_cls) 
       in
-      return @@ Let (x, new_expr_desc e1', new_expr_desc check_cls)
+      return @@ 
+      new_expr_desc @@ Let (x, e1', new_expr_desc check_cls)
     end
   | LetRecFunWithType (sig_lst, e, type_decl_lst) ->
     begin
       let fun_names = List.map (fun (Funsig (id, _, _)) -> id) sig_lst in
       let combined_lst = List.combine fun_names type_decl_lst in
       let folder (f, t) acc = 
-        let%bind t' = typed_non_to_on t.body in
+        let%bind t' = typed_non_to_on t in
         let%bind check_res = fresh_ident "check_res" in
         let%bind () = add_error_to_natodefa_mapping check_res (Var f) in
         let res_cls = 
           If (new_expr_desc @@ Var check_res, 
-              new_expr_desc acc, 
+              acc, 
               new_expr_desc@@ TypeError check_res) 
         in
         let check_cls = 
           Let (check_res, 
                new_expr_desc @@ 
                Appl (new_expr_desc @@ 
-                 RecordProj (new_expr_desc t', Label "checker"), 
+                 RecordProj (t', Label "checker"), 
                  new_expr_desc @@ Var f), 
                new_expr_desc res_cls) 
         in
-        return check_cls
+        return @@ new_expr_desc @@ check_cls
       in
       let%bind test_exprs = 
-        let%bind e' = typed_non_to_on e.body in
+        let%bind e' = typed_non_to_on e in
         list_fold_right_m folder combined_lst e' 
       in
       let%bind sig_lst' = 
@@ -1030,135 +953,102 @@ and typed_non_to_on (e : sem_type_natodefa) : core_natodefa m =
         |> List.map (transform_funsig typed_non_to_on)
         |> sequence 
       in
-      return @@ LetRecFun (sig_lst', new_expr_desc test_exprs)
+      return @@ 
+      new_expr_desc @@ LetRecFun (sig_lst', test_exprs)
     end
   | LetFunWithType ((Funsig (f, _, _) as fun_sig), e, type_decl) ->
     begin
-      let type_decl_body = type_decl.body in
-      let e_body = e.body in
-      let%bind type_decl' = typed_non_to_on type_decl_body in
-      let%bind e' = typed_non_to_on e_body in 
+      let%bind type_decl' = typed_non_to_on type_decl in
+      let%bind e' = typed_non_to_on e in 
       let%bind check_res = fresh_ident "check_res" in
       let%bind () = add_error_to_natodefa_mapping check_res (Var f) in
       let res_cls = 
         If (new_expr_desc @@ Var check_res, 
-            new_expr_desc e', 
+            e', 
             new_expr_desc @@ TypeError check_res) 
       in
       let check_cls = 
         Let (check_res, 
              new_expr_desc @@ 
              Appl (new_expr_desc @@ 
-               RecordProj (new_expr_desc type_decl', Label "checker"), 
+               RecordProj (type_decl', Label "checker"), 
                new_expr_desc @@ Var f), 
              new_expr_desc res_cls) 
       in
       let%bind fun_sig' = (transform_funsig typed_non_to_on) fun_sig in
-      return @@ LetFun (fun_sig', new_expr_desc check_cls)
+      return @@ 
+      new_expr_desc @@ LetFun (fun_sig', new_expr_desc check_cls)
     end
   | Plus (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Plus (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Plus (e1', e2') 
   | Minus (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Minus (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Minus (e1', e2') 
   | Times (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Times (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Times (e1', e2') 
   | Divide (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Divide (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Divide (e1', e2') 
   | Modulus (e1, e2) ->
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Modulus (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Modulus (e1', e2') 
   | Equal (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Equal (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Equal (e1', e2') 
   | Neq (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Neq (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Neq (e1', e2') 
   | LessThan (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ LessThan (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ LessThan (e1', e2')  
   | Leq (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Leq (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Leq (e1', e2') 
   | GreaterThan (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ GreaterThan (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ GreaterThan (e1', e2') 
   | Geq (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Geq (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Geq (e1', e2') 
   | And (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ And (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ And (e1', e2') 
   | Or (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ Or (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ Or (e1', e2') 
   | Not e ->
-    let e_body = e.body in
-    let%bind e' = typed_non_to_on e_body in
-    return @@ Not (new_expr_desc e')
+    let%bind e' = typed_non_to_on e in
+    return @@ new_expr_desc @@ Not e'
   | If (e1, e2, e3) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let e3_body = e3.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    let%bind e3' = typed_non_to_on e3_body in
-    return @@ If (new_expr_desc e1', new_expr_desc e2', new_expr_desc e3') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    let%bind e3' = typed_non_to_on e3 in
+    return @@ new_expr_desc @@ If (e1', e2', e3') 
   | Record m -> 
-    let%bind m' = ident_map_map_m (fun e -> typed_non_to_on e.body) m in
-    let m'' = Ident_map.map (fun e -> new_expr_desc e) m' in
-    return @@ Record m''
+    let%bind m' = ident_map_map_m (fun e -> typed_non_to_on e) m in
+    return @@ new_expr_desc @@ Record m'
   | RecordProj (e, l) -> 
-    let e_body = e.body in
-    let%bind e' = typed_non_to_on e_body in
-    return @@ RecordProj (new_expr_desc e', l)
+    let%bind e' = typed_non_to_on e in
+    return @@ new_expr_desc @@ RecordProj (e', l)
   | Match (e, pattern_expr_lst) ->
-    let e_body = e.body in
-    let%bind e' = typed_non_to_on e_body in
+    let%bind e' = typed_non_to_on e in
     let mapper (pat, expr) =
-      let%bind expr' = typed_non_to_on expr.body in
+      let%bind expr' = typed_non_to_on expr in
       return @@ (pat, expr') 
     in
     let%bind pattern_expr_lst' = 
@@ -1166,48 +1056,50 @@ and typed_non_to_on (e : sem_type_natodefa) : core_natodefa m =
       |> List.map mapper
       |> sequence 
     in
-    let pattern_expr_lst'' = 
-      List.map (fun (p, e) -> (p, new_expr_desc e)) pattern_expr_lst'
-    in
-    return @@ Match (new_expr_desc e', pattern_expr_lst'')
+    return @@ 
+    new_expr_desc @@ 
+    Match (e', pattern_expr_lst')
   | VariantExpr (lbl, e) -> 
-    let e_body = e.body in
-    let%bind e' = typed_non_to_on e_body in
-    return @@ VariantExpr (lbl, new_expr_desc e')
+    let%bind e' = typed_non_to_on e in
+    return @@ new_expr_desc @@ VariantExpr (lbl, e')
   | List expr_lst -> 
     let%bind expr_lst' = 
       expr_lst
-      |> List.map (fun e -> e.body)
       |> List.map typed_non_to_on
       |> sequence
     in
-    let expr_lst'' = 
-      List.map (fun e -> new_expr_desc e) expr_lst'
-    in
-    return @@ List expr_lst''
+    return @@ new_expr_desc @@ List expr_lst'
   | ListCons (e1, e2) -> 
-    let e1_body = e1.body in
-    let e2_body = e2.body in
-    let%bind e1' = typed_non_to_on e1_body in
-    let%bind e2' = typed_non_to_on e2_body in
-    return @@ ListCons (new_expr_desc e1', new_expr_desc e2') 
+    let%bind e1' = typed_non_to_on e1 in
+    let%bind e2' = typed_non_to_on e2 in
+    return @@ new_expr_desc @@ ListCons (e1', e2') 
   | Assert e -> 
-    let e_body = e.body in
-    let%bind e' = typed_non_to_on e_body in
-    return @@ Assert (new_expr_desc e')
+    let%bind e' = typed_non_to_on e in
+    return @@ new_expr_desc @@ Assert e'
   | Assume e -> 
-    let e_body = e.body in
-    let%bind e' = typed_non_to_on e_body in
-    return @@ Assume (new_expr_desc e')
+    let%bind e' = typed_non_to_on e in
+    return @@ new_expr_desc @@ Assume e'
+
+let debug_transform_ton
+  (trans_name : string)
+  (transform : 'a expr_desc -> 'b expr_desc m)
+  (e : 'a expr_desc)
+  : 'b expr_desc m =
+  let%bind e' = transform e in
+  lazy_logger `debug (fun () ->
+    Printf.sprintf "Result of %s:\n%s" trans_name (Pp_utils.pp_to_string On_ast_pp.pp_expr e'.body));
+  return e'
+;;
 
 let transform_natodefa (e : syn_type_natodefa) : (core_natodefa * Ton_to_on_maps.t) = 
   let transformed_expr : (core_natodefa * Ton_to_on_maps.t) m =
     let%bind e' = 
-      return e 
-      >>= semantic_type_of
-      >>= typed_non_to_on
+      return (new_expr_desc e) 
+      >>= debug_transform_ton "initial" (fun e -> return e)
+      >>= debug_transform_ton "typed natodefa phase one" semantic_type_of
+      >>= debug_transform_ton "typed natodefa phase two" typed_non_to_on
     in
     let%bind ton_on_map = ton_to_on_maps in
-    return (e', ton_on_map)
+    return (e'.body, ton_on_map)
   in
   run (new_translation_context ()) transformed_expr

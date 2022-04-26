@@ -25,18 +25,17 @@ module IntermediateExpr_map = struct
   include Pp_utils.Map_pp(M)(IntermediateExpr);;
 end;;
 
-(* type error_alist = (syn_type_natodefa * (ident list)) list *)
-
 type t = {
   error_to_natodefa_expr : sem_type_natodefa Ident_map.t;
   sem_to_syn : syn_type_natodefa IntermediateExpr_map.t;
-  (* natodefa_type_to_error : error_alist OriginalExpr_map.t; *)
+  error_to_expr_tag : int Ident_map.t;
 }
 ;;
 
 let empty = {
   error_to_natodefa_expr = Ident_map.empty;
   sem_to_syn = IntermediateExpr_map.empty;
+  error_to_expr_tag = Ident_map.empty;
   (* natodefa_type_to_error = OriginalExpr_map.empty; *)
 }
 ;;
@@ -57,20 +56,13 @@ let add_sem_syn_expr_mapping mappings sem syn =
   }
 ;;
 
-(* let add_type_error_mapping mappings t_key t_index idents =
-  let type_error_mapping = mappings.natodefa_type_to_error in
-  let og_v_opt = OriginalExpr_map.find_opt t_key type_error_mapping in
-  let v' = 
-    match og_v_opt with
-    | Some l -> 
-      l @ [(t_index, idents)]
-    | None -> [(t_index, idents)]
-  in
+let add_error_expr_tag_mapping mappings err_id expr_tag =
+  let error_expr_tag_mapping = mappings.error_to_expr_tag in
   { mappings with 
-    natodefa_type_to_error = 
-      OriginalExpr_map.add t_key v' type_error_mapping;
+    error_to_expr_tag = 
+      Ident_map.add err_id expr_tag error_expr_tag_mapping;
   }
-;; *)
+;;
 
 let transform_funsig 
   (f : 'a expr -> 'b expr) 
