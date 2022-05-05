@@ -20,11 +20,11 @@ val add_odefa_var_clause_mapping : t -> Ast.ident -> Ast.clause -> t;;
 
 (** Add a mapping from an odefa ident to the natodefa expression that, when
     flattened, produced its odefa clause. *)
-val add_odefa_var_on_expr_mapping : t -> Ast.ident -> On_ast.core_natodefa -> t;;
+val add_odefa_var_on_expr_mapping : t -> Ast.ident -> On_ast.core_natodefa_edesc -> t;;
 
 (** Add a mapping between two natodefa expressions.  These pairs are added
     when let rec, list, and variant expressions/patterns are desuraged. *)
-val add_on_expr_to_expr_mapping : t -> On_ast.core_natodefa -> On_ast.core_natodefa -> t;;
+val add_on_expr_to_expr_mapping : t -> On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc -> t;;
 
 (** Add a mapping between two natodefa idents.  These pairs are to be added
     when an ident is renamed during alphatization. *)
@@ -46,7 +46,7 @@ val get_pre_inst_equivalent_clause : t -> Ast.ident -> Ast.clause;;
 
 (** Get the natodefa expression that the odefa clause that the odefa var
     identifies maps to. *)
-val get_natodefa_equivalent_expr : t -> Ast.ident -> On_ast.core_natodefa;;
+val get_natodefa_equivalent_expr : t -> Ast.ident -> On_ast.core_natodefa_edesc;;
 
 (** Get the natodefa type that a set of record labels corresponds to.  If
     there is no mapping that exists, return a record type by default. *)
@@ -59,3 +59,6 @@ val is_natodefa : t -> bool;;
 (** Returns true if the ident was added during instrumentation, false
     otherwise. *)
 val is_var_instrumenting : t -> Ast.ident -> bool;;
+
+val on_expr_transformer : (On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc) ->
+    On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc;;

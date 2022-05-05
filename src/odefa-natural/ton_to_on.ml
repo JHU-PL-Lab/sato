@@ -51,7 +51,7 @@ let transform_funsig
 
 let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only expr_desc m =
   let t = e_desc.body in
-  let _tag = e_desc.tag in
+  let tag = e_desc.tag in
   match t with
   | TypeVar tvar -> 
     return @@ new_expr_desc @@ Appl (new_expr_desc (Var tvar), new_expr_desc (Var tvar))
@@ -72,6 +72,8 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       let fail_cls = 
         Let (fail_id, new_expr_desc @@ Bool false, new_expr_desc @@ check_cls) 
       in
+      (* Adding error point to tag mapping *)
+      let%bind () = add_error_to_tag_mapping fail_id tag in
       return @@ fail_cls
     in
     let rec_map = 
@@ -99,6 +101,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       let fail_cls = 
         Let (fail_id, new_expr_desc @@ Bool false, new_expr_desc @@ check_cls) 
       in
+      let%bind () = add_error_to_tag_mapping fail_id tag in
       return @@ fail_cls
     in
     let rec_map = 

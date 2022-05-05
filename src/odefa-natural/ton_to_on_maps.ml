@@ -3,38 +3,32 @@ open Jhupllib;;
 
 open On_ast;;
 
-module OriginalExpr = struct
-  include On_ast.TypedExpr;;
-  let pp = On_ast_pp.pp_expr;;
+module Original_expr_desc = struct
+  include On_ast.Typed_expr_desc;;
+  let pp = On_ast_pp.pp_expr_desc;;
 end;;
 
-module IntermediateExpr = struct
-  include On_ast.SemanticTypeExpr;;
-  let pp = On_ast_pp.pp_expr;;
+module Intermediate_expr_desc = struct
+  include On_ast.Semantic_typed_expr_desc;;
+  let pp = On_ast_pp.pp_expr_desc;;
 end;;
 
-module OriginalExpr_map = struct
-  module M = Map.Make(IntermediateExpr);;
+module Intermediate_expr_desc_map = struct
+  module M = Map.Make(Intermediate_expr_desc);;
   include M;;
-  include Pp_utils.Map_pp(M)(IntermediateExpr);;
-end;;
-
-module IntermediateExpr_map = struct
-  module M = Map.Make(IntermediateExpr);;
-  include M;;
-  include Pp_utils.Map_pp(M)(IntermediateExpr);;
+  include Pp_utils.Map_pp(M)(Intermediate_expr_desc);;
 end;;
 
 type t = {
-  error_to_natodefa_expr : sem_type_natodefa Ident_map.t;
-  sem_to_syn : syn_type_natodefa IntermediateExpr_map.t;
+  error_to_natodefa_expr : sem_natodefa_edesc Ident_map.t;
+  sem_to_syn : syn_natodefa_edesc Intermediate_expr_desc_map.t;
   error_to_expr_tag : int Ident_map.t;
 }
 ;;
 
 let empty = {
   error_to_natodefa_expr = Ident_map.empty;
-  sem_to_syn = IntermediateExpr_map.empty;
+  sem_to_syn = Intermediate_expr_desc_map.empty;
   error_to_expr_tag = Ident_map.empty;
   (* natodefa_type_to_error = OriginalExpr_map.empty; *)
 }
@@ -52,7 +46,7 @@ let add_sem_syn_expr_mapping mappings sem syn =
   let sem_syn_expr_mapping = mappings.sem_to_syn in
   { mappings with 
     sem_to_syn = 
-      IntermediateExpr_map.add sem syn sem_syn_expr_mapping;
+    Intermediate_expr_desc_map.add sem syn sem_syn_expr_mapping;
   }
 ;;
 
@@ -73,7 +67,7 @@ let transform_funsig
   Funsig (fun_name, params, new_expr_desc e')
 ;;
 
-let rec sem_natodefa_from_on_err ton_on_maps (on_err : core_natodefa) : sem_type_natodefa = 
+let rec sem_natodefa_from_on_err ton_on_maps (on_err : core_natodefa_edesc) : sem_natodefa_edesc = 
   match on_err with
   | TypeError err_id ->
     (* let () = print_endline @@ show_ident err_id in *)

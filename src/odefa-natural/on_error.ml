@@ -575,12 +575,31 @@ let odefa_to_natodefa_error
         }
       | Some err_loc ->
         (* let () = print_endline "Natodefa Type Error!" in *)
-        let expected_type = Ton_to_on_maps.IntermediateExpr_map.find err_loc ton_on_maps.sem_to_syn in
+        let expected_type = Ton_to_on_maps.Intermediate_expr_desc.find err_loc ton_on_maps.sem_to_syn in
         (* let () = print_endline "after find!" in *)
-        let _t_aliases = odefa_to_on_aliases aliases in
+        let t_aliases = odefa_to_on_aliases aliases in
         (* let () = failwith "SCREAM!" in *)
         (* let () = print_endline "WHERE1" in *)
         let _t_val = odefa_to_on_value aliases in
+        let find_tag =
+          t_aliases
+          |> List.filter_map 
+            (fun alias -> On_ast.Ident_map.find_opt alias ton_on_maps.error_to_expr_tag)
+        in
+        let tag = 
+          if List.is_empty find_tag then failwith "Scream!"
+          else List.hd find_tag
+        in
+        let () = print_endline @@ "tag = " ^ string_of_int tag in
+        let rec helper e =
+          if (e.tag = tag) 
+          then 
+            let () = print_endline @@ On_to_odefa.show_expr e.body in 
+            e
+          else
+            e
+        in
+        let () = On_to_odefa_maps.on_expr_transformer helper expected_type in 
         (* let () = print_endline "WHERE2" in *)
         Error_natodefa_type {
           err_type_aliases = odefa_to_on_aliases aliases;

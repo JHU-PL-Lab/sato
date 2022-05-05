@@ -141,14 +141,17 @@ let new_expr_desc : type a. a expr -> a expr_desc =
   {tag = fresh_tag (); body = e}
 
 type syn_type_natodefa = syntactic_only expr
+type syn_natodefa_edesc = syntactic_only expr_desc
 
 (* type syn_type_natodefa_desc = syntactic_only expr_desc *)
 
 type sem_type_natodefa = [ `Semantic ] expr
+type sem_natodefa_edesc = [ `Semantic ] expr_desc
 
 (* type sem_type_natodefa_desc = [ `Semantic ] expr *)
 
 type core_natodefa = [` Core ] expr
+type core_natodefa_edesc = [` Core ] expr_desc
 
 let rec equal_funsig: type a. a funsig -> a funsig -> bool =
   fun (Funsig (id1, params1, fe1)) (Funsig (id2, params2, fe2)) ->
@@ -395,7 +398,7 @@ and compare_expr : type a. a expr -> a expr -> int =
     (* TODO: Another potential source for bug *)
     | _ -> 1
 
-module type Expr = sig
+module type Expr_desc = sig
   type t;;
   val equal : t -> t -> bool;;
   val compare : t -> t -> int;;
@@ -419,22 +422,22 @@ module CoreExpr : (Expr with type t = core_natodefa) = struct
   let compare = compare_expr;;
 end;; *)
 
-module TypedExpr : (Expr with type t = syn_type_natodefa) = struct
-  type t = syn_type_natodefa;;
-  let equal = equal_expr;;
-  let compare = compare_expr;;
+module Typed_expr_desc : (Expr_desc with type t = syn_natodefa_edesc) = struct
+  type t = syn_natodefa_edesc;;
+  let equal = equal_expr_desc;;
+  let compare = compare_expr_desc;;
 end;;
 
-module SemanticTypeExpr : (Expr with type t = sem_type_natodefa) = struct
-  type t = sem_type_natodefa;;
-  let equal = equal_expr;;
-  let compare = compare_expr;;
+module Semantic_typed_expr_desc : (Expr_desc with type t = sem_natodefa_edesc) = struct
+  type t = sem_natodefa_edesc;;
+  let equal = equal_expr_desc;;
+  let compare = compare_expr_desc;;
 end;;
 
-module CoreExpr : (Expr with type t = core_natodefa) = struct
-  type t = core_natodefa;;
-  let equal = equal_expr;;
-  let compare = compare_expr;;
+module Core_expr_desc : (Expr_desc with type t = core_natodefa_edesc) = struct
+  type t = core_natodefa_edesc;;
+  let equal = equal_expr_desc;;
+  let compare = compare_expr_desc;;
 end;;
 
 module Pattern = struct

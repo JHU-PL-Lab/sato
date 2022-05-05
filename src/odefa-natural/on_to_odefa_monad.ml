@@ -52,10 +52,10 @@ module TranslationMonad : sig
   val is_instrument_var : Ast.var -> bool m
 
   (** Map an odefa var to a natodefa expression *)
-  val add_odefa_natodefa_mapping : Ast.var -> On_ast.core_natodefa -> unit m
+  val add_odefa_natodefa_mapping : Ast.var -> On_ast.core_natodefa_edesc -> unit m
 
   (** Map a natodefa expression to another natodefa expression *)
-  val add_natodefa_expr_mapping : On_ast.core_natodefa -> On_ast.core_natodefa -> unit m
+  val add_natodefa_expr_mapping : On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc -> unit m
 
   (** Map a natodefa ident to another ident. *)
   val add_natodefa_var_mapping : On_ast.ident -> On_ast.ident -> unit m
