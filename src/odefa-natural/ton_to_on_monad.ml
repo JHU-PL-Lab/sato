@@ -34,10 +34,10 @@ module TonTranslationMonad : sig
   val fresh_ident : string -> On_ast.ident m
 
   (** Map an error ident to the semantic natodefa expression **)
-  val add_error_to_natodefa_mapping : ident -> sem_type_natodefa -> unit m
+  val add_error_to_natodefa_mapping : ident -> sem_natodefa_edesc -> unit m
 
   (** Map a semantic natodefa expression to the syntactic natodefa type it has **)
-  val add_sem_to_syn_mapping : sem_type_natodefa -> syn_type_natodefa -> unit m
+  val add_sem_to_syn_mapping : sem_natodefa_edesc -> syn_natodefa_edesc -> unit m
 
   (** Map a semantic natodefa expression to the syntactic natodefa type it has **)
   val add_error_to_tag_mapping : ident -> int -> unit m

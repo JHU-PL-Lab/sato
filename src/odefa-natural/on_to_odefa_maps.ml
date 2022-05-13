@@ -187,7 +187,9 @@ let get_pre_inst_equivalent_clause mappings odefa_ident =
     We need a custom transformer function, rather than the one in utils, 
     because we need to first transform the expression, then recurse (whereas
     transform_expr and transform_expr_m do the other way around). *)
-let rec on_expr_transformer (transformer : On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc) (e_desc : On_ast.core_natodefa_edesc) =
+let rec on_expr_transformer 
+  (transformer : On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc) 
+  (e_desc : On_ast.core_natodefa_edesc) =
   (* let () = print_endline @@ "--------------" in *)
   (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in *)
   (* let () = print_endline @@ "Expression in on expr transformer" in *)
@@ -203,58 +205,61 @@ let rec on_expr_transformer (transformer : On_ast.core_natodefa_edesc -> On_ast.
   (* NOTE: Here we require the invariant that the transformer will
      make sure the transformed expression match the og_tag
   *)
-  let og_tag = e_desc
-  match expr' with
-  | Int _ | Bool _ | Var _ | Input | Untouched _ | TypeError _ -> 
-    new_expr_desc @@ expr'
-  | Record record ->
-    let record' =
-      record
-      |> On_ast.Ident_map.enum
-      |> Enum.map (fun (lbl, e) -> (lbl, recurse e))
-      |> On_ast.Ident_map.of_enum
-    in
-    new_expr_desc @@ Record record'
-  | Match (e, pat_e_lst) ->
-    let pat_e_lst' =
-      List.map (fun (pat, e) -> (pat, recurse e)) pat_e_lst
-    in
-    new_expr_desc @@ Match (recurse e, pat_e_lst')
-  | Function (id_lst, e) -> new_expr_desc @@ Function (id_lst, recurse e)
-  | Appl (e1, e2) -> new_expr_desc @@ Appl (recurse e1, recurse e2)
-  | Let (id, e1, e2) -> new_expr_desc @@ Let (id, recurse e1, recurse e2)
-  | LetFun (fs, e) ->
-    let Funsig (fs_ident, fs_args, e_body) = fs in
-    let fs' = Funsig (fs_ident, fs_args, recurse e_body) in
-    new_expr_desc @@ LetFun (fs', recurse e)
-  | LetRecFun (fs_lst, e) ->
-    let fs_lst' =
-      List.map
-        (fun (Funsig (id, args, e')) -> Funsig (id, args, recurse e'))
-        fs_lst
-    in
-    new_expr_desc @@ LetRecFun (fs_lst', recurse e)
-  | Plus (e1, e2) -> new_expr_desc @@ Plus (recurse e1, recurse e2)
-  | Minus (e1, e2) -> new_expr_desc @@ Minus (recurse e1, recurse e2)
-  | Times (e1, e2) -> new_expr_desc @@ Times (recurse e1, recurse e2)
-  | Divide (e1, e2) -> new_expr_desc @@ Divide (recurse e1, recurse e2)
-  | Modulus (e1, e2) -> new_expr_desc @@ Modulus (recurse e1, recurse e2)
-  | Equal (e1, e2) -> new_expr_desc @@ Equal (recurse e1, recurse e2)
-  | Neq (e1, e2) -> new_expr_desc @@ Neq (recurse e1, recurse e2)
-  | LessThan (e1, e2) -> new_expr_desc @@ LessThan (recurse e1, recurse e2)
-  | Leq (e1, e2) -> new_expr_desc @@ Leq (recurse e1, recurse e2)
-  | GreaterThan (e1, e2) -> new_expr_desc @@ GreaterThan (recurse e1, recurse e2)
-  | Geq (e1, e2) -> new_expr_desc @@ Geq (recurse e1, recurse e2)
-  | And (e1, e2) -> new_expr_desc @@ And (recurse e1, recurse e2)
-  | Or (e1, e2) -> new_expr_desc @@ Or (recurse e1, recurse e2)
-  | Not e -> new_expr_desc @@ Not (recurse e)
-  | If (e1, e2, e3) -> new_expr_desc @@ If (recurse e1, recurse e2, recurse e3)
-  | RecordProj (e, lbl) -> new_expr_desc @@ RecordProj (recurse e, lbl)
-  | VariantExpr (vlbl, e) -> new_expr_desc @@ VariantExpr (vlbl, recurse e)
-  | List (e_lst) -> new_expr_desc @@ List (List.map recurse e_lst)
-  | ListCons (e1, e2) -> new_expr_desc @@ ListCons (recurse e1, recurse e2)
-  | Assert e -> new_expr_desc @@ Assert (recurse e)
-  | Assume e -> new_expr_desc @@ Assume (recurse e)
+  let og_tag = e_desc.tag in
+  let body' = 
+    match expr' with
+    | Int _ | Bool _ | Var _ | Input | Untouched _ | TypeError _ -> 
+      expr'
+    | Record record ->
+      let record' =
+        record
+        |> On_ast.Ident_map.enum
+        |> Enum.map (fun (lbl, e) -> (lbl, recurse e))
+        |> On_ast.Ident_map.of_enum
+      in
+      Record record'
+    | Match (e, pat_e_lst) ->
+      let pat_e_lst' =
+        List.map (fun (pat, e) -> (pat, recurse e)) pat_e_lst
+      in
+      Match (recurse e, pat_e_lst')
+    | Function (id_lst, e) -> Function (id_lst, recurse e)
+    | Appl (e1, e2) -> Appl (recurse e1, recurse e2)
+    | Let (id, e1, e2) -> Let (id, recurse e1, recurse e2)
+    | LetFun (fs, e) ->
+      let Funsig (fs_ident, fs_args, e_body) = fs in
+      let fs' = Funsig (fs_ident, fs_args, recurse e_body) in
+      LetFun (fs', recurse e)
+    | LetRecFun (fs_lst, e) ->
+      let fs_lst' =
+        List.map
+          (fun (Funsig (id, args, e')) -> Funsig (id, args, recurse e'))
+          fs_lst
+      in
+      LetRecFun (fs_lst', recurse e)
+    | Plus (e1, e2) -> Plus (recurse e1, recurse e2)
+    | Minus (e1, e2) -> Minus (recurse e1, recurse e2)
+    | Times (e1, e2) -> Times (recurse e1, recurse e2)
+    | Divide (e1, e2) -> Divide (recurse e1, recurse e2)
+    | Modulus (e1, e2) -> Modulus (recurse e1, recurse e2)
+    | Equal (e1, e2) -> Equal (recurse e1, recurse e2)
+    | Neq (e1, e2) -> Neq (recurse e1, recurse e2)
+    | LessThan (e1, e2) -> LessThan (recurse e1, recurse e2)
+    | Leq (e1, e2) -> Leq (recurse e1, recurse e2)
+    | GreaterThan (e1, e2) -> GreaterThan (recurse e1, recurse e2)
+    | Geq (e1, e2) -> Geq (recurse e1, recurse e2)
+    | And (e1, e2) -> And (recurse e1, recurse e2)
+    | Or (e1, e2) -> Or (recurse e1, recurse e2)
+    | Not e -> Not (recurse e)
+    | If (e1, e2, e3) -> If (recurse e1, recurse e2, recurse e3)
+    | RecordProj (e, lbl) -> RecordProj (recurse e, lbl)
+    | VariantExpr (vlbl, e) -> VariantExpr (vlbl, recurse e)
+    | List (e_lst) -> List (List.map recurse e_lst)
+    | ListCons (e1, e2) -> ListCons (recurse e1, recurse e2)
+    | Assert e -> Assert (recurse e)
+    | Assume e -> Assume (recurse e)
+  in
+  {tag = og_tag; body = body'}
 ;;
 
 let get_natodefa_equivalent_expr mappings odefa_ident =

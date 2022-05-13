@@ -711,7 +711,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
     let%bind t' = semantic_type_of t in
-    let%bind () = add_sem_to_syn_mapping (Var x) t.body in
+    let%bind () = add_sem_to_syn_mapping (new_expr_desc @@ Var x) t in
     (* let%bind () = add_natodefa_expr_error_structure_mapping (Var x) ? in *)
     return @@ 
     new_expr_desc @@ 
@@ -722,8 +722,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       let%bind () = sig_t_lst
         |> list_fold_left_m 
            (fun () (Funsig (f, _, _), f_t) -> 
-              let f_t_body = f_t.body in
-              add_sem_to_syn_mapping (Var f) f_t_body)
+              add_sem_to_syn_mapping (new_expr_desc @@ Var f) f_t)
            ()
       in
       let%bind sig_lst' = 
@@ -744,7 +743,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
   | LetFunWithType (fun_sig, e, t) -> 
     begin
       let Funsig (f, _, _) = fun_sig in
-      let%bind () = add_sem_to_syn_mapping (Var f) t.body in
+      let%bind () = add_sem_to_syn_mapping (new_expr_desc @@ Var f) t in
       let%bind fun_sig' = 
         fun_sig 
         |> transform_funsig semantic_type_of
@@ -907,7 +906,7 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
       let%bind e1' = typed_non_to_on e1 in
       let%bind e2' = typed_non_to_on e2 in
       let%bind check_res = fresh_ident "check_res" in
-      let%bind () = add_error_to_natodefa_mapping check_res (Var x) in
+      let%bind () = add_error_to_natodefa_mapping check_res (new_expr_desc @@ Var x) in
       let res_cls = 
         If (new_expr_desc @@ Var check_res, 
             e2', 

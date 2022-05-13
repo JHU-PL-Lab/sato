@@ -221,8 +221,8 @@ let ident_map_map_m
    writer support. *** *)
 
 type ('env, 'out) m_env_out_expr_transformer =
-  ('env -> On_ast.core_natodefa -> (On_ast.core_natodefa * 'out) TranslationMonad.m) ->
-  'env -> On_ast.core_natodefa -> (On_ast.core_natodefa * 'out) TranslationMonad.m
+  ('env -> On_ast.core_natodefa_edesc -> (On_ast.core_natodefa_edesc * 'out) TranslationMonad.m) ->
+  'env -> On_ast.core_natodefa_edesc -> (On_ast.core_natodefa_edesc * 'out) TranslationMonad.m
 ;;
 
 let rec m_env_out_transform_expr
@@ -230,150 +230,113 @@ let rec m_env_out_transform_expr
     (combiner : 'out -> 'out -> 'out)
     (default : 'out)
     (env : 'env)
-    (e : On_ast.core_natodefa)
-  : (On_ast.core_natodefa * 'out) TranslationMonad.m =
+    (e_desc : On_ast.core_natodefa_edesc)
+  : (On_ast.core_natodefa_edesc * 'out) TranslationMonad.m =
   let recurse = m_env_out_transform_expr transformer combiner default in
   let open TranslationMonad in
   let transform_funsig (On_ast.Funsig(name,args,body)) =
-    let body_body = body.body in
-    let%bind (body', out') = recurse env body_body in
+    let%bind (body', out') = recurse env body in
     let%bind (body'', out'') = transformer recurse env body' in
-    return @@ (On_ast.Funsig(name,args,new_expr_desc body''), combiner out' out'')
+    return @@ (On_ast.Funsig(name,args, body''), combiner out' out'')
   in
-  let%bind ((e' : On_ast.core_natodefa), (out' : 'out)) =
+  let%bind ((e' : On_ast.core_natodefa_edesc), (out' : 'out)) =
+    let e = e_desc.body in
+    let og_tag = e_desc.tag in
     match e with
-    | On_ast.Var x -> return @@ (On_ast.Var x, default)
-    | On_ast.Input -> return @@ (On_ast.Input, default)
+    | On_ast.Var x -> return @@ ({tag = og_tag; body = On_ast.Var x}, default)
+    | On_ast.Input -> return @@ ({tag = og_tag; body = On_ast.Input}, default)
     | On_ast.Function (x, e1) ->
-      let e1_body = e1.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      return @@ (On_ast.Function(x, new_expr_desc e1'), out1)
+      let%bind (e1', out1) = recurse env e1 in
+      return @@ ({tag = og_tag; body = On_ast.Function(x, e1')}, out1)
     | On_ast.Appl (e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Appl(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Appl(e1', e2')}, combiner out1 out2)
     | On_ast.Let (x, e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Let(x, new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Let(x, e1', e2')}, combiner out1 out2)
     | On_ast.LetRecFun (funsigs, e1) ->
-      let e1_body = e1.body in
-      let%bind (e1', out1) = recurse env e1_body in
+      let%bind (e1', out1) = recurse env e1 in
       let%bind (funsigs', outs) =
         lift1 List.split @@ sequence @@ List.map transform_funsig funsigs
       in
       let out = List.fold_left combiner out1 outs in
-      return @@ (On_ast.LetRecFun(funsigs', new_expr_desc e1'), out)
+      return @@ ({tag = og_tag; body = On_ast.LetRecFun(funsigs', e1')}, out)
     | On_ast.LetFun (funsig, e1) ->
-      let e1_body = e1.body in
-      let%bind (e1', out1) = recurse env e1_body in
+      let%bind (e1', out1) = recurse env e1 in
       let%bind (funsig', out2) = transform_funsig funsig in
-      return @@ (On_ast.LetFun(funsig', new_expr_desc e1'), combiner out1 out2)
+      return @@ ({tag = og_tag; body = On_ast.LetFun(funsig', e1')}, combiner out1 out2)
     | On_ast.Plus (e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Plus(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Plus(e1', e2')}, combiner out1 out2)
     | On_ast.Minus (e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Minus(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Minus(e1', e2')}, combiner out1 out2)
     | On_ast.Times (e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Times(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Times(e1', e2')}, combiner out1 out2)
     | On_ast.Divide (e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Divide(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Divide(e1', e2')}, combiner out1 out2)
     | On_ast.Modulus (e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Modulus(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Modulus(e1', e2')}, combiner out1 out2)
     | On_ast.Equal(e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Equal(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Equal(e1', e2')}, combiner out1 out2)
     | On_ast.Neq(e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Neq(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Neq(e1', e2')}, combiner out1 out2)
     | On_ast.LessThan(e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.LessThan(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.LessThan(e1', e2')}, combiner out1 out2)
     | On_ast.Leq(e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Leq(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Leq(e1', e2')}, combiner out1 out2)
     | On_ast.GreaterThan(e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.GreaterThan(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.GreaterThan(e1', e2')}, combiner out1 out2)
     | On_ast.Geq(e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Geq(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Geq(e1', e2')}, combiner out1 out2)
     | On_ast.And(e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.And(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.And(e1', e2')}, combiner out1 out2)
     | On_ast.Or(e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.Or(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.Or(e1', e2')}, combiner out1 out2)
     | On_ast.Not e1 ->
-      let e1_body = e1.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      return @@ (On_ast.Not(new_expr_desc e1'), out1)
+      let%bind (e1', out1) = recurse env e1 in
+      return @@ ({tag = og_tag; body = On_ast.Not(e1')}, out1)
     | On_ast.If (e1, e2, e3) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let e3_body = e3.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      let%bind (e3', out3) = recurse env e3_body in
-      return @@ (On_ast.If(new_expr_desc e1', new_expr_desc e2', new_expr_desc e3'), combiner (combiner out1 out2) out3)
-    | On_ast.Int n -> return @@ (On_ast.Int n, default)
-    | On_ast.Bool b -> return @@ (On_ast.Bool b, default)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      let%bind (e3', out3) = recurse env e3 in
+      return @@ ({tag = og_tag; body = On_ast.If(e1', e2', e3')}, combiner (combiner out1 out2) out3)
+    | On_ast.Int n -> return @@ ({tag = og_tag; body = On_ast.Int n}, default)
+    | On_ast.Bool b -> return @@ ({tag = og_tag; body = On_ast.Bool b}, default)
     | On_ast.Record r ->
       let%bind (mappings, outs) =
         r
         |> On_ast.Ident_map.enum
         |> Enum.map
           (fun (k,v) ->
-             let v_body = v.body in
-             let%bind (v',out') = recurse env v_body in
-             return ((k,new_expr_desc v'), out')
+             let%bind (v',out') = recurse env v in
+             return ((k, v'), out')
           )
         |> List.of_enum
         |> sequence
@@ -382,75 +345,66 @@ let rec m_env_out_transform_expr
       in
       let r' = On_ast.Ident_map.of_enum mappings in
       let out = Enum.fold combiner default outs in
-      return @@ (On_ast.Record r', out)
+      return @@ ({tag = og_tag; body = On_ast.Record r'}, out)
     | On_ast.RecordProj (e1, l) ->
-      let e1_body = e1.body in
-      let%bind (e1', out) = recurse env e1_body in
-      return @@ (On_ast.RecordProj(new_expr_desc e1', l), out)
+      let%bind (e1', out) = recurse env e1 in
+      return @@ ({tag = og_tag; body = On_ast.RecordProj(e1', l)}, out)
     | On_ast.Match (e0, branches) ->
-      let e0_body = e0.body in
-      let%bind (e0', out0) = recurse env e0_body in
+      let%bind (e0', out0) = recurse env e0 in
       let%bind (branches', outs) =
         lift1 List.split @@
         sequence @@
         List.map
           (fun (pat,expr) ->
-             let expr_body = expr.body in
-             let%bind (expr',out') = recurse env expr_body in
-             return ((pat, new_expr_desc expr'), out')
+             let%bind (expr',out') = recurse env expr in
+             return ((pat, expr'), out')
           )
           branches
       in
       let out = List.fold_left combiner out0 outs in
-      return @@ (On_ast.Match(new_expr_desc e0', branches'), out)
+      return @@ ({tag = og_tag; body = On_ast.Match(e0', branches')}, out)
     | On_ast.VariantExpr (l, e) ->
-      let e_body = e.body in
-      let%bind (e', out) = recurse env e_body in
-      return @@ (On_ast.VariantExpr(l, new_expr_desc e'), out)
+      let%bind (e', out) = recurse env e in
+      return @@ ({tag = og_tag; body = On_ast.VariantExpr(l, e')}, out)
     | On_ast.List es ->
       let%bind (es', outs) =
-        lift1 List.split @@ sequence @@ List.map (fun e -> recurse env e.body) es
+        lift1 List.split @@ sequence @@ List.map (fun e -> recurse env e) es
       in
-      let es'' = List.map (fun e -> new_expr_desc e) es' in
       let out = List.fold_left combiner default outs in
-      return @@ (On_ast.List es'', out)
+      return @@ ({tag = og_tag; body = On_ast.List es'}, out)
     | On_ast.ListCons (e1, e2) ->
-      let e1_body = e1.body in
-      let e2_body = e2.body in
-      let%bind (e1', out1) = recurse env e1_body in
-      let%bind (e2', out2) = recurse env e2_body in
-      return @@ (On_ast.ListCons(new_expr_desc e1', new_expr_desc e2'), combiner out1 out2)
+      let%bind (e1', out1) = recurse env e1 in
+      let%bind (e2', out2) = recurse env e2 in
+      return @@ ({tag = og_tag; body = On_ast.ListCons(e1', e2')}, combiner out1 out2)
     | On_ast.Assert e ->
-      let e_body = e.body in
-      let%bind (e', out) = recurse env e_body in
-      return @@ (On_ast.Assert (new_expr_desc e'), out)
+      let%bind (e', out) = recurse env e in
+      return @@ ({tag = og_tag; body = On_ast.Assert e'}, out)
     | On_ast.Assume e ->
-      let e_body = e.body in
-      let%bind (e', out) = recurse env e_body in
-      return @@ (On_ast.Assume (new_expr_desc e'), out)
-    | On_ast.Untouched s -> return @@ (On_ast.Untouched s, default)
-    | On_ast.TypeError x -> return @@ (On_ast.TypeError x, default)
+      let%bind (e', out) = recurse env e in
+      return @@ ({tag = og_tag; body = On_ast.Assume e'}, out)
+    | On_ast.Untouched s -> return @@ ({tag = og_tag; body = On_ast.Untouched s}, default)
+    | On_ast.TypeError x -> return @@ ({tag = og_tag; body = On_ast.TypeError x}, default)
   in
   let%bind (e'', out'') = transformer recurse env e' in
   return (e'', combiner out' out'')
 ;;
 
 type 'env m_env_expr_transformer =
-  ('env -> On_ast.core_natodefa -> On_ast.core_natodefa TranslationMonad.m) ->
-  'env -> On_ast.core_natodefa -> On_ast.core_natodefa TranslationMonad.m
+  ('env -> On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc TranslationMonad.m) ->
+  'env -> On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc TranslationMonad.m
 ;;
 
 let m_env_transform_expr
     (transformer : 'env m_env_expr_transformer)
     (env : 'env)
-    (e : On_ast.core_natodefa)
-  : On_ast.core_natodefa TranslationMonad.m =
+    (e : On_ast.core_natodefa_edesc)
+  : On_ast.core_natodefa_edesc TranslationMonad.m =
   let open TranslationMonad in
   let transformer'
-      (recurse : 'env -> On_ast.core_natodefa -> (On_ast.core_natodefa * unit) m)
+      (recurse : 'env -> On_ast.core_natodefa_edesc -> (On_ast.core_natodefa_edesc * unit) m)
       env
-      (e : On_ast.core_natodefa)
-    : (On_ast.core_natodefa * unit) m =
+      (e : On_ast.core_natodefa_edesc)
+    : (On_ast.core_natodefa_edesc * unit) m =
     let recurse' env e =
       let%bind (e'', ()) = recurse env e in return e''
     in
@@ -464,16 +418,16 @@ let m_env_transform_expr
 ;;
 
 type m_expr_transformer =
-  (On_ast.core_natodefa -> On_ast.core_natodefa TranslationMonad.m) -> On_ast.core_natodefa ->
-  On_ast.core_natodefa TranslationMonad.m
+  (On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc TranslationMonad.m) -> On_ast.core_natodefa_edesc ->
+  On_ast.core_natodefa_edesc TranslationMonad.m
 ;;
 
-let m_transform_expr (transformer : m_expr_transformer) (e : On_ast.core_natodefa)
-  : On_ast.core_natodefa TranslationMonad.m =
+let m_transform_expr (transformer : m_expr_transformer) (e : On_ast.core_natodefa_edesc)
+  : On_ast.core_natodefa_edesc TranslationMonad.m =
   let open TranslationMonad in
   let transformer'
-      (recurse : unit -> On_ast.core_natodefa -> On_ast.core_natodefa m) () (e : On_ast.core_natodefa)
-    : On_ast.core_natodefa TranslationMonad.m =
+      (recurse : unit -> On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc m) () (e : On_ast.core_natodefa_edesc)
+    : On_ast.core_natodefa_edesc TranslationMonad.m =
     let recurse' e = recurse () e in
     transformer recurse' e
   in

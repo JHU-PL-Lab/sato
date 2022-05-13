@@ -100,6 +100,8 @@ let pat_rename_vars
 ;;
 
 (** Performs alpha substitution on a given expression. *)
+(* TODO: Probably should change the type of the function. Operate on expr_desc directly? *)
+(* Doesn't create new subtrees -- should preserve the tags just fine *)
 let rec rename_variable
     (old_name : On_ast.ident)
     (new_name : On_ast.ident)
@@ -285,6 +287,7 @@ let alphatize (e : On_ast.core_natodefa) : On_ast.core_natodefa m =
      the renamed expressions, the new set of declared identifiers, and a
      dictionary mapping the identifiers which were renamed onto their new
      values. *)
+     (* This function also shouldn't create any new subtrees, thus safe to keep og tags *)
   let rec ensure_exprs_unique_names
       (names : Ident.t list)
       (exprs : core_natodefa list)
@@ -563,6 +566,7 @@ let new_odefa_inst_var (expr : On_ast.core_natodefa) (var_name : string) : (Ast.
 ;;
 
 (** Returns the body of a function or conditional with its return variable *)
+(* TODO: When is this ever relavant? *)
 let nonempty_body
     (expr : On_ast.core_natodefa)
     ((body, var) : (Ast.clause list * Ast.var))
