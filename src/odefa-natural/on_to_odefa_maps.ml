@@ -67,7 +67,13 @@ type t = {
       determine if a record was originally a list, variant, or record, depending
       on its labels. *)
   natodefa_idents_to_types : On_ast.type_sig On_labels_map.t;
+
+  false_id_to_subj_var : Ast.var On_ast.Ident_map.t;
+  (** Mapping between abort id and its context information. Used to track back
+      to the origin of an abort. *)
+  (* abort_mapping : abort_value Ast.Ident_map.t; *)
 }
+
 [@@ deriving show]
 ;;
 
@@ -89,6 +95,8 @@ let empty is_natodefa = {
   natodefa_expr_to_expr = Expr_desc_map.empty;
   natodefa_var_to_var = On_ast.Ident_map.empty;
   natodefa_idents_to_types = On_labels_map.empty;
+  false_id_to_subj_var = On_ast.Ident_map.empty;
+  (* abort_mapping = Ast.Ident_map.empty; *)
 }
 ;;
 
@@ -176,6 +184,19 @@ let get_pre_inst_equivalent_clause mappings odefa_ident =
         (Ast.show_ident odefa_ident))
 ;;
 
+let add_false_id_to_subj_var_mapping mappings f_id subj_var = 
+  let false_subj_map = mappings.false_id_to_subj_var in
+  { mappings with
+    false_id_to_subj_var =
+      On_ast.Ident_map.add f_id subj_var false_subj_map
+  }
+(* let add_abort_mapping mappings ab_id ab_ctx =
+  let abort_map = mappings.abort_mapping in
+  { mappings with
+    abort_mapping =
+      Ast.Ident_map.add ab_id ab_ctx abort_map
+  }
+;; *)
 
 (* Note (Earl): The problem is with this function. It is trying to reconstruct 
    the original AST, but we have a match in a let rec that's transformed 
@@ -406,4 +427,8 @@ let is_natodefa mappings = mappings.is_natodefa;;
 let is_var_instrumenting mappings odefa_ident =
   let inst_map = mappings.odefa_instrument_vars_map in
   Ast.Ident_map.mem odefa_ident inst_map
+;;
+
+let get_false_id_to_subj_var_mapping mappings = 
+  mappings.false_id_to_subj_var
 ;;

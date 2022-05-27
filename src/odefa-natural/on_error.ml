@@ -453,10 +453,183 @@ let odefa_to_on_binop
   | Ast.Binary_operator_xnor -> (fun e1 e2 -> On_ast.Equal (new_expr_desc e1, new_expr_desc e2))
 ;;
 
+let rec replace_type 
+  (t_desc : syn_natodefa_edesc) 
+  (new_t : syn_natodefa_edesc) (tag : int) 
+  : syn_natodefa_edesc =
+  let cur_tag = t_desc.tag in
+  let t = t_desc.body in
+  if tag = cur_tag 
+  then 
+    begin
+      (* (print_endline "tag matched!");
+      (print_endline @@ On_to_odefa.show_expr_desc new_t); *)
+      new_t
+    end 
+  else
+  let transform_funsig (Funsig (fid, args, fe_desc)) = 
+    Funsig (fid, args, replace_type fe_desc new_t tag)
+  in
+  let t' = 
+    match t with
+    | Int _ | Bool _ | Var _ | Input | TypeError _ | Untouched _ -> t
+    | Function (args, fe_desc) -> 
+      Function (args, replace_type fe_desc new_t tag) 
+    | Appl (ed1, ed2) -> 
+      Appl (replace_type ed1 new_t tag, replace_type ed2 new_t tag)
+    | Let (x, ed1, ed2) -> 
+      Let (x, replace_type ed1 new_t tag, replace_type ed2 new_t tag)
+    | LetRecFun (funsigs, e_desc) -> 
+      let funsigs' = List.map transform_funsig funsigs in
+      let e_desc' = replace_type e_desc new_t tag in
+      LetRecFun (funsigs', e_desc') 
+    | LetFun (funsig, e_desc) -> 
+      let funsig' = transform_funsig funsig in
+      let e_desc' = replace_type e_desc new_t tag in
+      LetFun (funsig', e_desc')
+    | LetWithType (x, e1_desc, e2_desc, e3_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      let e3_desc' = replace_type e3_desc new_t tag in
+      LetWithType (x, e1_desc', e2_desc', e3_desc')
+    | LetRecFunWithType (funsigs, e_desc, ts) -> 
+      let funsigs' = List.map transform_funsig funsigs in
+      let e_desc' = replace_type e_desc new_t tag in
+      let ts' = List.map (fun ed -> replace_type ed new_t tag) ts in
+      LetRecFunWithType (funsigs', e_desc', ts')
+    | LetFunWithType (funsig, e_desc, t) -> 
+      let funsig' = transform_funsig funsig in
+      let e_desc' = replace_type e_desc new_t tag in
+      let t' = replace_type t new_t tag in
+      LetFunWithType (funsig', e_desc', t')
+    | Plus (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      Plus (e1_desc', e2_desc')
+    | Minus (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      Minus (e1_desc', e2_desc')
+    | Times (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      Times (e1_desc', e2_desc')
+    | Divide (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      Divide (e1_desc', e2_desc')
+    | Modulus (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      Modulus (e1_desc', e2_desc')
+    | Equal (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      Equal (e1_desc', e2_desc')
+    | Neq (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      Neq (e1_desc', e2_desc')
+    | LessThan (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      LessThan (e1_desc', e2_desc')    
+    | Leq (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      Leq (e1_desc', e2_desc')    
+    | GreaterThan (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      GreaterThan (e1_desc', e2_desc')    
+    | Geq (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      Geq (e1_desc', e2_desc')    
+    | And (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      And (e1_desc', e2_desc')    
+    | Or (e1_desc, e2_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      Or (e1_desc', e2_desc')
+    | Not (e_desc) -> 
+      let e_desc' = replace_type e_desc new_t tag in
+      Not (e_desc')
+    | If (e1_desc, e2_desc, e3_desc) -> 
+      let e1_desc' = replace_type e1_desc new_t tag in
+      let e2_desc' = replace_type e2_desc new_t tag in
+      let e3_desc' = replace_type e3_desc new_t tag in
+      If (e1_desc', e2_desc', e3_desc')
+    | Record (ed_map) -> 
+      let ed_map' = Ident_map.map (fun ed -> replace_type ed new_t tag) ed_map in
+      Record (ed_map') 
+    | RecordProj (e_desc, l) ->
+      let e_desc' = replace_type e_desc new_t tag in
+      RecordProj (e_desc', l)
+    | Match (me_desc, ped_lst) -> 
+      let me_desc' = replace_type me_desc new_t tag in
+      let ped_lst' = 
+        List.map (fun (p, ped) -> (p, replace_type ped new_t tag)) ped_lst 
+      in
+      Match (me_desc', ped_lst')
+    | VariantExpr (vl, e_desc) ->
+      let e_desc' = replace_type e_desc new_t tag in
+      VariantExpr (vl, e_desc')
+    | List (ts) -> 
+      let ts' = List.map (fun t -> replace_type t new_t tag) ts in
+      List (ts') 
+    | ListCons (hd_desc, tl_desc) -> 
+      let hd_desc' = replace_type hd_desc new_t tag in
+      let tl_desc' = replace_type tl_desc new_t tag in
+      ListCons (hd_desc', tl_desc') 
+    | Assert (e_desc) -> 
+      let e_desc' = replace_type e_desc new_t tag in
+      Assert (e_desc') 
+    | Assume (e_desc) -> 
+      let e_desc' = replace_type e_desc new_t tag in
+      Assume (e_desc') 
+    | TypeUntouched _ | TypeVar _ | TypeInt | TypeBool -> 
+      t
+    | TypeRecord (td_map) -> 
+      let td_map' = Ident_map.map (fun td -> replace_type td new_t tag) td_map in
+      TypeRecord (td_map') 
+    | TypeList td ->
+      let td' = replace_type td new_t tag in
+      TypeList (td')
+    | TypeArrow (td1, td2) ->
+      let td1' = replace_type td1 new_t tag in
+      let td2' = replace_type td2 new_t tag in
+      TypeArrow (td1', td2')
+    | TypeArrowD ((tid, td1), td2) -> 
+      let td1' = replace_type td1 new_t tag in
+      let td2' = replace_type td2 new_t tag in
+      TypeArrowD ((tid, td1'), td2')
+    | TypeSet (td, pred) ->
+      let td' = replace_type td new_t tag in
+      let pred' = replace_type pred new_t tag in
+      TypeSet (td', pred')
+    | TypeUnion (td1, td2) ->
+      let td1' = replace_type td1 new_t tag in
+      let td2' = replace_type td2 new_t tag in
+      TypeUnion (td1', td2')
+    | TypeIntersect (td1, td2) ->
+      let td1' = replace_type td1 new_t tag in
+      let td2' = replace_type td2 new_t tag in
+      TypeIntersect (td1', td2')
+    | TypeRecurse (tv, td) -> 
+      let td' = replace_type td new_t tag in
+      TypeRecurse (tv, td')
+  in
+  {tag = cur_tag; body = t'}
+;;
+
 let odefa_to_natodefa_error 
     (odefa_on_maps : On_to_odefa_maps.t)
     (ton_on_maps : Ton_to_on_maps.t)
-    (err_loc_option : On_ast.sem_type_natodefa option)
+    (err_loc_option : On_ast.syn_natodefa_edesc option)
+    (err_vals_map : Ast.value On_ast.Ident_map.t)
     (odefa_err : Error.Odefa_error.t)
   : On_error.t =
   (* Helper functions *)
@@ -479,7 +652,7 @@ let odefa_to_natodefa_error
         (* let () = print_endline @@ "current ident: " ^ Ast.show_ident alias in *)
         let temp = odefa_to_on_expr alias in
         (* let () = print_endline @@ "Finished odefa_to_on_aliases" in *)
-        match temp with
+        match (temp.body) with
         | (On_ast.Var ident) -> Some ident
         | _ -> None
       )
@@ -491,7 +664,7 @@ let odefa_to_natodefa_error
   in
   (* let () = failwith "SCREAM!" in *)
   (* let () = print_endline @@ "Post odefa_to_on_aliases" in *)
-  let odefa_to_on_value (aliases : Ast.ident list) : On_ast.core_natodefa =
+  let odefa_to_on_value (aliases : Ast.ident list) : On_ast.core_natodefa_edesc =
     let last_var =
       try
         List.last aliases
@@ -534,11 +707,11 @@ let odefa_to_natodefa_error
       let r_value = odefa_to_on_value r_aliases in
       let constraint_expr =
         let left_expr =
-          if List.is_empty l_aliases_on then l_value else
+          if List.is_empty l_aliases_on then l_value.body else
             On_ast.Var (List.hd l_aliases_on)
         in
         let right_expr =
-          if List.is_empty r_aliases_on then r_value else
+          if List.is_empty r_aliases_on then r_value.body else
             On_ast.Var (List.hd r_aliases_on)
         in
         odefa_to_on_binop op left_expr right_expr
@@ -546,8 +719,8 @@ let odefa_to_natodefa_error
       Error_binop {
         err_binop_left_aliases = l_aliases_on;
         err_binop_right_aliases = r_aliases_on;
-        err_binop_left_val = l_value;
-        err_binop_right_val = r_value;
+        err_binop_left_val = l_value.body;
+        err_binop_right_val = r_value.body;
         err_binop_operation = constraint_expr;
       }
     end
@@ -557,7 +730,7 @@ let odefa_to_natodefa_error
       let aliases = err.err_match_aliases in
       Error_match {
         err_match_aliases = odefa_to_on_aliases aliases;
-        err_match_val = odefa_to_on_value aliases;
+        err_match_val = (odefa_to_on_value aliases).body;
         err_match_expected = odefa_to_on_type err.err_match_expected;
         err_match_actual = odefa_to_on_type err.err_match_actual;
       }
@@ -571,16 +744,46 @@ let odefa_to_natodefa_error
         (* let () = print_endline "Natodefa Value Error!" in *)
         Error_value {
           err_value_aliases = odefa_to_on_aliases aliases;
-          err_value_val = odefa_to_on_value aliases;
+          err_value_val = (odefa_to_on_value aliases).body;
         }
       | Some err_loc ->
         (* let () = print_endline "Natodefa Type Error!" in *)
-        let expected_type = Ton_to_on_maps.Intermediate_expr_desc.find err_loc ton_on_maps.sem_to_syn in
+        (* let () = print_endline @@ "Error_loc: " in *)
+        (* let () = print_endline @@ On_to_odefa.show_expr_desc err_loc in *)
+        let expected_type = 
+          match (err_loc.body) with
+          | LetWithType (_, _, _, t) -> t
+          | LetFunWithType (_, _, t) -> t
+          (* TODO: Need to fix this case later *)
+          | LetRecFunWithType (_, _, ts) -> List.hd ts
+          | _ -> failwith "Shouldn't be here!"
+        in
+        (* let () = print_endline @@ "Expected type: " in *)
+        (* let () = print_endline @@ On_to_odefa.show_expr_desc expected_type in *)
         (* let () = print_endline "after find!" in *)
         let t_aliases = odefa_to_on_aliases aliases in
         (* let () = failwith "SCREAM!" in *)
         (* let () = print_endline "WHERE1" in *)
-        let _t_val = odefa_to_on_value aliases in
+        (* let t_val = odefa_to_on_value aliases in *)
+        let t_val = 
+          t_aliases
+          |> List.filter_map 
+            (fun alias -> 
+              let () = print_endline @@ show_ident alias in
+              On_ast.Ident_map.find_opt alias err_vals_map)
+        in
+        (* let () = print_endline @@ "Value: " in
+        let () = print_endline @@ On_to_odefa.show_expr_desc t_val in *)
+        let new_t = 
+          if List.is_empty t_val then failwith "Scream!"
+          else
+            match (List.hd t_val) with
+            | Value_int _ -> new_expr_desc @@ TypeInt
+            | Value_bool _ -> new_expr_desc @@ TypeBool
+            | _ -> 
+              let () = print_endline @@ Ast_pp.show_value (List.hd t_val) in
+              failwith "Houston we have a problem!"
+        in
         let find_tag =
           t_aliases
           |> List.filter_map 
@@ -588,24 +791,29 @@ let odefa_to_natodefa_error
         in
         let tag = 
           if List.is_empty find_tag then failwith "Scream!"
-          else List.hd find_tag
+          else 
+            (print_endline @@ "Tag: " ^ string_of_int @@ List.hd find_tag);
+            List.hd find_tag
         in
-        let () = print_endline @@ "tag = " ^ string_of_int tag in
-        let rec helper e =
+        let actual_type = 
+          replace_type expected_type new_t tag
+        in
+        (* let () = print_endline @@ "tag = " ^ string_of_int tag in *)
+        (* let rec helper e =
           if (e.tag = tag) 
           then 
-            let () = print_endline @@ On_to_odefa.show_expr e.body in 
+            let () = print_endline @@ On_to_odefa.show_expr_desc e in 
             e
           else
             e
-        in
-        let () = On_to_odefa_maps.on_expr_transformer helper expected_type in 
+        in *)
+        (* let () = On_to_odefa_maps.on_expr_transformer helper expected_type in  *)
         (* let () = print_endline "WHERE2" in *)
         Error_natodefa_type {
           err_type_aliases = odefa_to_on_aliases aliases;
-          err_type_val = odefa_to_on_value aliases;
-          err_type_expected = expected_type;
-          err_type_actual = expected_type;
+          err_type_val = (odefa_to_on_value aliases).body;
+          err_type_expected = expected_type.body;
+          err_type_actual = actual_type.body;
         }
     end
 ;;

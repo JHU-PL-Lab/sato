@@ -35,6 +35,9 @@ val add_on_var_to_var_mapping : t -> On_ast.ident -> On_ast.ident -> t;;
     desugaring lists or variants. *)
 val add_on_idents_to_type_mapping : t -> On_ast.Ident_set.t -> On_ast.type_sig -> t;;
 
+val add_false_id_to_subj_var_mapping : t -> On_ast.ident -> Ast.var -> t;;
+(* val add_abort_mapping : t -> Ast.ident -> abort_value -> t;; *)
+
 (* **** Getter functions **** *)
 
 (** Get an odefa clause that existed before the odefa program was
@@ -59,6 +62,8 @@ val is_natodefa : t -> bool;;
 (** Returns true if the ident was added during instrumentation, false
     otherwise. *)
 val is_var_instrumenting : t -> Ast.ident -> bool;;
+
+val get_false_id_to_subj_var_mapping : t -> Ast.var On_ast.Ident_map.t;;
 
 val on_expr_transformer : (On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc) ->
     On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc;;

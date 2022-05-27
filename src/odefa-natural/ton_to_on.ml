@@ -61,19 +61,22 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     in
     let%bind expr_id = fresh_ident "expr" in 
     let%bind fail_id = fresh_ident "fail" in
+    let match_edesc = 
+      new_expr_desc @@
+      Match (new_expr_desc (Var expr_id), 
+            [(IntPat, new_expr_desc @@ Bool true); 
+             (AnyPat, new_expr_desc @@ Var fail_id)])
+    in
     let%bind checker =
       let check_cls = 
-        Function ([expr_id], 
-          new_expr_desc @@
-          Match (new_expr_desc (Var expr_id), 
-                [(IntPat, new_expr_desc @@ Bool true); 
-                 (AnyPat, new_expr_desc @@ Var fail_id)]))
+        Function ([expr_id], match_edesc)
       in
       let fail_cls = 
         Let (fail_id, new_expr_desc @@ Bool false, new_expr_desc @@ check_cls) 
       in
       (* Adding error point to tag mapping *)
       let%bind () = add_error_to_tag_mapping fail_id tag in
+      let%bind () = add_match_to_error_mapping match_edesc.tag fail_id in
       return @@ fail_cls
     in
     let rec_map = 
@@ -90,18 +93,21 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     in
     let%bind expr_id = fresh_ident "expr" in 
     let%bind fail_id = fresh_ident "fail" in
+    let match_edesc = 
+      new_expr_desc @@
+      Match (new_expr_desc (Var expr_id), 
+            [(BoolPat, new_expr_desc @@ Bool true); 
+             (AnyPat, new_expr_desc @@ Var fail_id)])
+    in
     let%bind checker =
       let check_cls = 
-        Function ([expr_id], 
-          new_expr_desc @@
-          Match (new_expr_desc @@ Var expr_id, 
-                [(BoolPat, new_expr_desc @@ Bool true); 
-                 (AnyPat, new_expr_desc @@ Var fail_id)]))
+        Function ([expr_id], match_edesc)
       in
       let fail_cls = 
         Let (fail_id, new_expr_desc @@ Bool false, new_expr_desc @@ check_cls) 
       in
       let%bind () = add_error_to_tag_mapping fail_id tag in
+      let%bind () = add_match_to_error_mapping match_edesc.tag fail_id in
       return @@ fail_cls
     in
     let rec_map = 
@@ -711,11 +717,10 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
     let%bind t' = semantic_type_of t in
-    let%bind () = add_sem_to_syn_mapping (new_expr_desc @@ Var x) t in
+    let res = new_expr_desc @@ LetWithType (x, e1', e2', t') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
     (* let%bind () = add_natodefa_expr_error_structure_mapping (Var x) ? in *)
-    return @@ 
-    new_expr_desc @@ 
-      LetWithType (x, e1', e2', t')
+    return @@ res
   | LetRecFunWithType (sig_lst, e, t_lst) ->
     begin
       let sig_t_lst = List.combine sig_lst t_lst in
@@ -742,16 +747,18 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     end
   | LetFunWithType (fun_sig, e, t) -> 
     begin
-      let Funsig (f, _, _) = fun_sig in
-      let%bind () = add_sem_to_syn_mapping (new_expr_desc @@ Var f) t in
+      (* let Funsig (f, _, _) = fun_sig in *)
       let%bind fun_sig' = 
         fun_sig 
         |> transform_funsig semantic_type_of
       in
       let%bind e' = semantic_type_of e in
       let%bind t' = semantic_type_of t in
-      return @@
-      new_expr_desc @@ LetFunWithType (fun_sig', e', t')
+      let res = 
+        new_expr_desc @@ LetFunWithType (fun_sig', e', t')
+      in
+      let%bind () = add_sem_to_syn_mapping res e_desc in
+      return @@ res
     end
   | Plus (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
@@ -906,7 +913,7 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
       let%bind e1' = typed_non_to_on e1 in
       let%bind e2' = typed_non_to_on e2 in
       let%bind check_res = fresh_ident "check_res" in
-      let%bind () = add_error_to_natodefa_mapping check_res (new_expr_desc @@ Var x) in
+      let%bind () = add_error_to_natodefa_mapping check_res e_desc in
       let res_cls = 
         If (new_expr_desc @@ Var check_res, 
             e2', 
@@ -930,7 +937,7 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
       let folder (f, t) acc = 
         let%bind t' = typed_non_to_on t in
         let%bind check_res = fresh_ident "check_res" in
-        let%bind () = add_error_to_natodefa_mapping check_res (Var f) in
+        let%bind () = add_error_to_natodefa_mapping check_res e_desc in
         let res_cls = 
           If (new_expr_desc @@ Var check_res, 
               acc, 
@@ -963,7 +970,7 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
       let%bind type_decl' = typed_non_to_on type_decl in
       let%bind e' = typed_non_to_on e in 
       let%bind check_res = fresh_ident "check_res" in
-      let%bind () = add_error_to_natodefa_mapping check_res (Var f) in
+      let%bind () = add_error_to_natodefa_mapping check_res e_desc in
       let res_cls = 
         If (new_expr_desc @@ Var check_res, 
             e', 
@@ -1093,8 +1100,8 @@ let debug_transform_ton
   return e'
 ;;
 
-let transform_natodefa (e : syn_type_natodefa) : (core_natodefa * Ton_to_on_maps.t) = 
-  let transformed_expr : (core_natodefa * Ton_to_on_maps.t) m =
+let transform_natodefa (e : syn_type_natodefa) : (core_natodefa_edesc * Ton_to_on_maps.t) = 
+  let transformed_expr : (core_natodefa_edesc * Ton_to_on_maps.t) m =
     let%bind e' = 
       return (new_expr_desc e) 
       >>= debug_transform_ton "initial" (fun e -> return e)
@@ -1102,6 +1109,6 @@ let transform_natodefa (e : syn_type_natodefa) : (core_natodefa * Ton_to_on_maps
       >>= debug_transform_ton "typed natodefa phase two" typed_non_to_on
     in
     let%bind ton_on_map = ton_to_on_maps in
-    return (e'.body, ton_on_map)
+    return (e', ton_on_map)
   in
   run (new_translation_context ()) transformed_expr

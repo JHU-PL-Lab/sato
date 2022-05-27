@@ -28,7 +28,7 @@ let parse_program
         let natodefa_ast = File.with_file_in filename On_parse.parse_program in
         let (desugared_typed, ton_on_maps) = transform_natodefa natodefa_ast in
         let (odefa_ast, on_odefa_maps) =
-          On_to_odefa.translate desugared_typed
+          On_to_odefa.translate ton_on_maps desugared_typed 
         in
         Ast_wellformedness.check_wellformed_expr odefa_ast;
         (odefa_ast, on_odefa_maps, Some ton_on_maps)

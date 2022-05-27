@@ -47,10 +47,10 @@ module Odefa_error_location
 end;;
 
 module Natodefa_error_location
-  : Error_location with type t = On_ast.sem_type_natodefa = struct
-  type t = On_ast.sem_type_natodefa;;
-  let show = Pp_utils.pp_to_string On_ast_pp.pp_expr;;
-  let show_brief = Pp_utils.pp_to_string On_ast_pp.pp_expr;;
+  : Error_location with type t = On_ast.syn_natodefa_edesc = struct
+  type t = On_ast.syn_natodefa_edesc;;
+  let show = Pp_utils.pp_to_string On_ast_pp.pp_expr_desc;;
+  let show_brief = Pp_utils.pp_to_string On_ast_pp.pp_expr_desc;;
   let to_yojson expr = 
     `String (replace_linebreaks @@ show expr);;
 end;;
@@ -235,61 +235,76 @@ module Natodefa_type_errors : Answer = struct
 
   (* Reporting Natodefa errors. *)
   let answer_from_result steps e x result =
-    let (input_seq, error_opt) =
-      Generator_utils.input_sequence_from_result e x result
-    in
-      match (!odefa_on_maps_option_ref, !ton_on_maps_option_ref) with
-      | (Some odefa_on_maps, Some ton_on_maps) ->
-        begin
-          match error_opt with
-          | Some (error_loc, error_lst) ->
-            (* let () = On_to_odefa_maps.print_natodefa_expr_to_expr odefa_on_maps in *)
-            (* TODO (Earl): This probably should be the place to trace all the way
-               back to the original, user-written Natodefa code.
-               The current issue with how mappings are kept is that the abort vars
-               are bound to the "assert false" statements directly. 
-               Need to find a way to chain up the assert false to the original point of
-               error.
-            *)
-            let on_err_loc =
-              On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps error_loc
-            in
-            (* TODO (Earl): This is pretty hacky, but it'll do for now *)
-            (* More hack? Returns a pair to indicate whether we're handling type error here? *)
-            let actual_err_loc = 
-              Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps on_err_loc
-            in
-            (* If type error, pass a special flag to odefa_to_natodefa_error so that it'll handle
-               value error differently.
-            *)
-            let is_type_error = 
-              match on_err_loc with
-              | TypeError _ -> true
-              | _ -> false
-            in
-            let err_loc_option = 
-              if is_type_error then Some actual_err_loc else None
-            in
-            (* let () = print_endline "before printing list!" in *)
-            (* let () = print_endline @@ string_of_int @@ List.length error_lst in *)
-            (* let () = failwith "SCREAM!" in *)
-            let on_err_list =
-              let mapper = (On_error.odefa_to_natodefa_error odefa_on_maps ton_on_maps err_loc_option) in 
-              (* let () = print_endline "mapper is fine" in *)
-              (* let () = print_endline @@ string_of_int (List.length error_lst) in *)
-              List.map mapper error_lst
-            in
-            (* let () = failwith "SCREAM!" in *)
-            Some {
-              err_input_seq = input_seq;
-              err_location = actual_err_loc;
-              err_errors = on_err_list;
-              err_steps = steps;
-            }
-          | None -> None
-        end
-      | None, _ -> failwith "Odefa/natodefa maps were not set!"
-      | _, None -> failwith "typed natodefa/natodefa maps were not set!"
+    match (!odefa_on_maps_option_ref, !ton_on_maps_option_ref) with
+    | (Some odefa_on_maps, Some ton_on_maps) ->
+      begin
+        let (input_seq, error_opt, err_vals_map) =
+          Generator_utils.input_sequence_from_result_natodefa e x result odefa_on_maps
+        in
+        match error_opt with
+        | Some (error_loc, error_lst) ->
+          (* let () = On_to_odefa_maps.print_natodefa_expr_to_expr odefa_on_maps in *)
+          (* TODO (Earl): This probably should be the place to trace all the way
+              back to the original, user-written Natodefa code.
+              The current issue with how mappings are kept is that the abort vars
+              are bound to the "assert false" statements directly. 
+              Need to find a way to chain up the assert false to the original point of
+              error.
+          *)
+          let on_err_loc =
+            On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps error_loc
+          in
+          let () = print_endline @@ On_to_odefa.show_expr_desc on_err_loc in
+          (* TODO (Earl): This is pretty hacky, but it'll do for now *)
+          (* More hack? Returns a pair to indicate whether we're handling type error here? *)
+          let err_loc_sem = 
+            Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps on_err_loc
+          in
+          let actual_err_loc_opt = 
+            Ton_to_on_maps.Intermediate_expr_desc_map.find_opt 
+            err_loc_sem 
+            ton_on_maps.sem_to_syn
+          in
+          let actual_err_loc = 
+            match actual_err_loc_opt with
+            | Some l -> l
+            | None -> 
+              Ton_to_on_maps.syn_natodefa_from_sem_natodefa 
+              ton_on_maps 
+              err_loc_sem
+          in
+          (* If type error, pass a special flag to odefa_to_natodefa_error so that it'll handle
+              value error differently.
+          *)
+          let is_type_error = 
+            match on_err_loc.body with
+            | TypeError _ -> true
+            | _ -> false
+          in
+          let err_loc_option = 
+            if is_type_error then Some actual_err_loc else None
+          in
+          (* let () = print_endline "before printing list!" in *)
+          (* let () = print_endline @@ string_of_int @@ List.length error_lst in *)
+          (* let () = failwith "SCREAM!" in *)
+          let on_err_list =
+            let mapper = 
+              (On_error.odefa_to_natodefa_error odefa_on_maps ton_on_maps err_loc_option err_vals_map) in 
+            (* let () = print_endline "mapper is fine" in *)
+            (* let () = print_endline @@ string_of_int (List.length error_lst) in *)
+            List.map mapper error_lst
+          in
+          (* let () = failwith "SCREAM!" in *)
+          Some {
+            err_input_seq = input_seq;
+            err_location = actual_err_loc;
+            err_errors = on_err_list;
+            err_steps = steps;
+          }
+        | None -> None
+      end
+    | None, _ -> failwith "Odefa/natodefa maps were not set!"
+    | _, None -> failwith "typed natodefa/natodefa maps were not set!"
   ;;
 
   let set_odefa_natodefa_map odefa_on_maps =

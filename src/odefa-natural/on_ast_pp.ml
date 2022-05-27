@@ -167,8 +167,10 @@ and pp_binop : type a. Format.formatter -> a expr -> unit =
 and pp_expr_desc : 
   type a. Format.formatter -> a expr_desc -> unit = 
   fun formatter e ->
-    Format.fprintf formatter "{tag: %a, body: %a}"
-    Format.pp_print_int e.tag pp_expr e.body
+    (* Format.fprintf formatter "{tag: %a, body: %a}"
+    Format.pp_print_int e.tag pp_expr e.body *)
+    Format.fprintf formatter "%a"
+    pp_expr e.body
 
 and pp_expr : 
   type a. Format.formatter -> a expr -> unit =

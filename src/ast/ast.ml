@@ -42,13 +42,13 @@ end;;
     body of a function). *)
 type freshening_stack =
   | Freshening_stack of ident list
-[@@deriving eq, ord, to_yojson]
+[@@deriving show, eq, ord, to_yojson]
 ;;
 
 (** Variables in the AST. *)
 type var =
   | Var of ident * freshening_stack option
-[@@deriving eq, ord, to_yojson]
+[@@deriving show, eq, ord, to_yojson]
 ;;
 
 module Var =
@@ -216,3 +216,19 @@ struct
     | _, _ -> equal t1 t2
   ;;
 end;;
+
+type abort_value = {
+  (** The identifier of the conditional clause the abort clause
+      is nested in. *)
+  abort_conditional_ident : ident;
+
+  (** The predicate of the conditional clauses the abort clause
+      is nested in. *)
+  abort_predicate_ident : ident;
+
+  (** The branch of the conditional clause that the abort clause
+      is nested in. *)
+  abort_conditional_branch : bool;
+}
+[@@ deriving eq, ord, show]
+;;

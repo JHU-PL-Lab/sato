@@ -1,5 +1,6 @@
 open Jhupllib;;
 
+open Odefa_ast;;
 open Odefa_symbolic_interpreter;;
 
 (* Natodefa modules *)
@@ -141,5 +142,5 @@ val odefa_error_remove_instrument_vars :
 (** Given an odefa/natodefa mapping, converts an odefa error into a natodefa
     error. *)
 val odefa_to_natodefa_error :
-  On_to_odefa_maps.t -> Ton_to_on_maps.t -> On_ast.sem_type_natodefa option -> Error.Odefa_error.t -> On_error.t
+  On_to_odefa_maps.t -> Ton_to_on_maps.t -> On_ast.syn_natodefa_edesc option -> Ast.value On_ast.Ident_map.t -> Error.Odefa_error.t -> On_error.t
 ;;
