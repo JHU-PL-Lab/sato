@@ -30,9 +30,13 @@ let make_test (in_file, out_file) =
   let expected = Yojson.Safe.from_file out_file in
   let test_thunk ctxt =
     assert_command
-      ~foutput:(fun (cstream : char Stream.t) : unit ->
-        let chars_ref = ref [] in
-        Stream.iter (fun c -> chars_ref := c :: !chars_ref) cstream;
+      ~foutput:(fun (cstream : char Seq.t) : unit ->
+         let chars_ref = ref [] in
+         (
+           try
+            Seq.iter (fun c -> chars_ref := c :: !chars_ref) cstream
+           with End_of_file -> ()
+        );
         let actual =
           !chars_ref
           |> List.rev
@@ -47,7 +51,7 @@ let make_test (in_file, out_file) =
           ~printer:Yojson.Safe.(fun yj -> yj |> to_string |> prettify)
           ~cmp:Yojson.Safe.equal
           expected
-          actual
+          actual 
       )
       ~ctxt
       "./sato"
