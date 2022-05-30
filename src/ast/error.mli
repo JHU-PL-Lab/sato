@@ -1,7 +1,5 @@
 open Jhupllib;;
 
-open Odefa_ast;;
-
 (** Raised when a string cannot be parsed into an error *)
 exception Parse_failure of string;;
 

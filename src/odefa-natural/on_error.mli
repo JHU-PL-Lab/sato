@@ -1,4 +1,4 @@
-open Odefa_symbolic_interpreter;;
+open Odefa_ast;;
 
 (* Natodefa modules *)
 

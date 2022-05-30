@@ -4,7 +4,6 @@ open Jhupllib;;
 open Odefa_ast;;
 open Ast;;
 
-open Odefa_symbolic_interpreter;;
 open Odefa_symbolic_interpreter.Interpreter;;
 
 open Odefa_natural;;

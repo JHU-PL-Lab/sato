@@ -2,7 +2,6 @@ open Batteries;;
 open Jhupllib;;
 
 open Odefa_ast;;
-open Odefa_symbolic_interpreter;;
 
 (* **** Natodefa module signatures **** *)
 

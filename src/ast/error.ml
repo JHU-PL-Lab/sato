@@ -1,8 +1,6 @@
 open Batteries;;
 open Jhupllib;;
 
-open Odefa_ast;;
-
 exception Parse_failure of string;;
 
 module type Error_ident = sig
