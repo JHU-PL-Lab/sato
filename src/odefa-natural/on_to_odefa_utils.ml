@@ -11,6 +11,7 @@ type ('env,'out) env_out_expr_transformer =
     On_ast.core_natodefa * 'out
 ;;
 
+(* TODO: Update this later *)
 let rec env_out_transform_expr
     (transformer : ('env,'out) env_out_expr_transformer)
     (combiner : 'out -> 'out -> 'out)
@@ -23,9 +24,10 @@ let rec env_out_transform_expr
   in
   let transform_funsig (On_ast.Funsig(name,args,body)) =
     let body_body = body.body in
+    let body_tag = body.tag in
     let (body',out') = recurse env body_body in
     let (body'',out'') = transformer recurse env body' in
-    (On_ast.Funsig(name,args,new_expr_desc body''), combiner out' out'')
+    (On_ast.Funsig(name,args,expr_desc_with_og_tag body_tag body''), combiner out' out'')
   in
   let (e' : On_ast.core_natodefa), (out' : 'out) =
     match e with

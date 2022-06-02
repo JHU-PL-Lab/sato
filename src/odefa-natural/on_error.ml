@@ -629,6 +629,7 @@ let odefa_to_natodefa_error
     (odefa_on_maps : On_to_odefa_maps.t)
     (ton_on_maps : Ton_to_on_maps.t)
     (err_loc_option : On_ast.syn_natodefa_edesc option)
+    (actual_aliases : Ast.ident list)
     (err_vals_map : Ast.value On_ast.Ident_map.t)
     (odefa_err : Error.Odefa_error.t)
   : On_error.t =
@@ -774,12 +775,12 @@ let odefa_to_natodefa_error
         in
         (* let () = print_endline @@ "Value: " in
         let () = print_endline @@ On_to_odefa.show_expr_desc t_val in *)
-        let new_t = 
-          if List.is_empty t_val then failwith "Scream!"
+        let (new_t, new_v) = 
+          if List.is_empty t_val then failwith "Scream1!"
           else
             match (List.hd t_val) with
-            | Value_int _ -> new_expr_desc @@ TypeInt
-            | Value_bool _ -> new_expr_desc @@ TypeBool
+            | Value_int n -> new_expr_desc @@ TypeInt, new_expr_desc @@ Int n
+            | Value_bool b -> new_expr_desc @@ TypeBool, new_expr_desc @@ Bool b
             | _ -> 
               let () = print_endline @@ Ast_pp.show_value (List.hd t_val) in
               failwith "Houston we have a problem!"
@@ -790,7 +791,7 @@ let odefa_to_natodefa_error
             (fun alias -> On_ast.Ident_map.find_opt alias ton_on_maps.error_to_expr_tag)
         in
         let tag = 
-          if List.is_empty find_tag then failwith "Scream!"
+          if List.is_empty find_tag then failwith "Scream2!"
           else 
             (print_endline @@ "Tag: " ^ string_of_int @@ List.hd find_tag);
             List.hd find_tag
@@ -810,8 +811,8 @@ let odefa_to_natodefa_error
         (* let () = On_to_odefa_maps.on_expr_transformer helper expected_type in  *)
         (* let () = print_endline "WHERE2" in *)
         Error_natodefa_type {
-          err_type_aliases = odefa_to_on_aliases aliases;
-          err_type_val = (odefa_to_on_value aliases).body;
+          err_type_aliases = odefa_to_on_aliases actual_aliases;
+          err_type_val = new_v.body;
           err_type_expected = expected_type.body;
           err_type_actual = actual_type.body;
         }

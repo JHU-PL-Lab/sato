@@ -807,6 +807,7 @@ and flatten_pattern_match
     (pat_e_list : (On_ast.pattern * On_ast.core_natodefa_edesc) list)
   : (Ast.clause list * Ast.var) m =
   let tag = expr_desc.tag in
+  let () = print_endline @@ string_of_int tag in
   let%bind () = 
     if Ton_to_on_maps.Int_map.mem tag ton_on_maps.match_tag_to_error_id
       then 
@@ -814,7 +815,6 @@ and flatten_pattern_match
           Ton_to_on_maps.Int_map.find tag ton_on_maps.match_tag_to_error_id
         in
         let () = print_endline @@ On_ast.show_ident false_id in
-        let () = failwith "HEre!" in
         add_false_id_subj_var_mapping false_id subj_var 
       else
         return ()

@@ -238,7 +238,7 @@ module Natodefa_type_errors : Answer = struct
     match (!odefa_on_maps_option_ref, !ton_on_maps_option_ref) with
     | (Some odefa_on_maps, Some ton_on_maps) ->
       begin
-        let (input_seq, error_opt, err_vals_map) =
+        let (input_seq, error_opt, aliases, err_vals_map) =
           Generator_utils.input_sequence_from_result_natodefa e x result odefa_on_maps
         in
         match error_opt with
@@ -289,7 +289,7 @@ module Natodefa_type_errors : Answer = struct
           (* let () = failwith "SCREAM!" in *)
           let on_err_list =
             let mapper = 
-              (On_error.odefa_to_natodefa_error odefa_on_maps ton_on_maps err_loc_option err_vals_map) in 
+              (On_error.odefa_to_natodefa_error odefa_on_maps ton_on_maps err_loc_option aliases err_vals_map) in 
             (* let () = print_endline "mapper is fine" in *)
             (* let () = print_endline @@ string_of_int (List.length error_lst) in *)
             List.map mapper error_lst

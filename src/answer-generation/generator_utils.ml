@@ -222,7 +222,7 @@ let input_sequence_from_result_natodefa
     (x : Ident.t)
     (result : Interpreter.evaluation_result)
     (on_to_odefa_maps : On_to_odefa_maps.t)
-  : (int list * (Ast.ident * Error.Odefa_error.t list) option * value On_ast.Ident_map.t) =
+  : (int list * (Ast.ident * Error.Odefa_error.t list) option * ident list * value On_ast.Ident_map.t) =
   match Solver.solve result.er_solver with
   | None ->
     raise @@ Jhupllib_utils.Invariant_failure
@@ -255,11 +255,36 @@ let input_sequence_from_result_natodefa
       input_record := value :: !input_record;
       value
     in
+    let fid_vars_lst = 
+      On_ast.Ident_map.bindings @@ 
+      On_to_odefa_maps.get_false_id_to_subj_var_mapping on_to_odefa_maps
+    in
+    let () = 
+      List.iter (fun (fid, v) -> print_endline @@ "(" ^ On_ast.show_ident fid ^ ", " ^ show_var v ^ ")")
+      fid_vars_lst
+    in
+    let fid_var_ref = ref fid_vars_lst in
     (* Callback function executed on each clause encountered *)
-    let stop_at_stop_var (Clause(x, _)) =
+    let stop_at_stop_var (Clause((Var (xid, _)) as x, _)) =
       if equal_var x stop_var then
         (* (); *)
-        raise Halt_execution_as_input_sequence_is_complete;
+        raise Halt_execution_as_input_sequence_is_complete
+      else
+        if 
+          List.exists 
+          (fun (_, (Var (xid', _))) -> 
+            (* let () = print_endline @@ "______" in
+            let () = print_endline @@ show_ident xid in
+            let () = print_endline @@ show_ident xid' in
+            let () = print_endline @@ "______" in *)
+            xid = xid') 
+          !fid_var_ref
+          then 
+            (* let () = failwith "Triggered" in  *)
+            fid_var_ref := 
+              List.map 
+              (fun (fid, (Var (xid', _) as x')) -> if xid' = xid then (fid, x) else (fid, x'))
+              !fid_var_ref; 
     in
     (* Function to record the first abort error encountered *)
     let abort_opt_ref = ref None in
@@ -335,6 +360,14 @@ let input_sequence_from_result_natodefa
         end
       | None -> None
     in
+    let fid_var =
+      List.filter_map 
+      (fun (_, Var (_, fs) as x)  ->
+       match fs with
+       | Some _ -> Some x
+       | None -> None
+      ) !fid_var_ref
+    in
     let err_vals_map =
       let get_vals_from_solver v = 
         let (x, stack) = destructure_var v in
@@ -349,15 +382,44 @@ let input_sequence_from_result_natodefa
         in
         value
       in
-      let fid_vars_lst = 
-        On_ast.Ident_map.bindings @@ 
-        On_to_odefa_maps.get_false_id_to_subj_var_mapping on_to_odefa_maps
-      in
       List.fold_left 
       (fun acc (k, v) -> 
         let () = print_endline @@ On_ast.show_ident k in
         On_ast.Ident_map.add k (get_vals_from_solver v) acc) 
-      On_ast.Ident_map.empty fid_vars_lst
+      On_ast.Ident_map.empty fid_var
     in
-    (input_seq_ints, abort_var_to_errors !abort_opt_ref, err_vals_map)
+    let (_, v) = List.hd fid_var in
+    let get_aliases err = 
+      let get_aliases_from_solver v = 
+        let (x, stack) = destructure_var v in
+        let relstack = relativize_stack stop_stack stack in
+        let symbol = Symbol(x, relstack) in
+        let aliases =
+          match Solver._construct_alias_chain result.er_solver symbol with
+          | [] ->
+            failwith "Should have value in solver!"
+          | l ->
+            l
+        in
+        aliases
+      in
+      match err with
+      | Error.Odefa_error.Error_value _ ->
+        get_aliases_from_solver v
+      | _ -> []
+    in
+    let og_errs = abort_var_to_errors !abort_opt_ref in
+    let aliases = 
+      match og_errs with
+      | None -> []
+      | Some (_, og_errs') -> 
+        get_aliases @@ List.hd og_errs'
+    in
+    (* let errs' = 
+      match og_errs with
+      | None -> None
+      | Some (_, og_errs') -> 
+        let (Var (x', _)) = v in Some (x', List.map real_err og_errs')
+    in *)
+    (input_seq_ints, og_errs, aliases, err_vals_map)
 ;;

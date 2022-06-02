@@ -83,3 +83,5 @@ val pp : t pretty_printer;;
 
 (** Converts the constraints in a solver to a human-readable string. *)
 val show : t -> string;;
+
+val _construct_alias_chain : t -> symbol -> Ast.ident list;;

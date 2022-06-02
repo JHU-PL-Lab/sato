@@ -136,6 +136,10 @@ let fresh_tag () =
   let c = !counter in
   (counter := c + 1); c
 
+let expr_desc_with_og_tag : type a. int -> a expr -> a expr_desc = 
+  fun tag e ->
+  {tag = tag; body = e}
+
 let new_expr_desc : type a. a expr -> a expr_desc = 
   fun e ->
   {tag = fresh_tag (); body = e}
