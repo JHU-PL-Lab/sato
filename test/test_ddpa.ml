@@ -552,8 +552,9 @@ let make_test filename expectations =
     let is_natodefa = String.ends_with filename "natodefa" in
     let (i_expr, _) =
       if is_natodefa then begin
-        On_to_odefa.translate @@ typed_non_to_on
-          @@ File.with_file_in filename On_parse.parse_program
+        let natodefa_ast = File.with_file_in filename On_parse.parse_program in
+        let (desugared_typed, ton_on_maps) = transform_natodefa natodefa_ast in
+        On_to_odefa.translate ton_on_maps desugared_typed 
       end else begin
         Odefa_instrumentation.instrument_odefa
           @@ File.with_file_in filename Parser.parse_program
