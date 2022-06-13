@@ -355,7 +355,6 @@ let input_sequence_from_result_natodefa
       in
       List.fold_left 
       (fun acc (k, v) -> 
-        let () = print_endline @@ On_ast.show_ident k in
         On_ast.Ident_map.add k (get_vals_from_solver v) acc) 
       On_ast.Ident_map.empty fid_vars_lst
     in

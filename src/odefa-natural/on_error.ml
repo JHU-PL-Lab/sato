@@ -415,7 +415,6 @@ let odefa_error_remove_instrument_vars
 (* Helper function to remove adjacent duplicate entries in a list (note that
    this does not remove non-adjacent dupes). *)
 let deduplicate_list list =
-  (* let () = failwith "SCREAM!" in *)
   let res = 
   List.fold_right
     (fun x deduped_list ->
@@ -429,7 +428,6 @@ let deduplicate_list list =
     list
     []
   in
-  (* let () = failwith "SCREAM!" in *)
   res
 ;;
 
@@ -633,25 +631,14 @@ let odefa_to_natodefa_error
     (odefa_err : Error.Odefa_error.t)
   : On_error.t =
   (* Helper functions *)
-  let () = print_endline @@ "In odefa_to_on_expr" in
   let odefa_to_on_expr x =
-    (* let () = print_endline @@ Ast.show_ident x in *)
     On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps x
   in
-  (* let () = print_endline @@ "Finished odefa_to_on_expr" in *)
-  (* let () = failwith "SCREAM!" in *)
-  (* let () = print_endline @@ "Post odefa_to_on_expr" in *)
   let odefa_to_on_aliases (aliases : Ast.ident list) : On_ast.ident list =
-    (* let () = List.iter (fun x -> print_endline @@ Ast.show_ident x) aliases in *)
-    (* let () = print_endline @@ "In odefa_to_on_aliases" in *)
-    (* let () = failwith "SCREAM2!" in *)
     aliases
     |> List.filter_map
       (fun alias ->
-        (* let () = failwith "SCREAM2!" in *)
-        (* let () = print_endline @@ "current ident: " ^ Ast.show_ident alias in *)
         let temp = odefa_to_on_expr alias in
-        (* let () = print_endline @@ "Finished odefa_to_on_aliases" in *)
         match (temp.body) with
         | (On_ast.Var ident) -> Some ident
         | _ -> None
@@ -659,11 +646,8 @@ let odefa_to_natodefa_error
     (* During translation, some odefa vars are assigned to the same natodefa
        vars (namely in var expressions).  The following procedure removes any
        adjacent duplicates from the alias chain. *)
-    (* |> let () = failwith "SCREAM!" in deduplicate_list *)
     |> deduplicate_list
   in
-  (* let () = failwith "SCREAM!" in *)
-  (* let () = print_endline @@ "Post odefa_to_on_aliases" in *)
   let odefa_to_on_value (aliases : Ast.ident list) : On_ast.core_natodefa_edesc =
     let last_var =
       try
@@ -671,10 +655,8 @@ let odefa_to_natodefa_error
       with Invalid_argument _ ->
         raise @@ Jhupllib.Utils.Invariant_failure "Can't have empty alias list!"
     in
-    (* let () = print_endline @@ Ast.show_ident last_var in *)
     odefa_to_on_expr last_var
   in
-  (* let () = failwith "SCREAM!" in *)
   let odefa_to_on_type (typ : Ast.type_sig) : On_ast.type_sig =
     match typ with
     | Ast.Top_type -> TopType
@@ -693,11 +675,9 @@ let odefa_to_natodefa_error
         (Printf.sprintf "Bottom type not in natodefa")
   in
   (* Odefa to natodefa *)
-  (* let () = failwith "SCREAM!" in *)
   match odefa_err with
   | Error.Odefa_error.Error_binop err ->
     begin
-      (* let () = print_endline "Natodefa Binop Error!" in *)
       let l_aliases = err.err_binop_left_aliases in
       let r_aliases = err.err_binop_right_aliases in
       let l_aliases_on = odefa_to_on_aliases l_aliases in
@@ -726,7 +706,6 @@ let odefa_to_natodefa_error
     end
   | Error.Odefa_error.Error_match err ->
     begin
-      (* let () = print_endline "Natodefa Match Error!" in *)
       let aliases = err.err_match_aliases in
       Error_match {
         err_match_aliases = odefa_to_on_aliases aliases;
@@ -737,19 +716,14 @@ let odefa_to_natodefa_error
     end
   | Error.Odefa_error.Error_value err ->
     begin
-      (* let () = failwith "SCREAM!" in *)
       let aliases = err.err_value_aliases in
       match err_loc_option with
       | None ->
-        (* let () = print_endline "Natodefa Value Error!" in *)
         Error_value {
           err_value_aliases = odefa_to_on_aliases aliases;
           err_value_val = (odefa_to_on_value aliases).body;
         }
       | Some err_loc ->
-        (* let () = print_endline "Natodefa Type Error!" in *)
-        (* let () = print_endline @@ "Error_loc: " in *)
-        (* let () = print_endline @@ On_to_odefa.show_expr_desc err_loc in *)
         let expected_type = 
           match (err_loc.body) with
           | LetWithType (_, _, _, t) -> t
@@ -758,22 +732,13 @@ let odefa_to_natodefa_error
           | LetRecFunWithType (_, _, ts) -> List.hd ts
           | _ -> failwith "Shouldn't be here!"
         in
-        (* let () = print_endline @@ "Expected type: " in *)
-        (* let () = print_endline @@ On_to_odefa.show_expr_desc expected_type in *)
-        (* let () = print_endline "after find!" in *)
         let t_aliases = odefa_to_on_aliases aliases in
-        (* let () = failwith "SCREAM!" in *)
-        (* let () = print_endline "WHERE1" in *)
-        (* let t_val = odefa_to_on_value aliases in *)
         let t_val = 
           t_aliases
           |> List.filter_map 
             (fun alias -> 
-              let () = print_endline @@ show_ident alias in
               On_ast.Ident_map.find_opt alias err_vals_map)
         in
-        (* let () = print_endline @@ "Value: " in
-        let () = print_endline @@ On_to_odefa.show_expr_desc t_val in *)
         let new_t = 
           if List.is_empty t_val then failwith "Scream!"
           else
@@ -781,7 +746,6 @@ let odefa_to_natodefa_error
             | Value_int _ -> new_expr_desc @@ TypeInt
             | Value_bool _ -> new_expr_desc @@ TypeBool
             | _ -> 
-              let () = print_endline @@ Ast_pp.show_value (List.hd t_val) in
               failwith "Houston we have a problem!"
         in
         let find_tag =
@@ -798,17 +762,6 @@ let odefa_to_natodefa_error
         let actual_type = 
           replace_type expected_type new_t tag
         in
-        (* let () = print_endline @@ "tag = " ^ string_of_int tag in *)
-        (* let rec helper e =
-          if (e.tag = tag) 
-          then 
-            let () = print_endline @@ On_to_odefa.show_expr_desc e in 
-            e
-          else
-            e
-        in *)
-        (* let () = On_to_odefa_maps.on_expr_transformer helper expected_type in  *)
-        (* let () = print_endline "WHERE2" in *)
         Error_natodefa_type {
           err_type_aliases = odefa_to_on_aliases aliases;
           err_type_val = (odefa_to_on_value aliases).body;

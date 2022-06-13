@@ -291,27 +291,11 @@ let preliminary_encode_expr (e : core_natodefa_edesc) : core_natodefa_edesc m =
       let%bind () = add_natodefa_expr_mapping expr' e_desc in
       return expr'
     | Match (match_e, pat_e_lst) ->
-      (* let () = print_endline "In Match case" in *)
       let%bind expr' = encode_match_exprs recurse match_e pat_e_lst in
-      (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in *)
-      (* let () = print_endline "------------------------" in
-      let () = print_endline @@ "Here's the mapping we're trying to add: " in
-      let () = print_endline @@ show_expr expr' in
-      let () = print_endline "***" in
-      let () = print_endline @@ show_expr expr in
-      let () = print_endline "------------------------" in *)
       let%bind () = add_natodefa_expr_mapping expr' e_desc in
       return expr'
     | LetRecFun (fun_sig_list, rec_e) ->
-      (* let () = print_endline "In LetRecFun case" in *)
       let%bind expr' = letrec_expr_to_fun recurse fun_sig_list rec_e in
-      (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in *)
-      (* let () = print_endline "------------------------" in *)
-      (* let () = print_endline @@ "Here's the mapping we're adding: " in *)
-      (* let () = print_endline @@ show_expr expr in *)
-      (* let () = print_endline "***" in *)
-      (* let () = print_endline @@ show_expr expr' in *)
-      (* let () = print_endline "------------------------" in *)
       let%bind () = add_natodefa_expr_mapping expr' e_desc in
       return expr'
     | _ -> return e_desc

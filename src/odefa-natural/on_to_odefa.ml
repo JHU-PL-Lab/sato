@@ -813,8 +813,6 @@ and flatten_pattern_match
         let false_id = 
           Ton_to_on_maps.Int_map.find tag ton_on_maps.match_tag_to_error_id
         in
-        let () = print_endline @@ On_ast.show_ident false_id in
-        let () = failwith "HEre!" in
         add_false_id_subj_var_mapping false_id subj_var 
       else
         return ()

@@ -129,18 +129,8 @@ let add_on_expr_to_expr_mapping mappings expr1 expr2 =
   let natodefa_expr_map = mappings.natodefa_expr_to_expr in
   let add' k v m = 
     if Expr_desc_map.mem k m then 
-      (* let () = print_endline @@ "--------------" in
-      let () = print_endline @@ "Mapping already exists: " in
-      let () = print_endline @@ show_expr k in
-      let () = print_endline @@ show_expr (Expr_map.find k m) in
-      let () = print_endline @@ "--------------" in *)
       m
     else 
-      (* let () = print_endline @@ "--------------" in
-      let () = print_endline @@ "Adding Mapping: " in
-      let () = print_endline @@ show_expr k in
-      let () = print_endline @@ show_expr v in
-      let () = print_endline @@ "--------------" in *)
       Expr_desc_map.add k v m 
   in
   { mappings with
@@ -190,13 +180,6 @@ let add_false_id_to_subj_var_mapping mappings f_id subj_var =
     false_id_to_subj_var =
       On_ast.Ident_map.add f_id subj_var false_subj_map
   }
-(* let add_abort_mapping mappings ab_id ab_ctx =
-  let abort_map = mappings.abort_mapping in
-  { mappings with
-    abort_mapping =
-      Ast.Ident_map.add ab_id ab_ctx abort_map
-  }
-;; *)
 
 (* Note (Earl): The problem is with this function. It is trying to reconstruct 
    the original AST, but we have a match in a let rec that's transformed 
@@ -211,17 +194,9 @@ let add_false_id_to_subj_var_mapping mappings f_id subj_var =
 let rec on_expr_transformer 
   (transformer : On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc) 
   (e_desc : On_ast.core_natodefa_edesc) =
-  (* let () = print_endline @@ "--------------" in *)
-  (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in *)
-  (* let () = print_endline @@ "Expression in on expr transformer" in *)
-  (* let () = print_endline @@ show_expr expr in  *)
   let open On_ast in
-  (* let () = print_endline @@ "==>" in *)
   let (recurse : core_natodefa_edesc -> core_natodefa_edesc) = on_expr_transformer transformer in
   let e_desc' = transformer e_desc in
-  (* let () = print_endline @@ "Expression' in on expr transformer" in
-  let () = print_endline @@ show_expr expr' in
-  let () = print_endline @@ "--------------" in *)
   let expr' = e_desc'.body in
   (* NOTE: Here we require the invariant that the transformer will
      make sure the transformed expression match the og_tag
@@ -284,7 +259,6 @@ let rec on_expr_transformer
 ;;
 
 let get_natodefa_equivalent_expr mappings odefa_ident =
-  (* let () = print_endline "In get_natodefa_equivalent_expr" in *)
   let inst_map = mappings.odefa_instrument_vars_map in
   let odefa_on_map = mappings.odefa_var_to_natodefa_expr in
   let on_expr_map = mappings.natodefa_expr_to_expr in
@@ -295,7 +269,6 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
     | Some (Some pre_inst_ident) -> pre_inst_ident
     | Some (None) | None -> odefa_ident
   in
-  (* let () = print_endline "pre-natodefa_expr" in *)
   (* Get natodefa expr from odefa var *)
   let natodefa_expr =
     try
@@ -307,21 +280,12 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
           (Ast.show_ident odefa_ident'))
   in
   (* Get any original natodefa exprs *)
-  (* let () = print_endline "on_expr_transform" in *)
   let on_expr_transform (expr : On_ast.core_natodefa_edesc) =
-    (* let () = print_natodefa_expr_to_expr mappings in *)
     match Expr_desc_map.Exceptionless.find expr on_expr_map with
     | Some expr' -> 
-      (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in
-      let () = print_endline "------------------------" in
-      let () = print_endline @@ show_expr expr in
-      let () = print_endline @@ " maps to " in 
-      let () = print_endline @@ show_expr expr' in
-      let () = print_endline "------------------------" in *)
       expr'
     | None -> expr
   in
-  (* let () = print_endline "pre-on_ident_transform" in *)
   let on_ident_transform 
       (e_desc : On_ast.core_natodefa_edesc) : On_ast.core_natodefa_edesc =
     let open On_ast in
@@ -387,8 +351,6 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
         let pat_e_list' =
           List.map
             (fun (pat, match_expr) -> 
-              (* let show_expr = Pp_utils.pp_to_string On_ast_pp.pp_expr in *)
-              (* let () = print_endline @@ show_expr match_expr in *)
               (transform_pattern pat, match_expr))
             pat_e_list
         in
@@ -397,15 +359,10 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
     in
     {tag = og_tag; body = expr'}
   in
-  (* let () = print_endline "pre-pipe" in *)
   natodefa_expr
   |> on_expr_transformer on_ident_transform
   |> 
-  (* let () = print_endline "2nd pipe" in  *)
   let res = on_expr_transformer on_expr_transform in
-  (* let res = on_expr_transform in *)
-  (* let () = print_endline "3rd pipe" in  *)
-  (* let () = print_endline "Finished get_natodefa_equivalent_expr" in *)
   res
 ;;
 

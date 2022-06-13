@@ -527,10 +527,6 @@ struct
     }
   ;;
 
-  (* TODO: Implement this! - EW *)
-  (* let record_alias () = failwith "TBI!"
-  ;; *)
-
   (* check_constraint function + helpers *)
 
   let _trace_log_contradiction (log : log) : state =
