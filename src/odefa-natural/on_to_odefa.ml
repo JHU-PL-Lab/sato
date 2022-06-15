@@ -1014,6 +1014,7 @@ and flatten_expr
     let%bind true_var = fresh_var "true" in
     let%bind binop_var = fresh_var "binop" in
     let%bind () = add_odefa_natodefa_mapping true_var (On_ast.new_expr_desc @@ Bool true) in
+    (* let%bind () = add_odefa_natodefa_mapping true_var expr_desc in *)
     let%bind () = add_odefa_natodefa_mapping binop_var expr_desc in
     let binop = Ast.Binary_operator_xor in
     let true_body = Ast.Value_body(Value_bool true) in

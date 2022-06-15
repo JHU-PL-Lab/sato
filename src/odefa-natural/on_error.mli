@@ -49,9 +49,9 @@ end;;
 
 module Ident : Error_ident with type t = On_ast.ident;;
 
-module Value : Error_value with type t = On_ast.core_natodefa;;
+module Value : Error_value with type t = On_ast.syn_type_natodefa;;
 
-module Binop : Error_binop with type t = On_ast.core_natodefa;;
+module Binop : Error_binop with type t = On_ast.syn_type_natodefa;;
 
 module Type : Error_type with type t = On_ast.type_sig;;
 

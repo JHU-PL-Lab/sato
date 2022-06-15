@@ -251,14 +251,14 @@ module Natodefa_type_errors : Answer = struct
               error.
           *)
           let on_err_loc =
-            On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps error_loc
+            On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps ton_on_maps error_loc
           in
           (* TODO (Earl): This is pretty hacky, but it'll do for now *)
           (* More hack? Returns a pair to indicate whether we're handling type error here? *)
-          let err_loc_sem = 
+          (* let err_loc_sem = 
             Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps on_err_loc
-          in
-          let actual_err_loc_opt = 
+          in *)
+          (* let actual_err_loc_opt = 
             Ton_to_on_maps.Intermediate_expr_desc_map.find_opt 
             err_loc_sem 
             ton_on_maps.sem_to_syn
@@ -270,7 +270,7 @@ module Natodefa_type_errors : Answer = struct
               Ton_to_on_maps.syn_natodefa_from_sem_natodefa 
               ton_on_maps 
               err_loc_sem
-          in
+          in *)
           (* If type error, pass a special flag to odefa_to_natodefa_error so that it'll handle
               value error differently.
           *)
@@ -280,7 +280,7 @@ module Natodefa_type_errors : Answer = struct
             | _ -> false
           in
           let err_loc_option = 
-            if is_type_error then Some actual_err_loc else None
+            if is_type_error then Some on_err_loc else None
           in
           let on_err_list =
             let mapper = 
@@ -289,7 +289,7 @@ module Natodefa_type_errors : Answer = struct
           in
           Some {
             err_input_seq = input_seq;
-            err_location = actual_err_loc;
+            err_location = on_err_loc;
             err_errors = on_err_list;
             err_steps = steps;
           }

@@ -49,7 +49,7 @@ val get_pre_inst_equivalent_clause : t -> Ast.ident -> Ast.clause;;
 
 (** Get the natodefa expression that the odefa clause that the odefa var
     identifies maps to. *)
-val get_natodefa_equivalent_expr : t -> Ast.ident -> On_ast.core_natodefa_edesc;;
+val get_natodefa_equivalent_expr : t -> Ton_to_on_maps.t -> Ast.ident -> On_ast.syn_natodefa_edesc;;
 
 (** Get the natodefa type that a set of record labels corresponds to.  If
     there is no mapping that exists, return a record type by default. *)

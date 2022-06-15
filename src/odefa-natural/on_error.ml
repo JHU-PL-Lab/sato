@@ -64,8 +64,8 @@ module Ident : (Error_ident with type t = On_ast.ident) = struct
     `String (replace_linebreaks @@ show ident);;
 end;;
 
-module Value : (Error_value with type t = On_ast.core_natodefa) = struct
-  type t = On_ast.core_natodefa;;
+module Value : (Error_value with type t = On_ast.syn_type_natodefa) = struct
+  type t = On_ast.syn_type_natodefa;;
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = Pp_utils.pp_to_string pp;;
@@ -73,8 +73,8 @@ module Value : (Error_value with type t = On_ast.core_natodefa) = struct
     `String (replace_linebreaks @@ show value);;
 end;;
 
-module Binop : (Error_binop with type t = On_ast.core_natodefa) = struct
-  type t = On_ast.core_natodefa;;
+module Binop : (Error_binop with type t = On_ast.syn_type_natodefa) = struct
+  type t = On_ast.syn_type_natodefa;;
   let equal = On_ast.equal_expr;;
   let pp = On_ast_pp.pp_expr;;
   let show = Pp_utils.pp_to_string pp;;
@@ -433,7 +433,7 @@ let deduplicate_list list =
 
 (* Helper function that returns a natodefa binop, depending on the odefa
    binary operator. *)
-let odefa_to_on_binop 
+(* let odefa_to_on_binop 
   (odefa_binop : Ast.binary_operator) : (On_ast.core_natodefa -> On_ast.core_natodefa -> On_ast.core_natodefa) =
   match odefa_binop with
   | Ast.Binary_operator_plus -> (fun e1 e2 -> On_ast.Plus (new_expr_desc e1, new_expr_desc e2))
@@ -449,6 +449,24 @@ let odefa_to_on_binop
   | Ast.Binary_operator_or -> (fun e1 e2 -> On_ast.Or (new_expr_desc e1, new_expr_desc e2))
   | Ast.Binary_operator_xor -> (fun e1 e2 -> On_ast.Neq (new_expr_desc e1, new_expr_desc e2))
   | Ast.Binary_operator_xnor -> (fun e1 e2 -> On_ast.Equal (new_expr_desc e1, new_expr_desc e2))
+;; *)
+
+let odefa_to_on_binop 
+  (odefa_binop : Ast.binary_operator) : (On_ast.syn_natodefa_edesc -> On_ast.syn_natodefa_edesc -> On_ast.syn_type_natodefa) =
+  match odefa_binop with
+  | Ast.Binary_operator_plus -> (fun e1 e2 -> On_ast.Plus (e1, e2))
+  | Ast.Binary_operator_minus -> (fun e1 e2 -> On_ast.Minus (e1, e2))
+  | Ast.Binary_operator_times -> (fun e1 e2 -> On_ast.Times (e1, e2))
+  | Ast.Binary_operator_divide -> (fun e1 e2 -> On_ast.Divide (e1, e2))
+  | Ast.Binary_operator_modulus -> (fun e1 e2 -> On_ast.Modulus (e1, e2))
+  | Ast.Binary_operator_equal_to -> (fun e1 e2 -> On_ast.Equal (e1, e2))
+  | Ast.Binary_operator_not_equal_to -> (fun e1 e2 -> On_ast.Neq (e1, e2))
+  | Ast.Binary_operator_less_than -> (fun e1 e2 -> On_ast.LessThan (e1, e2))
+  | Ast.Binary_operator_less_than_or_equal_to -> (fun e1 e2 -> On_ast.Leq (e1, e2))
+  | Ast.Binary_operator_and -> (fun e1 e2 -> On_ast.And (e1, e2))
+  | Ast.Binary_operator_or -> (fun e1 e2 -> On_ast.Or (e1, e2))
+  | Ast.Binary_operator_xor -> (fun e1 e2 -> On_ast.Neq (e1, e2))
+  | Ast.Binary_operator_xnor -> (fun e1 e2 -> On_ast.Equal (e1, e2))
 ;;
 
 let rec replace_type 
@@ -632,7 +650,7 @@ let odefa_to_natodefa_error
   : On_error.t =
   (* Helper functions *)
   let odefa_to_on_expr x =
-    On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps x
+    On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps ton_on_maps x
   in
   let odefa_to_on_aliases (aliases : Ast.ident list) : On_ast.ident list =
     aliases
@@ -648,7 +666,7 @@ let odefa_to_natodefa_error
        adjacent duplicates from the alias chain. *)
     |> deduplicate_list
   in
-  let odefa_to_on_value (aliases : Ast.ident list) : On_ast.core_natodefa_edesc =
+  let odefa_to_on_value (aliases : Ast.ident list) : On_ast.syn_natodefa_edesc =
     let last_var =
       try
         List.last aliases
@@ -687,12 +705,12 @@ let odefa_to_natodefa_error
       let r_value = odefa_to_on_value r_aliases in
       let constraint_expr =
         let left_expr =
-          if List.is_empty l_aliases_on then l_value.body else
-            On_ast.Var (List.hd l_aliases_on)
+          if List.is_empty l_aliases_on then l_value else
+            new_expr_desc @@ On_ast.Var (List.hd l_aliases_on)
         in
         let right_expr =
-          if List.is_empty r_aliases_on then r_value.body else
-            On_ast.Var (List.hd r_aliases_on)
+          if List.is_empty r_aliases_on then r_value else
+            new_expr_desc @@ On_ast.Var (List.hd r_aliases_on)
         in
         odefa_to_on_binop op left_expr right_expr
       in

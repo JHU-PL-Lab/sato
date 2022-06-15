@@ -27,6 +27,7 @@ let parse_program
       begin
         let natodefa_ast = File.with_file_in filename On_parse.parse_program in
         let (desugared_typed, ton_on_maps) = transform_natodefa natodefa_ast in
+        (* let () = print_endline @@ On_to_odefa.show_expr_desc desugared_typed in *)
         let (odefa_ast, on_odefa_maps) =
           On_to_odefa.translate ton_on_maps desugared_typed 
         in

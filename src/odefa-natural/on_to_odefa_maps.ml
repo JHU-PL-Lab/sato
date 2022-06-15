@@ -77,8 +77,9 @@ type t = {
 [@@ deriving show]
 ;;
 
+let show_expr_desc = Pp_utils.pp_to_string On_ast_pp.pp_expr_desc;;
+
 let print_natodefa_expr_to_expr mappings = 
-  let show_expr_desc = Pp_utils.pp_to_string On_ast_pp.pp_expr_desc in
   let () = Expr_desc_map.iter 
     (fun k v -> 
       let () = print_endline @@ "Key: " ^ show_expr_desc k in
@@ -258,11 +259,13 @@ let rec on_expr_transformer
   {tag = og_tag; body = body'}
 ;;
 
-let get_natodefa_equivalent_expr mappings odefa_ident =
-  let inst_map = mappings.odefa_instrument_vars_map in
-  let odefa_on_map = mappings.odefa_var_to_natodefa_expr in
-  let on_expr_map = mappings.natodefa_expr_to_expr in
-  let on_ident_map = mappings.natodefa_var_to_var in
+let get_natodefa_equivalent_expr on_mappings ton_mappings odefa_ident =
+  let inst_map = on_mappings.odefa_instrument_vars_map in
+  let odefa_on_map = on_mappings.odefa_var_to_natodefa_expr in
+  let on_expr_map = on_mappings.natodefa_expr_to_expr in
+  (* let core_sem_expr_map = ton_mappings.core_to_sem in *)
+  (* let sem_syn_expr_map = ton_mappings.sem_to_syn in *)
+  let on_ident_map = on_mappings.natodefa_var_to_var in
   (* Get pre-instrument var *)
   let odefa_ident' =
     match Ast.Ident_map.Exceptionless.find odefa_ident inst_map with
@@ -279,12 +282,17 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
           "variable %s is not associated with any natodefa expr."
           (Ast.show_ident odefa_ident'))
   in
-  (* Get any original natodefa exprs *)
-  let on_expr_transform (expr : On_ast.core_natodefa_edesc) =
+  (* Get any original core natodefa exprs *)
+  let get_core_natodefa (expr : On_ast.core_natodefa_edesc) =
     match Expr_desc_map.Exceptionless.find expr on_expr_map with
     | Some expr' -> 
       expr'
     | None -> expr
+  in
+  let get_syn_natodefa (expr : On_ast.core_natodefa_edesc) =
+    expr
+    |> Ton_to_on_maps.sem_natodefa_from_on_err ton_mappings
+    |> Ton_to_on_maps.syn_natodefa_from_sem_natodefa ton_mappings
   in
   let on_ident_transform 
       (e_desc : On_ast.core_natodefa_edesc) : On_ast.core_natodefa_edesc =
@@ -361,9 +369,8 @@ let get_natodefa_equivalent_expr mappings odefa_ident =
   in
   natodefa_expr
   |> on_expr_transformer on_ident_transform
-  |> 
-  let res = on_expr_transformer on_expr_transform in
-  res
+  |> on_expr_transformer get_core_natodefa
+  |> get_syn_natodefa
 ;;
 
 let get_type_from_idents mappings odefa_idents =

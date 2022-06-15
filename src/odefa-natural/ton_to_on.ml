@@ -54,7 +54,11 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
   let tag = e_desc.tag in
   match t with
   | TypeVar tvar -> 
-    return @@ new_expr_desc @@ Appl (new_expr_desc (Var tvar), new_expr_desc (Var tvar))
+    let res = 
+      new_expr_desc @@ Appl (new_expr_desc (Var tvar), new_expr_desc (Var tvar))
+    in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeInt ->
     let generator =
       Function ([Ident "~null"], new_expr_desc Input)
@@ -84,7 +88,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ new_expr_desc @@ Record rec_map
+    let res = new_expr_desc @@ Record rec_map in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeBool ->
     let generator =
       Function ([Ident "~null"], 
@@ -115,7 +121,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ new_expr_desc @@ Record rec_map
+    let res = new_expr_desc @@ Record rec_map in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeRecord r ->
     let%bind generator = 
       let all_bindings = Ident_map.bindings r in
@@ -230,7 +238,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ new_expr_desc @@ Record rec_map
+    let res = new_expr_desc @@ Record rec_map in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeList l ->
     (* TODO: Might need the tag here as well; add mapping*)
     let%bind gc_pair = semantic_type_of l in
@@ -343,7 +353,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ new_expr_desc @@ Record rec_map
+    let res = new_expr_desc @@ Record rec_map in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeArrow (t1, t2) ->
     (* TODO: Mapping *)
     let%bind gc_pair_dom = semantic_type_of t1 in
@@ -392,7 +404,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ new_expr_desc @@ Record rec_map
+    let res = new_expr_desc @@ Record rec_map in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeArrowD ((x1, t1), t2) ->
     (* TODO: Mapping *)
     let%bind gc_pair_dom = semantic_type_of t1 in
@@ -450,7 +464,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ new_expr_desc @@ Record rec_map
+    let res = new_expr_desc @@ Record rec_map in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeSet (t, p) ->
     let%bind gc_pair = semantic_type_of t in
     let%bind p' = semantic_type_of p in
@@ -513,7 +529,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
                           Appl (RecordProj (gc_pair_pred, Label "checker"), p'),
                           pred_cond)
     in *)
-    return @@ new_expr_desc @@ Record rec_map
+    let res = new_expr_desc @@ Record rec_map in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeUnion (t1, t2) ->
     let%bind gc_pair1 = semantic_type_of t1 in
     let%bind gc_pair2 = semantic_type_of t2 in
@@ -591,7 +609,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ new_expr_desc @@ Record rec_map
+    let res = new_expr_desc @@ Record rec_map in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeIntersect (t1, t2) -> 
     let%bind gc_pair1 = semantic_type_of t1 in
     let%bind gc_pair2 = semantic_type_of t2 in
@@ -641,16 +661,21 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ new_expr_desc @@ Record rec_map
+    let res = new_expr_desc @@ Record rec_map in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeRecurse (t_var, t') ->
     let%bind gc_pair = semantic_type_of t' in
     let%bind primer_id = fresh_ident "primer" in
-    return @@ 
-    new_expr_desc @@ Let (primer_id, 
-                   new_expr_desc @@ Function ([t_var], gc_pair), 
-                   new_expr_desc @@ 
-                   Appl (new_expr_desc @@ Var primer_id, 
-                     new_expr_desc @@ Var primer_id))
+    let res = 
+      new_expr_desc @@ Let (primer_id, 
+                    new_expr_desc @@ Function ([t_var], gc_pair), 
+                    new_expr_desc @@ 
+                    Appl (new_expr_desc @@ Var primer_id, 
+                      new_expr_desc @@ Var primer_id))
+    in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | TypeUntouched t' ->
     let generator = 
       Function ([Ident "~null"], new_expr_desc @@ Untouched t')
@@ -673,27 +698,52 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       |> Ident_map.add (Ident "generator") (new_expr_desc generator)
       |> Ident_map.add (Ident "checker") (new_expr_desc checker)
     in
-    return @@ new_expr_desc @@ Record rec_map
+    let res = new_expr_desc @@ Record rec_map in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   (* These are constant functions that only modify the types *)
-  | Int n -> return @@ new_expr_desc @@ Int n
-  | Bool b -> return @@ new_expr_desc @@ Bool b
-  | Var x -> return @@ new_expr_desc @@ Var x
-  | Input -> return @@ new_expr_desc @@ Input
-  | Untouched s -> return @@ new_expr_desc @@ Untouched s
-  | TypeError x -> return @@ new_expr_desc @@ TypeError x
+  | Int n -> 
+    let res = new_expr_desc @@ Int n in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
+  | Bool b -> 
+    let res = new_expr_desc @@ Bool b in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
+  | Var x -> 
+    let res = new_expr_desc @@ Var x in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
+  | Input -> 
+    let res = new_expr_desc @@ Input in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
+  | Untouched s ->
+    let res = new_expr_desc @@ Untouched s in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
+  | TypeError x -> 
+    let res = new_expr_desc @@ TypeError x in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   (* All other expressions are homomorphic *)
-  (* TODO: Add mappings here *)
   | Function (id_lst, f_expr) -> 
     let%bind f_expr' = semantic_type_of f_expr in
-    return @@ new_expr_desc @@ Function (id_lst, f_expr')
+    let res = new_expr_desc @@ Function (id_lst, f_expr') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Appl (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Appl (e1', e2')
+    let res = new_expr_desc @@ Appl (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Let (x, e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Let (x, e1', e2')
+    let res = new_expr_desc @@ Let (x, e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | LetRecFun (sig_lst, e) ->
     begin
       let%bind sig_lst' = 
@@ -702,7 +752,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
         |> sequence 
       in 
       let%bind e' = semantic_type_of e in
-      return @@ new_expr_desc @@ LetRecFun (sig_lst', e')
+      let res = new_expr_desc @@ LetRecFun (sig_lst', e') in
+      let%bind () = add_sem_to_syn_mapping res e_desc in
+      return res
     end
   | LetFun (fun_sig, e) ->
     begin
@@ -711,7 +763,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
         |> transform_funsig semantic_type_of
       in
       let%bind e' = semantic_type_of e in
-      return @@ new_expr_desc @@ LetFun (fun_sig', e')
+      let res = new_expr_desc @@ LetFun (fun_sig', e') in
+      let%bind () = add_sem_to_syn_mapping res e_desc in
+      return res
     end
   | LetWithType (x, e1, e2, t) -> 
     let%bind e1' = semantic_type_of e1 in
@@ -720,16 +774,16 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let res = new_expr_desc @@ LetWithType (x, e1', e2', t') in
     let%bind () = add_sem_to_syn_mapping res e_desc in
     (* let%bind () = add_natodefa_expr_error_structure_mapping (Var x) ? in *)
-    return @@ res
+    return res
   | LetRecFunWithType (sig_lst, e, t_lst) ->
     begin
-      let sig_t_lst = List.combine sig_lst t_lst in
-      let%bind () = sig_t_lst
+      (* let sig_t_lst = List.combine sig_lst t_lst in *)
+      (* let%bind () = sig_t_lst
         |> list_fold_left_m 
            (fun () (Funsig (f, _, _), f_t) -> 
               add_sem_to_syn_mapping (new_expr_desc @@ Var f) f_t)
            ()
-      in
+      in *)
       let%bind sig_lst' = 
         sig_lst
         |> List.map (transform_funsig semantic_type_of)
@@ -741,13 +795,15 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
         |> sequence
       in 
       let%bind e' = semantic_type_of e in
-      return @@ 
-      new_expr_desc @@ 
-        LetRecFunWithType (sig_lst', e', t_lst')
+      let res = 
+        new_expr_desc @@ 
+          LetRecFunWithType (sig_lst', e', t_lst')
+      in
+      let%bind () = add_sem_to_syn_mapping res e_desc in
+      return res
     end
   | LetFunWithType (fun_sig, e, t) -> 
     begin
-      (* let Funsig (f, _, _) = fun_sig in *)
       let%bind fun_sig' = 
         fun_sig 
         |> transform_funsig semantic_type_of
@@ -758,74 +814,108 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
         new_expr_desc @@ LetFunWithType (fun_sig', e', t')
       in
       let%bind () = add_sem_to_syn_mapping res e_desc in
-      return @@ res
+      return res
     end
   | Plus (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Plus (e1', e2')
+    let res = new_expr_desc @@ Plus (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Minus (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Minus (e1', e2')
+    let res = new_expr_desc @@ Minus (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Times (e1, e2) ->
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Times (e1', e2')
+    let res = new_expr_desc @@ Times (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Divide (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Divide (e1', e2')
+    let res = new_expr_desc @@ Divide (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Modulus (e1, e2) ->
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Modulus (e1', e2')
+    let res = new_expr_desc @@ Modulus (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Equal (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Equal (e1', e2')
+    let res = new_expr_desc @@ Equal (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Neq (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Neq (e1', e2')
+    let res = new_expr_desc @@ Neq (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | LessThan (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ LessThan (e1', e2')
+    let res = new_expr_desc @@ LessThan (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Leq (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Leq (e1', e2')
+    let res = new_expr_desc @@ Leq (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | GreaterThan (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ GreaterThan (e1', e2')
+    let res = new_expr_desc @@ GreaterThan (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Geq (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Geq (e1', e2')
+    let res = new_expr_desc @@ Geq (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | And (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ And (e1', e2')
+    let res = new_expr_desc @@ And (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Or (e1, e2) ->
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ Or (e1', e2')
+    let res = new_expr_desc @@ Or (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Not e -> 
     let%bind e' = semantic_type_of e in
-    return @@ new_expr_desc @@ Not e'
+    let res = new_expr_desc @@ Not e' in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | If (e1, e2, e3) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
     let%bind e3' = semantic_type_of e3 in
-    return @@ new_expr_desc @@ If (e1', e2', e3')
+    let res = new_expr_desc @@ If (e1', e2', e3') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Record m -> 
     let%bind m' = ident_map_map_m semantic_type_of m in
-    return @@ new_expr_desc @@ Record m'
+    let res = new_expr_desc @@ Record m' in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | RecordProj (e, l) ->
     let%bind e' = semantic_type_of e in
-    return @@ new_expr_desc @@ RecordProj (e', l)
+    let res = new_expr_desc @@ RecordProj (e', l) in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Match (e, pattern_expr_lst) ->
     let%bind e' = semantic_type_of e in
     let mapper (pat, expr) =
@@ -837,27 +927,39 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       |> List.map mapper 
       |> sequence
     in
-    return @@ new_expr_desc @@ Match (e', pattern_expr_lst')
+    let res = new_expr_desc @@ Match (e', pattern_expr_lst') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | VariantExpr (lbl, e) -> 
     let%bind e' = semantic_type_of e in
-    return @@ new_expr_desc @@ VariantExpr (lbl, e')
+    let res = new_expr_desc @@ VariantExpr (lbl, e') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | List expr_lst -> 
     let%bind expr_lst' = 
       expr_lst
       |> List.map semantic_type_of
       |> sequence
     in
-    return @@ new_expr_desc @@ List expr_lst'
+    let res = new_expr_desc @@ List expr_lst' in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | ListCons (e1, e2) -> 
     let%bind e1' = semantic_type_of e1 in
     let%bind e2' = semantic_type_of e2 in
-    return @@ new_expr_desc @@ ListCons (e1', e2')
+    let res = new_expr_desc @@ ListCons (e1', e2') in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Assert e ->
     let%bind e' = semantic_type_of e in
-    return @@ new_expr_desc @@ Assert e'
+    let res = new_expr_desc @@ Assert e' in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
   | Assume e -> 
     let%bind e' = semantic_type_of e in
-    return @@ new_expr_desc @@ Assume e'
+    let res = new_expr_desc @@ Assume e' in
+    let%bind () = add_sem_to_syn_mapping res e_desc in
+    return res
 
 (* Phase two of the transformation: erasing all type signatures from 
    the code. By the end of this phase, there should no longer be any
@@ -870,24 +972,48 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
   let e = e_desc.body in
   let _tag = e_desc.tag in
   match e with
-  | Int n -> return @@ new_expr_desc @@ Int n
-  | Bool b -> return @@ new_expr_desc @@ Bool b
-  | Var x -> return @@ new_expr_desc @@ Var x
-  | Input -> return @@ new_expr_desc @@ Input
-  | Untouched s -> return @@ new_expr_desc @@ Untouched s
+  | Int n -> 
+    let res = new_expr_desc @@ Int n in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
+  | Bool b -> 
+    let res = new_expr_desc @@ Bool b in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
+  | Var x -> 
+    let res = new_expr_desc @@ Var x in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
+  | Input -> 
+    let res = new_expr_desc @@ Input in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
+  | Untouched s -> 
+    let res = new_expr_desc @@ Untouched s in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   (* TODO (Earl): Come back to here to add mappings to dictionary *)
-  | TypeError x -> return @@ new_expr_desc @@ TypeError x
+  | TypeError x -> 
+    let res = new_expr_desc @@ TypeError x in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | Function (id_lst, e) -> 
     let%bind e' = typed_non_to_on e in
-    return @@ new_expr_desc @@ Function (id_lst, e')
+    let res = new_expr_desc @@ Function (id_lst, e') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | Appl (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Appl (e1', e2') 
+    let res = new_expr_desc @@ Appl (e1', e2') in 
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | Let (x, e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@  Let (x, e1', e2') 
+    let res = new_expr_desc @@ Let (x, e1', e2') in 
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | LetRecFun (sig_lst, e) ->
     begin
       let%bind sig_lst' = 
@@ -896,7 +1022,9 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
         |> sequence
       in
       let%bind e' = typed_non_to_on e in
-      return @@ new_expr_desc @@ LetRecFun (sig_lst', e')
+      let res = new_expr_desc @@ LetRecFun (sig_lst', e') in
+      let%bind () = add_core_to_sem_mapping res e_desc in
+      return res
     end
   | LetFun (fun_sig, e) ->
     begin
@@ -905,7 +1033,9 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
         |> (transform_funsig typed_non_to_on) 
       in
       let%bind e' = typed_non_to_on e in
-      return @@ new_expr_desc @@ LetFun (sig', e')
+      let res = new_expr_desc @@ LetFun (sig', e') in
+      let%bind () = add_core_to_sem_mapping res e_desc in
+      return res
     end
   | LetWithType (x, e1, e2, type_decl) ->
     begin
@@ -927,8 +1057,11 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
                new_expr_desc @@ Var x), 
              new_expr_desc @@ res_cls) 
       in
-      return @@ 
-      new_expr_desc @@ Let (x, e1', new_expr_desc check_cls)
+      let res =
+        new_expr_desc @@ Let (x, e1', new_expr_desc check_cls)
+      in
+      let%bind () = add_core_to_sem_mapping res e_desc in
+      return res
     end
   | LetRecFunWithType (sig_lst, e, type_decl_lst) ->
     begin
@@ -962,8 +1095,11 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
         |> List.map (transform_funsig typed_non_to_on)
         |> sequence 
       in
-      return @@ 
-      new_expr_desc @@ LetRecFun (sig_lst', test_exprs)
+      let res =
+        new_expr_desc @@ LetRecFun (sig_lst', test_exprs)
+      in
+      let%bind () = add_core_to_sem_mapping res e_desc in
+      return res
     end
   | LetFunWithType ((Funsig (f, _, _) as fun_sig), e, type_decl) ->
     begin
@@ -985,75 +1121,112 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
              new_expr_desc res_cls) 
       in
       let%bind fun_sig' = (transform_funsig typed_non_to_on) fun_sig in
-      return @@ 
-      new_expr_desc @@ LetFun (fun_sig', new_expr_desc check_cls)
+      let res =  
+        new_expr_desc @@ LetFun (fun_sig', new_expr_desc check_cls)
+      in
+      let%bind () = add_core_to_sem_mapping res e_desc in
+      return res
     end
   | Plus (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Plus (e1', e2') 
+    let res = new_expr_desc @@ Plus (e1', e2') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res 
   | Minus (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Minus (e1', e2') 
+    let res = new_expr_desc @@ Minus (e1', e2') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res 
   | Times (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Times (e1', e2') 
+    let res = new_expr_desc @@ Times (e1', e2') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res 
   | Divide (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Divide (e1', e2') 
+    let res = new_expr_desc @@ Divide (e1', e2') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res 
   | Modulus (e1, e2) ->
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Modulus (e1', e2') 
+    let res = new_expr_desc @@ Modulus (e1', e2') in 
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | Equal (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Equal (e1', e2') 
+    let res = new_expr_desc @@ Equal (e1', e2') in 
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | Neq (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Neq (e1', e2') 
+    let res = new_expr_desc @@ Neq (e1', e2') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | LessThan (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ LessThan (e1', e2')  
+    let res = new_expr_desc @@ LessThan (e1', e2') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res  
   | Leq (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Leq (e1', e2') 
+    let res = new_expr_desc @@ Leq (e1', e2') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res 
   | GreaterThan (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ GreaterThan (e1', e2') 
+    let res = new_expr_desc @@ GreaterThan (e1', e2') in 
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | Geq (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Geq (e1', e2') 
+    let res = new_expr_desc @@ Geq (e1', e2') in 
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | And (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ And (e1', e2') 
+    let res = new_expr_desc @@ And (e1', e2') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res 
   | Or (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ Or (e1', e2') 
+    let res = new_expr_desc @@ Or (e1', e2') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | Not e ->
     let%bind e' = typed_non_to_on e in
-    return @@ new_expr_desc @@ Not e'
+    let res = new_expr_desc @@ Not e' in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | If (e1, e2, e3) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
     let%bind e3' = typed_non_to_on e3 in
-    return @@ new_expr_desc @@ If (e1', e2', e3') 
+    let res = new_expr_desc @@ If (e1', e2', e3') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res 
   | Record m -> 
     let%bind m' = ident_map_map_m (fun e -> typed_non_to_on e) m in
-    return @@ new_expr_desc @@ Record m'
+    let res = new_expr_desc @@ Record m' in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | RecordProj (e, l) -> 
     let%bind e' = typed_non_to_on e in
-    return @@ new_expr_desc @@ RecordProj (e', l)
+    let res = new_expr_desc @@ RecordProj (e', l) in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | Match (e, pattern_expr_lst) ->
     let%bind e' = typed_non_to_on e in
     let mapper (pat, expr) =
@@ -1065,29 +1238,42 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
       |> List.map mapper
       |> sequence 
     in
-    return @@ 
-    new_expr_desc @@ 
-    Match (e', pattern_expr_lst')
+    let res =
+      new_expr_desc @@ 
+      Match (e', pattern_expr_lst')
+    in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | VariantExpr (lbl, e) -> 
     let%bind e' = typed_non_to_on e in
-    return @@ new_expr_desc @@ VariantExpr (lbl, e')
+    let res = new_expr_desc @@ VariantExpr (lbl, e') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | List expr_lst -> 
     let%bind expr_lst' = 
       expr_lst
       |> List.map typed_non_to_on
       |> sequence
     in
-    return @@ new_expr_desc @@ List expr_lst'
-  | ListCons (e1, e2) -> 
+    let res = new_expr_desc @@ List expr_lst' in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
+    | ListCons (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
-    return @@ new_expr_desc @@ ListCons (e1', e2') 
+    let res = new_expr_desc @@ ListCons (e1', e2') in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res 
   | Assert e -> 
     let%bind e' = typed_non_to_on e in
-    return @@ new_expr_desc @@ Assert e'
+    let res = new_expr_desc @@ Assert e' in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
   | Assume e -> 
     let%bind e' = typed_non_to_on e in
-    return @@ new_expr_desc @@ Assume e'
+    let res = new_expr_desc @@ Assume e' in
+    let%bind () = add_core_to_sem_mapping res e_desc in
+    return res
 
 let debug_transform_ton
   (trans_name : string)
