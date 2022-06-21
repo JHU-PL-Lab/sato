@@ -154,7 +154,7 @@ module Type_errors : Answer = struct
     | Some odefa_on_maps ->
       begin
         match error_opt with
-        | Some (error_loc, error_list) ->
+        | Some (error_loc, error_list, _solution) ->
           let rm_inst_fn =
             On_error.odefa_error_remove_instrument_vars odefa_on_maps
           in
@@ -238,11 +238,11 @@ module Natodefa_type_errors : Answer = struct
     match (!odefa_on_maps_option_ref, !ton_on_maps_option_ref) with
     | (Some odefa_on_maps, Some ton_on_maps) ->
       begin
-        let (input_seq, error_opt, err_vals_map) =
-          Generator_utils.input_sequence_from_result_natodefa e x result odefa_on_maps
+        let (input_seq, error_opt) =
+          Generator_utils.input_sequence_from_result e x result
         in
         match error_opt with
-        | Some (error_loc, error_lst) ->
+        | Some (error_loc, error_lst, solution) ->
           (* TODO (Earl): This probably should be the place to trace all the way
               back to the original, user-written Natodefa code.
               The current issue with how mappings are kept is that the abort vars
@@ -250,46 +250,80 @@ module Natodefa_type_errors : Answer = struct
               Need to find a way to chain up the assert false to the original point of
               error.
           *)
-          let on_err_loc =
-            On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps ton_on_maps error_loc
+          (* Getting the original syntactic natodefa expression *)
+          let on_err_loc_core =
+            error_loc
+            |> On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps 
           in
-          (* TODO (Earl): This is pretty hacky, but it'll do for now *)
-          (* More hack? Returns a pair to indicate whether we're handling type error here? *)
-          (* let err_loc_sem = 
-            Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps on_err_loc
-          in *)
-          (* let actual_err_loc_opt = 
-            Ton_to_on_maps.Intermediate_expr_desc_map.find_opt 
-            err_loc_sem 
-            ton_on_maps.sem_to_syn
+          let on_err_loc_nat = 
+            on_err_loc_core
+            |> Ton_to_on_maps.get_syn_nat_equivalent_expr ton_on_maps
           in
-          let actual_err_loc = 
-            match actual_err_loc_opt with
-            | Some l -> l
-            | None -> 
-              Ton_to_on_maps.syn_natodefa_from_sem_natodefa 
-              ton_on_maps 
-              err_loc_sem
-          in *)
-          (* If type error, pass a special flag to odefa_to_natodefa_error so that it'll handle
-              value error differently.
+          (* If type error, we need to find the corresponding point of error.
           *)
           let is_type_error = 
-            match on_err_loc.body with
-            | TypeError _ -> true
+            (* false *)
+            match on_err_loc_nat.body with
+            | LetWithType _ | LetFunWithType _ | LetRecFunWithType _ -> true
             | _ -> false
           in
-          let err_loc_option = 
-            if is_type_error then Some on_err_loc else None
+          (* This helper function is called in the case of a type error.
+             When given an odefa_err, it expects an Error_value. Through
+             the aliases, it will retrieve error variable in syn nat. 
+           *)
+          let find_err_ident odefa_err = 
+            match odefa_err with
+            | Error.Odefa_error.Error_binop _
+            | Error.Odefa_error.Error_match _ ->
+              failwith "This shouldn't happen!"
+            | Error.Odefa_error.Error_value err ->
+              let odefa_aliases = err.err_value_aliases in
+              let syn_nat_aliases = 
+                odefa_aliases
+                |> (On_to_odefa_maps.odefa_to_on_aliases odefa_on_maps)
+                |> List.map (Ton_to_on_maps.get_syn_nat_equivalent_expr ton_on_maps)
+              in
+              (* let () =
+                List.iter (fun ed -> print_endline @@ On_to_odefa.show_expr_desc ed) syn_nat_aliases
+              in *)
+              let core_eds = 
+                Ton_to_on_maps.get_core_match_expr_from_err_ident ton_on_maps syn_nat_aliases
+              in
+              (* let () = print_endline @@ string_of_bool @@ List.is_empty core_eds in *)
+              (* let () =
+                List.iter (fun ed -> print_endline @@ On_to_odefa.show_expr_desc ed) core_eds
+              in *)
+              let odefa_subj_var = 
+                List.map
+                (On_to_odefa_maps.get_odefa_subj_var_from_natodefa_expr odefa_on_maps)
+                core_eds
+              in
+              odefa_subj_var
+              |> List.filter_map 
+                (Generator_utils.answer_from_solution solution x result)
+              (* let () = print_endline @@ string_of_bool @@ List.is_empty odefa_subj_var in
+              let () = print_endline @@ Ast_pp.show_var @@ List.hd odefa_subj_var in
+              failwith "TBI!" *)
+          in
+          let err_vals_lst_opt = 
+            List.map 
+              (fun err -> 
+                if is_type_error 
+                then
+                  (err, Some (on_err_loc_nat, find_err_ident err))
+                else
+                  (err, None))
+            error_lst
           in
           let on_err_list =
             let mapper = 
-              (On_error.odefa_to_natodefa_error odefa_on_maps ton_on_maps err_loc_option err_vals_map) in 
-            List.map mapper error_lst
+              (On_error.odefa_to_natodefa_error odefa_on_maps ton_on_maps) 
+            in 
+            List.map mapper err_vals_lst_opt
           in
           Some {
             err_input_seq = input_seq;
-            err_location = on_err_loc;
+            err_location = on_err_loc_nat;
             err_errors = on_err_list;
             err_steps = steps;
           }

@@ -136,7 +136,6 @@ module type Error = sig
   }
 
   type error_type = {
-    err_type_aliases : ident list;
     err_type_val : value;
     err_type_expected : natodefa_type;
     err_type_actual : natodefa_type;
@@ -197,7 +196,6 @@ module Make
   [@@ deriving eq, to_yojson]
 
   type error_type = {
-    err_type_aliases : Ident.t list;
     err_type_val : Value.t;
     err_type_expected : NatodefaType.t;
     err_type_actual : NatodefaType.t;
@@ -309,14 +307,7 @@ module Make
 
   let pp_error_type formatter err =
     let pp_value formatter err =
-    let aliases = err.err_type_aliases in
-    let value = err.err_type_val in
-    if not @@ List.is_empty aliases then
-      Format.fprintf formatter 
-        "@[* Value    : @[%a@ =@ %a@]@]@,"
-        pp_alias_list aliases
-        Value.pp value
-    else
+      let value = err.err_type_val in
       Format.fprintf formatter 
         "@[* Value    : @[%a@]@]@,"
         Value.pp value
@@ -414,7 +405,7 @@ let odefa_error_remove_instrument_vars
 
 (* Helper function to remove adjacent duplicate entries in a list (note that
    this does not remove non-adjacent dupes). *)
-let deduplicate_list list =
+(* let deduplicate_list list =
   let res = 
   List.fold_right
     (fun x deduped_list ->
@@ -429,7 +420,7 @@ let deduplicate_list list =
     []
   in
   res
-;;
+;; *)
 
 (* Helper function that returns a natodefa binop, depending on the odefa
    binary operator. *)
@@ -644,27 +635,17 @@ let rec replace_type
 let odefa_to_natodefa_error 
     (odefa_on_maps : On_to_odefa_maps.t)
     (ton_on_maps : Ton_to_on_maps.t)
-    (err_loc_option : On_ast.syn_natodefa_edesc option)
-    (err_vals_map : Ast.value On_ast.Ident_map.t)
-    (odefa_err : Error.Odefa_error.t)
+    (odefa_err_with_val_opt : Error.Odefa_error.t * ((On_ast.syn_natodefa_edesc * Ast.value list) option))
   : On_error.t =
   (* Helper functions *)
   let odefa_to_on_expr x =
-    On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps ton_on_maps x
+    On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps x
+    |> Ton_to_on_maps.get_syn_nat_equivalent_expr ton_on_maps
   in
-  let odefa_to_on_aliases (aliases : Ast.ident list) : On_ast.ident list =
+  let odefa_to_syn_aliases (aliases : Ast.ident list) : On_ast.syn_natodefa_edesc list =
     aliases
-    |> List.filter_map
-      (fun alias ->
-        let temp = odefa_to_on_expr alias in
-        match (temp.body) with
-        | (On_ast.Var ident) -> Some ident
-        | _ -> None
-      )
-    (* During translation, some odefa vars are assigned to the same natodefa
-       vars (namely in var expressions).  The following procedure removes any
-       adjacent duplicates from the alias chain. *)
-    |> deduplicate_list
+    |> On_to_odefa_maps.odefa_to_on_aliases odefa_on_maps
+    |> List.map (Ton_to_on_maps.get_syn_nat_equivalent_expr ton_on_maps)
   in
   let odefa_to_on_value (aliases : Ast.ident list) : On_ast.syn_natodefa_edesc =
     let last_var =
@@ -674,6 +655,15 @@ let odefa_to_natodefa_error
         raise @@ Jhupllib.Utils.Invariant_failure "Can't have empty alias list!"
     in
     odefa_to_on_expr last_var
+  in
+  let get_idents_from_aliases aliases =
+    aliases
+    |> List.filter_map 
+    (fun ed -> 
+      match ed.body with
+      | On_ast.Var x -> Some x
+      | _ -> None
+    ) 
   in
   let odefa_to_on_type (typ : Ast.type_sig) : On_ast.type_sig =
     match typ with
@@ -693,30 +683,33 @@ let odefa_to_natodefa_error
         (Printf.sprintf "Bottom type not in natodefa")
   in
   (* Odefa to natodefa *)
+  let (odefa_err, loc_val_opt)  = odefa_err_with_val_opt in
   match odefa_err with
   | Error.Odefa_error.Error_binop err ->
     begin
       let l_aliases = err.err_binop_left_aliases in
       let r_aliases = err.err_binop_right_aliases in
-      let l_aliases_on = odefa_to_on_aliases l_aliases in
-      let r_aliases_on = odefa_to_on_aliases r_aliases in
+      let l_aliases_on = 
+        odefa_to_syn_aliases l_aliases
+      in
+      let r_aliases_on = odefa_to_syn_aliases r_aliases in
       let (_, op, _) = err.err_binop_operation in
       let l_value = odefa_to_on_value l_aliases in
       let r_value = odefa_to_on_value r_aliases in
       let constraint_expr =
         let left_expr =
           if List.is_empty l_aliases_on then l_value else
-            new_expr_desc @@ On_ast.Var (List.hd l_aliases_on)
+            List.hd l_aliases_on
         in
         let right_expr =
           if List.is_empty r_aliases_on then r_value else
-            new_expr_desc @@ On_ast.Var (List.hd r_aliases_on)
+            List.hd r_aliases_on
         in
         odefa_to_on_binop op left_expr right_expr
       in
       Error_binop {
-        err_binop_left_aliases = l_aliases_on;
-        err_binop_right_aliases = r_aliases_on;
+        err_binop_left_aliases = get_idents_from_aliases l_aliases_on;
+        err_binop_right_aliases = get_idents_from_aliases r_aliases_on;
         err_binop_left_val = l_value.body;
         err_binop_right_val = r_value.body;
         err_binop_operation = constraint_expr;
@@ -726,7 +719,8 @@ let odefa_to_natodefa_error
     begin
       let aliases = err.err_match_aliases in
       Error_match {
-        err_match_aliases = odefa_to_on_aliases aliases;
+        err_match_aliases = 
+          get_idents_from_aliases @@ odefa_to_syn_aliases aliases;
         err_match_val = (odefa_to_on_value aliases).body;
         err_match_expected = odefa_to_on_type err.err_match_expected;
         err_match_actual = odefa_to_on_type err.err_match_actual;
@@ -735,39 +729,44 @@ let odefa_to_natodefa_error
   | Error.Odefa_error.Error_value err ->
     begin
       let aliases = err.err_value_aliases in
-      match err_loc_option with
+      match loc_val_opt with
       | None ->
         Error_value {
-          err_value_aliases = odefa_to_on_aliases aliases;
+          err_value_aliases = 
+            get_idents_from_aliases @@ odefa_to_syn_aliases aliases;
           err_value_val = (odefa_to_on_value aliases).body;
         }
-      | Some err_loc ->
+      | Some (error_loc, err_val_lst) ->
         let expected_type = 
-          match (err_loc.body) with
+          match (error_loc.body) with
           | LetWithType (_, _, _, t) -> t
           | LetFunWithType (_, _, t) -> t
           (* TODO: Need to fix this case later *)
           | LetRecFunWithType (_, _, ts) -> List.hd ts
           | _ -> failwith "Shouldn't be here!"
         in
-        let t_aliases = odefa_to_on_aliases aliases in
         let t_val = 
-          t_aliases
-          |> List.filter_map 
-            (fun alias -> 
-              On_ast.Ident_map.find_opt alias err_vals_map)
+          List.hd err_val_lst
         in
         let new_t = 
-          if List.is_empty t_val then failwith "Scream!"
-          else
-            match (List.hd t_val) with
-            | Value_int _ -> new_expr_desc @@ TypeInt
-            | Value_bool _ -> new_expr_desc @@ TypeBool
-            | _ -> 
-              failwith "Houston we have a problem!"
+          match t_val with
+          | Value_int _ -> new_expr_desc @@ TypeInt
+          | Value_bool _ -> new_expr_desc @@ TypeBool
+          | _ -> 
+            failwith "Houston we have a problem!"
+        in
+        let syn_nat_aliases = 
+          aliases
+          |> (On_to_odefa_maps.odefa_to_on_aliases odefa_on_maps)
         in
         let find_tag =
-          t_aliases
+          syn_nat_aliases
+          |> List.filter_map 
+            (fun e -> 
+              match e.body with
+              | On_ast.Var x -> Some x
+              | _ -> None
+              )
           |> List.filter_map 
             (fun alias -> On_ast.Ident_map.find_opt alias ton_on_maps.error_to_expr_tag)
         in
@@ -781,7 +780,6 @@ let odefa_to_natodefa_error
           replace_type expected_type new_t tag
         in
         Error_natodefa_type {
-          err_type_aliases = odefa_to_on_aliases aliases;
           err_type_val = (odefa_to_on_value aliases).body;
           err_type_expected = expected_type.body;
           err_type_actual = actual_type.body;

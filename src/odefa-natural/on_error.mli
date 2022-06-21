@@ -91,7 +91,6 @@ module type Error = sig
   }
 
   type error_type = {
-    err_type_aliases : ident list;
     err_type_val : value;
     err_type_expected : natodefa_type;
     err_type_actual : natodefa_type;
@@ -142,5 +141,8 @@ val odefa_error_remove_instrument_vars :
 (** Given an odefa/natodefa mapping, converts an odefa error into a natodefa
     error. *)
 val odefa_to_natodefa_error :
-  On_to_odefa_maps.t -> Ton_to_on_maps.t -> On_ast.syn_natodefa_edesc option -> Ast.value On_ast.Ident_map.t -> Error.Odefa_error.t -> On_error.t
+  On_to_odefa_maps.t -> 
+  Ton_to_on_maps.t -> 
+  Error.Odefa_error.t * ((On_ast.syn_natodefa_edesc * Ast.value list) option) -> 
+  On_error.t
 ;;

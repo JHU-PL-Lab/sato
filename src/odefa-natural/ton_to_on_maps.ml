@@ -397,3 +397,53 @@ let rec sem_natodefa_from_on_err ton_on_maps (on_err_desc : core_natodefa_edesc)
       {tag = og_tag; body = Assume (e')}
     | Untouched s -> {tag = og_tag; body = Untouched s}
 ;;
+
+
+let get_syn_nat_equivalent_expr ton_on_maps (expr : On_ast.core_natodefa_edesc) =
+  expr
+  |> sem_natodefa_from_on_err ton_on_maps
+  |> syn_natodefa_from_sem_natodefa ton_on_maps
+;;
+
+let get_core_match_expr_from_err_ident ton_on_maps (eds : On_ast.syn_natodefa_edesc list) : On_ast.core_natodefa_edesc list = 
+  let idents = 
+    eds
+    |> List.filter_map 
+    (fun ed -> 
+      match ed.body with
+      | On_ast.Var x -> Some x
+      | _ -> None
+    )
+  in
+  let find_match_tag x =
+    Int_map.fold 
+    (fun tag fail_id acc -> if (fail_id = x) then Some tag else acc) 
+    ton_on_maps.match_tag_to_error_id None  
+  in
+  let match_tags = 
+    List.filter_map find_match_tag idents
+  in
+  (* let () = print_endline @@ string_of_bool @@ List.is_empty match_tags in
+  let () =
+    List.iter (fun t -> print_endline @@ string_of_int t) match_tags
+  in *)
+  (* let get_sem_expr_from_syn_tag tag = 
+    Intermediate_expr_desc_map.fold 
+    (fun sem_ed _syn_ed acc -> if (sem_ed.tag == tag) then Some sem_ed else acc) 
+    ton_on_maps.sem_to_syn None
+  in
+  let sem_expr = 
+    List.filter_map get_sem_expr_from_syn_tag match_tags
+  in *)
+  (* let () = print_endline @@ string_of_bool @@ List.is_empty sem_expr in *)
+  let get_core_expr_from_sem_expr tag = 
+    Core_expr_desc_map.fold 
+    (fun core_ed sem_ed acc -> if (tag = sem_ed.tag) then Some core_ed else acc) 
+    ton_on_maps.core_to_sem None
+  in
+  let core_expr = 
+    List.filter_map get_core_expr_from_sem_expr match_tags
+  in
+  core_expr
+  (* failwith "TBI!" *)
+;;

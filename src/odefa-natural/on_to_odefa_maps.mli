@@ -35,6 +35,8 @@ val add_on_var_to_var_mapping : t -> On_ast.ident -> On_ast.ident -> t;;
     desugaring lists or variants. *)
 val add_on_idents_to_type_mapping : t -> On_ast.Ident_set.t -> On_ast.type_sig -> t;;
 
+val add_match_id_to_subj_var_mapping : t -> Ast.ident -> Ast.var -> t;;
+
 val add_false_id_to_subj_var_mapping : t -> On_ast.ident -> Ast.var -> t;;
 (* val add_abort_mapping : t -> Ast.ident -> abort_value -> t;; *)
 
@@ -47,9 +49,11 @@ val add_false_id_to_subj_var_mapping : t -> On_ast.ident -> Ast.var -> t;;
     before instrumentation. *)
 val get_pre_inst_equivalent_clause : t -> Ast.ident -> Ast.clause;;
 
+val odefa_to_on_aliases : t -> Ast.ident list -> On_ast.core_natodefa_edesc list;;
+
 (** Get the natodefa expression that the odefa clause that the odefa var
     identifies maps to. *)
-val get_natodefa_equivalent_expr : t -> Ton_to_on_maps.t -> Ast.ident -> On_ast.syn_natodefa_edesc;;
+val get_natodefa_equivalent_expr : t -> Ast.ident -> On_ast.core_natodefa_edesc;;
 
 (** Get the natodefa type that a set of record labels corresponds to.  If
     there is no mapping that exists, return a record type by default. *)
@@ -67,3 +71,5 @@ val get_false_id_to_subj_var_mapping : t -> Ast.var On_ast.Ident_map.t;;
 
 val on_expr_transformer : (On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc) ->
     On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc;;
+
+val get_odefa_subj_var_from_natodefa_expr : t -> On_ast.core_natodefa_edesc -> Ast.var;;

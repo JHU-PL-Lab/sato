@@ -63,7 +63,9 @@ module TranslationMonad : sig
   (** Map a set of natodefa idents to a natodefa type. *)
   val add_natodefa_type_mapping : On_ast.Ident_set.t -> On_ast.type_sig -> unit m
 
-  val add_false_id_subj_var_mapping : On_ast.ident -> Ast.var -> unit m;;
+  val add_match_id_subj_var_mapping : Ast.ident -> Ast.var -> unit m
+
+  val add_false_id_subj_var_mapping : On_ast.ident -> Ast.var -> unit m
 
   (** Retrieve the odefa-to-natodefa maps from the monad *)
   val odefa_natodefa_maps : On_to_odefa_maps.t m
@@ -163,6 +165,11 @@ end = struct
     ctx.tc_odefa_natodefa_mappings
       <- On_to_odefa_maps.add_on_idents_to_type_mapping odefa_on_maps k_idents v_type
   ;;
+
+  let add_match_id_subj_var_mapping m_id subj_var ctx = 
+    let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
+    ctx.tc_odefa_natodefa_mappings
+      <- On_to_odefa_maps.add_match_id_to_subj_var_mapping odefa_on_maps m_id subj_var
 
   let add_false_id_subj_var_mapping f_id subj_var ctx = 
     let odefa_on_maps = ctx.tc_odefa_natodefa_mappings in
