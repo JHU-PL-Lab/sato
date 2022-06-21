@@ -154,7 +154,7 @@ module Type_errors : Answer = struct
     | Some odefa_on_maps ->
       begin
         match error_opt with
-        | Some (error_loc, error_list, _solution) ->
+        | Some (error_loc, error_list, _, _solution) ->
           let rm_inst_fn =
             On_error.odefa_error_remove_instrument_vars odefa_on_maps
           in
@@ -242,7 +242,7 @@ module Natodefa_type_errors : Answer = struct
           Generator_utils.input_sequence_from_result e x result
         in
         match error_opt with
-        | Some (error_loc, error_lst, solution) ->
+        | Some (error_loc, error_lst, ab_var, solution) ->
           (* TODO (Earl): This probably should be the place to trace all the way
               back to the original, user-written Natodefa code.
               The current issue with how mappings are kept is that the abort vars
@@ -299,8 +299,8 @@ module Natodefa_type_errors : Answer = struct
                 core_eds
               in
               odefa_subj_var
-              |> List.filter_map 
-                (Generator_utils.answer_from_solution solution x result)
+              (* |> List.filter_map  *)
+                (* (Generator_utils.answer_from_solution solution x result) *)
               (* let () = print_endline @@ string_of_bool @@ List.is_empty odefa_subj_var in
               let () = print_endline @@ Ast_pp.show_var @@ List.hd odefa_subj_var in
               failwith "TBI!" *)
@@ -310,7 +310,21 @@ module Natodefa_type_errors : Answer = struct
               (fun err -> 
                 if is_type_error 
                 then
-                  (err, Some (on_err_loc_nat, find_err_ident err))
+                  let additional_queries = 
+                    err
+                    |> find_err_ident
+                    |> List.map 
+                       (fun v ->
+                        let (Var (x, _), Var (_, stack)) = (v, ab_var)
+                        in 
+                        let res = Var (x, stack) in
+                        let () = print_endline @@ show_var res
+                        in
+                        res
+                       )
+                    |> List.filter_map (Generator_utils.answer_from_solution solution x result)
+                  in
+                  (err, Some (on_err_loc_nat, additional_queries))
                 else
                   (err, None))
             error_lst

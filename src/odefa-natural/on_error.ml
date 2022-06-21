@@ -746,6 +746,7 @@ let odefa_to_natodefa_error
           | _ -> failwith "Shouldn't be here!"
         in
         let t_val = 
+          if List.is_empty err_val_lst then failwith "Scream!" else
           List.hd err_val_lst
         in
         let new_t = 

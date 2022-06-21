@@ -101,7 +101,7 @@ let input_sequence_from_result
     (e : expr)
     (x : Ident.t)
     (result : Interpreter.evaluation_result)
-  : (int list * (Ast.ident * Error.Odefa_error.t list * Solver.solution) option) =
+  : (int list * (Ast.ident * Error.Odefa_error.t list * Ast.var * Solver.solution) option) =
   match Solver.solve result.er_solver with
   | None ->
     raise @@ Jhupllib_utils.Invariant_failure
@@ -210,7 +210,15 @@ let input_sequence_from_result
             |> List.filter (fun l -> not @@ List.is_empty l)
             |> List.flatten
           in
-          Some (abort_location, error_list, solution)
+          (* let additional_queries = 
+            vs
+            |> List.map
+              (fun x ->
+                match x with
+                | Var (x, _) -> Symbol (x, relstack))
+            |> List.filter_map get_value
+          in *)
+          Some (abort_location, error_list, ab_var, solution)
         end
       | None -> None
     in
@@ -234,6 +242,7 @@ let answer_from_solution
     let (x, stack) = destructure_var v in
     let relstack = relativize_stack stop_stack stack in
     let symbol = Symbol(x, relstack) in
+    let () = print_endline @@ "Symbol: " ^ show_symbol symbol in
     get_value symbol
   in
   get_val_from_solver v
