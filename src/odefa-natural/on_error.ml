@@ -354,6 +354,12 @@ let odefa_error_remove_instrument_vars
         not @@ On_to_odefa_maps.is_var_instrumenting odefa_on_maps alias)
       aliases
   in
+  let remove_instrument_symbols symbols =
+    List.filter
+      (fun (Interpreter_types.Symbol (alias, _)) ->
+        not @@ On_to_odefa_maps.is_var_instrumenting odefa_on_maps alias)
+      symbols
+  in
   match error with
   | Error_binop err ->
     begin
@@ -393,10 +399,10 @@ let odefa_error_remove_instrument_vars
     end
   | Error_value err ->
     begin
-      let aliases = err.err_value_aliases in
+      let symbols = err.err_value_aliases in
       Error_value {
         err with
-        err_value_aliases = remove_instrument_aliases aliases;
+        err_value_aliases = remove_instrument_symbols symbols;
       }
     end
 ;;
@@ -729,12 +735,20 @@ let odefa_to_natodefa_error
   | Error.Odefa_error.Error_value err ->
     begin
       let aliases = err.err_value_aliases in
+      let odefa_aliases = 
+        aliases
+        |> List.map (fun (Interpreter_types.Symbol (x, _)) -> x)
+        |> List.unique
+      in
+      let odefa_aliases' = 
+        odefa_aliases
+        |> List.map (fun (Ast.Ident x) -> Ident x)
+      in
       match loc_val_opt with
       | None ->
         Error_value {
-          err_value_aliases = 
-            get_idents_from_aliases @@ odefa_to_syn_aliases aliases;
-          err_value_val = (odefa_to_on_value aliases).body;
+          err_value_aliases = odefa_aliases';
+          err_value_val = (odefa_to_on_value odefa_aliases).body;
         }
       | Some (error_loc, err_val_lst) ->
         let expected_type = 
@@ -756,20 +770,21 @@ let odefa_to_natodefa_error
           | _ -> 
             failwith "Houston we have a problem!"
         in
-        let syn_nat_aliases = 
-          aliases
+        let sem_nat_aliases = 
+          odefa_aliases
           |> (On_to_odefa_maps.odefa_to_on_aliases odefa_on_maps)
+          |> List.map @@ Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps
         in
         let find_tag =
-          syn_nat_aliases
-          |> List.filter_map 
+          sem_nat_aliases
+          (* |> List.filter_map 
             (fun e -> 
               match e.body with
               | On_ast.Var x -> Some x
               | _ -> None
-              )
+              ) *)
           |> List.filter_map 
-            (fun alias -> On_ast.Ident_map.find_opt alias ton_on_maps.error_to_expr_tag)
+            (fun alias -> Ton_to_on_maps.Intermediate_expr_desc_map.find_opt alias ton_on_maps.error_to_expr_tag)
         in
         let tag = 
           if List.is_empty find_tag then failwith "Scream!"
@@ -781,7 +796,7 @@ let odefa_to_natodefa_error
           replace_type expected_type new_t tag
         in
         Error_natodefa_type {
-          err_type_val = (odefa_to_on_value aliases).body;
+          err_type_val = (odefa_to_on_value odefa_aliases).body;
           err_type_expected = expected_type.body;
           err_type_actual = actual_type.body;
         }

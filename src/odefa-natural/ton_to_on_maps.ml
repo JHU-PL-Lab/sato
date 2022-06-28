@@ -3,15 +3,31 @@ open Jhupllib;;
 
 open On_ast;;
 
+(* module User_expr_desc = struct
+  include On_ast.Typed_expr_desc;;
+  let pp = On_ast_pp.pp_expr_desc;;
+end;; *)
+
+module Intermediate_expr_desc = struct
+  include On_ast.Semantic_typed_expr_desc;;
+  let pp = On_ast_pp.pp_expr_desc;;
+end;;
+
 module Core_expr_desc = struct
   include On_ast.Core_expr_desc;;
   let pp = On_ast_pp.pp_expr_desc;;
 end;;
 
+(* module User_expr_desc_map = struct
+  module M = Map.Make(User_expr_desc);;
+  include M;;
+  include Pp_utils.Map_pp(M)(User_expr_desc);;
+end;; *)
 
-module Intermediate_expr_desc = struct
-  include On_ast.Semantic_typed_expr_desc;;
-  let pp = On_ast_pp.pp_expr_desc;;
+module Intermediate_expr_desc_map = struct
+  module M = Map.Make(Intermediate_expr_desc);;
+  include M;;
+  include Pp_utils.Map_pp(M)(Intermediate_expr_desc);;
 end;;
 
 module Core_expr_desc_map = struct
@@ -20,20 +36,14 @@ module Core_expr_desc_map = struct
   include Pp_utils.Map_pp(M)(Core_expr_desc);;
 end;;
 
-module Intermediate_expr_desc_map = struct
-  module M = Map.Make(Intermediate_expr_desc);;
-  include M;;
-  include Pp_utils.Map_pp(M)(Intermediate_expr_desc);;
-end;;
-
 module Int_map = Map.Make(struct type t = int let compare = compare end)
 
 type t = {
   error_to_natodefa_expr : sem_natodefa_edesc Ident_map.t;
   sem_to_syn : syn_natodefa_edesc Intermediate_expr_desc_map.t;
   core_to_sem : sem_natodefa_edesc Core_expr_desc_map.t;
-  error_to_expr_tag : int Ident_map.t;
-  match_tag_to_error_id : ident Int_map.t;
+  error_to_expr_tag : int Intermediate_expr_desc_map.t;
+  match_tag_to_error_expr : sem_natodefa_edesc Int_map.t;
 }
 ;;
 
@@ -41,8 +51,8 @@ let empty = {
   error_to_natodefa_expr = Ident_map.empty;
   sem_to_syn = Intermediate_expr_desc_map.empty;
   core_to_sem = Core_expr_desc_map.empty;
-  error_to_expr_tag = Ident_map.empty;
-  match_tag_to_error_id = Int_map.empty;
+  error_to_expr_tag = Intermediate_expr_desc_map.empty;
+  match_tag_to_error_expr = Int_map.empty;
 }
 ;;
 
@@ -70,19 +80,19 @@ let add_core_sem_expr_mapping mappings core sem =
   }
 ;;
 
-let add_error_expr_tag_mapping mappings err_id expr_tag =
+let add_error_expr_tag_mapping mappings err_expr expr_tag =
   let error_expr_tag_mapping = mappings.error_to_expr_tag in
   { mappings with 
     error_to_expr_tag = 
-      Ident_map.add err_id expr_tag error_expr_tag_mapping;
+      Intermediate_expr_desc_map.add err_expr expr_tag error_expr_tag_mapping;
   }
 ;;
 
-let add_match_tag_error_mapping mappings match_tag err_id =
-  let match_tag_err_mapping = mappings.match_tag_to_error_id in
+let add_match_tag_error_mapping mappings match_tag err_expr =
+  let match_tag_err_mapping = mappings.match_tag_to_error_expr in
   { mappings with 
-  match_tag_to_error_id = 
-      Int_map.add match_tag err_id match_tag_err_mapping;
+  match_tag_to_error_expr = 
+      Int_map.add match_tag err_expr match_tag_err_mapping;
   }
 ;;
 
@@ -405,23 +415,33 @@ let get_syn_nat_equivalent_expr ton_on_maps (expr : On_ast.core_natodefa_edesc) 
   |> syn_natodefa_from_sem_natodefa ton_on_maps
 ;;
 
-let get_core_match_expr_from_err_ident ton_on_maps (eds : On_ast.syn_natodefa_edesc list) : On_ast.core_natodefa_edesc list = 
-  let idents = 
+let show_expr_desc :
+  type a. a On_ast.expr_desc -> string = 
+  fun e -> 
+  Pp_utils.pp_to_string On_ast_pp.pp_expr_desc e;;
+
+let get_core_match_expr_from_err_ident ton_on_maps (eds : On_ast.sem_natodefa_edesc list) : On_ast.core_natodefa_edesc list = 
+  (* let idents = 
+    let () =
+    List.iter 
+    (fun e -> print_endline 
+      @@ "This is the error expr: " ^ (show_expr_desc e)) eds
+    in
     eds
     |> List.filter_map 
     (fun ed -> 
       match ed.body with
-      | On_ast.Var x -> Some x
+      | On_ast.Var _ -> Some ed
       | _ -> None
     )
-  in
+  in *)
   let find_match_tag x =
     Int_map.fold 
-    (fun tag fail_id acc -> if (fail_id = x) then Some tag else acc) 
-    ton_on_maps.match_tag_to_error_id None  
+    (fun tag fail_expr acc -> if (fail_expr = x) then Some tag else acc) 
+    ton_on_maps.match_tag_to_error_expr None  
   in
   let match_tags = 
-    List.filter_map find_match_tag idents
+    List.filter_map find_match_tag eds
   in
   (* let () = print_endline @@ string_of_bool @@ List.is_empty match_tags in
   let () =

@@ -242,7 +242,7 @@ module Natodefa_type_errors : Answer = struct
           Generator_utils.input_sequence_from_result e x result
         in
         match error_opt with
-        | Some (error_loc, error_lst, ab_var, solution) ->
+        | Some (error_loc, error_lst, _ab_var, solution) ->
           (* TODO (Earl): This probably should be the place to trace all the way
               back to the original, user-written Natodefa code.
               The current issue with how mappings are kept is that the abort vars
@@ -255,6 +255,10 @@ module Natodefa_type_errors : Answer = struct
             error_loc
             |> On_to_odefa_maps.get_natodefa_equivalent_expr odefa_on_maps 
           in
+          (* let on_err_sem = 
+            on_err_loc_core
+            |> Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps 
+          in *)
           let on_err_loc_nat = 
             on_err_loc_core
             |> Ton_to_on_maps.get_syn_nat_equivalent_expr ton_on_maps
@@ -277,28 +281,54 @@ module Natodefa_type_errors : Answer = struct
             | Error.Odefa_error.Error_match _ ->
               failwith "This shouldn't happen!"
             | Error.Odefa_error.Error_value err ->
-              let odefa_aliases = err.err_value_aliases in
-              let syn_nat_aliases = 
+              let odefa_symbols = err.err_value_aliases in
+              let odefa_aliases = 
+                odefa_symbols
+                |> List.map (fun (Interpreter_types.Symbol (x, _)) -> x)
+                |> List.unique
+              in
+              let sem_nat_aliases = 
                 odefa_aliases
                 |> (On_to_odefa_maps.odefa_to_on_aliases odefa_on_maps)
-                |> List.map (Ton_to_on_maps.get_syn_nat_equivalent_expr ton_on_maps)
+                |> List.map (Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps)
               in
-              (* let () =
-                List.iter (fun ed -> print_endline @@ On_to_odefa.show_expr_desc ed) syn_nat_aliases
-              in *)
+              let () =
+                List.iter (fun ed -> print_endline @@ On_to_odefa.show_expr_desc ed) sem_nat_aliases
+              in
               let core_eds = 
-                Ton_to_on_maps.get_core_match_expr_from_err_ident ton_on_maps syn_nat_aliases
+                Ton_to_on_maps.get_core_match_expr_from_err_ident ton_on_maps sem_nat_aliases
               in
-              (* let () = print_endline @@ string_of_bool @@ List.is_empty core_eds in *)
-              (* let () =
+              let () = print_endline @@ string_of_bool @@ List.is_empty core_eds in
+              let () =
                 List.iter (fun ed -> print_endline @@ On_to_odefa.show_expr_desc ed) core_eds
-              in *)
+              in
               let odefa_subj_var = 
                 List.map
                 (On_to_odefa_maps.get_odefa_subj_var_from_natodefa_expr odefa_on_maps)
                 core_eds
               in
-              odefa_subj_var
+              let () = print_endline "----------" in
+              let () =
+                List.iter 
+                (fun s -> print_endline @@ Interpreter_types.show_symbol s) 
+                odefa_symbols 
+              in
+              let () = print_endline "----------" in
+              let relstacks = 
+                odefa_symbols 
+                |> List.map (fun (Interpreter_types.Symbol (_, relstack)) -> relstack)
+              in
+              let res = 
+                odefa_subj_var
+                |> List.map (fun (Var (x, _)) -> x)
+                |> List.map 
+                  (fun x -> 
+                    List.map (fun relstack -> Interpreter_types.Symbol (x, relstack))
+                    relstacks
+                  )
+                |> List.concat
+              in
+              res
               (* |> List.filter_map  *)
                 (* (Generator_utils.answer_from_solution solution x result) *)
               (* let () = print_endline @@ string_of_bool @@ List.is_empty odefa_subj_var in
@@ -313,7 +343,7 @@ module Natodefa_type_errors : Answer = struct
                   let additional_queries = 
                     err
                     |> find_err_ident
-                    |> List.map 
+                    (* |> List.map 
                        (fun v ->
                         let (Var (x, _), Var (_, stack)) = (v, ab_var)
                         in 
@@ -321,8 +351,8 @@ module Natodefa_type_errors : Answer = struct
                         let () = print_endline @@ show_var res
                         in
                         res
-                       )
-                    |> List.filter_map (Generator_utils.answer_from_solution solution x result)
+                       ) *)
+                    |> List.filter_map (Generator_utils.answer_from_solution solution)
                   in
                   (err, Some (on_err_loc_nat, additional_queries))
                 else

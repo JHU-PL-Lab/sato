@@ -227,25 +227,11 @@ let input_sequence_from_result
 
 let answer_from_solution
     (solution : Solver.solution)
-    (x : Ident.t)
-    (result : Interpreter.evaluation_result)
-    (v : Ast.var)
+    (symbol : Interpreter_types.symbol)
   : Ast.value option =
   let (get_value, _) = solution in
-  let Concrete_stack stack = result.er_stack in
-  let stop_var =
-    (* Var(successor_var e x, Some(Freshening_stack(stack))) *)
-    Var (x, Some (Freshening_stack stack))
-  in
-  let (_, stop_stack) = destructure_var stop_var in
-  let get_val_from_solver v = 
-    let (x, stack) = destructure_var v in
-    let relstack = relativize_stack stop_stack stack in
-    let symbol = Symbol(x, relstack) in
-    let () = print_endline @@ "Symbol: " ^ show_symbol symbol in
-    get_value symbol
-  in
-  get_val_from_solver v
+  let () = print_endline @@ show_symbol symbol in
+  get_value symbol
 ;;
 
 let input_sequence_from_result_natodefa

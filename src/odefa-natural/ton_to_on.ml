@@ -65,11 +65,12 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     in
     let%bind expr_id = fresh_ident "expr" in 
     let%bind fail_id = fresh_ident "fail" in
+    let (fail_pat_cls : sem_natodefa_edesc) = new_expr_desc @@ Var fail_id in
     let match_edesc = 
       new_expr_desc @@
       Match (new_expr_desc (Var expr_id), 
             [(IntPat, new_expr_desc @@ Bool true); 
-             (AnyPat, new_expr_desc @@ Var fail_id)])
+             (AnyPat, fail_pat_cls)])
     in
     let%bind checker =
       let check_cls = 
@@ -79,8 +80,8 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
         Let (fail_id, new_expr_desc @@ Bool false, new_expr_desc @@ check_cls) 
       in
       (* Adding error point to tag mapping *)
-      let%bind () = add_error_to_tag_mapping fail_id tag in
-      let%bind () = add_match_to_error_mapping match_edesc.tag fail_id in
+      let%bind () = add_error_to_tag_mapping fail_pat_cls tag in
+      let%bind () = add_match_to_error_mapping match_edesc.tag fail_pat_cls in
       return @@ fail_cls
     in
     let rec_map = 
@@ -99,11 +100,12 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     in
     let%bind expr_id = fresh_ident "expr" in 
     let%bind fail_id = fresh_ident "fail" in
+    let (fail_pat_cls : sem_natodefa_edesc) = new_expr_desc @@ Var fail_id in
     let match_edesc = 
       new_expr_desc @@
       Match (new_expr_desc (Var expr_id), 
             [(BoolPat, new_expr_desc @@ Bool true); 
-             (AnyPat, new_expr_desc @@ Var fail_id)])
+             (AnyPat, fail_pat_cls)])
     in
     let%bind checker =
       let check_cls = 
@@ -112,8 +114,8 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       let fail_cls = 
         Let (fail_id, new_expr_desc @@ Bool false, new_expr_desc @@ check_cls) 
       in
-      let%bind () = add_error_to_tag_mapping fail_id tag in
-      let%bind () = add_match_to_error_mapping match_edesc.tag fail_id in
+      let%bind () = add_error_to_tag_mapping fail_pat_cls tag in
+      let%bind () = add_match_to_error_mapping match_edesc.tag fail_pat_cls in
       return @@ fail_cls
     in
     let rec_map = 
@@ -243,7 +245,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     return res
   | TypeList l ->
     (* TODO: Might need the tag here as well; add mapping*)
-    let%bind gc_pair = semantic_type_of l in
+    let%bind gc_pair_g = semantic_type_of l in
     let%bind generator = 
       let%bind len_id = fresh_ident "len" in
       let%bind list_id = fresh_ident "list" in
@@ -254,7 +256,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
               new_expr_desc @@
               Appl (
                 new_expr_desc @@
-                RecordProj (gc_pair, Label "generator"), 
+                RecordProj (gc_pair_g, Label "generator"), 
                 new_expr_desc @@
                 Int 0), 
               new_expr_desc @@
@@ -297,6 +299,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind expr_id = fresh_ident "expr" in
     let%bind elm_check_fail = fresh_ident "elm_fail" in
     let%bind lst_check_fail = fresh_ident "lst_fail" in
+    let%bind gc_pair_c = semantic_type_of l in
     let%bind checker = 
     let test_fun = 
       Match (
@@ -310,7 +313,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
               new_expr_desc @@
               Appl (
                 new_expr_desc @@
-                RecordProj (gc_pair, Label "checker"), 
+                RecordProj (gc_pair_c, Label "checker"), 
                 new_expr_desc @@ Var (Ident "hd")), 
               new_expr_desc @@
               If (new_expr_desc @@ Var elm_check_id, 
@@ -358,18 +361,18 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     return res
   | TypeArrow (t1, t2) ->
     (* TODO: Mapping *)
-    let%bind gc_pair_dom = semantic_type_of t1 in
-    let%bind gc_pair_cod = semantic_type_of t2 in
+    let%bind gc_pair_dom_gen = semantic_type_of t1 in
+    let%bind gc_pair_cod_gen = semantic_type_of t2 in
     let%bind generator = 
       let%bind arg_assume = fresh_ident "arg_assume" in
       let inner_expr = 
         If (new_expr_desc @@
           Appl (new_expr_desc @@ 
-            RecordProj (gc_pair_dom, Label "checker"), 
+            RecordProj (gc_pair_dom_gen, Label "checker"), 
               new_expr_desc @@ Var arg_assume), 
           new_expr_desc @@
           Appl (new_expr_desc @@ 
-            RecordProj (gc_pair_cod, Label "generator"), 
+            RecordProj (gc_pair_cod_gen, Label "generator"), 
               new_expr_desc @@ Int 0), 
           new_expr_desc @@ 
             Assert (new_expr_desc @@ Bool false)) in 
@@ -379,12 +382,14 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind expr_id = fresh_ident "expr" in
     let%bind arg_assert = fresh_ident "arg_assert" in
     let%bind codom_check_id = fresh_ident "codom_check" in
+    let%bind gc_pair_dom_check = semantic_type_of t1 in
+    let%bind gc_pair_cod_check = semantic_type_of t2 in
     let%bind checker = 
       let codom_check = 
         Let (codom_check_id, 
           new_expr_desc @@
           Appl (new_expr_desc @@
-            RecordProj (gc_pair_cod, Label "checker"), 
+            RecordProj (gc_pair_cod_check, Label "checker"), 
           new_expr_desc @@
           Appl (new_expr_desc @@ Var expr_id, new_expr_desc @@ Var arg_assert)), 
           new_expr_desc @@ 
@@ -394,7 +399,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
         Let (arg_assert, 
              new_expr_desc @@ 
              Appl (new_expr_desc @@ 
-              RecordProj (gc_pair_dom, Label "generator"), 
+              RecordProj (gc_pair_dom_check, Label "generator"), 
                 new_expr_desc @@ Int 0), 
              new_expr_desc codom_check) in
       return @@ Function ([expr_id], new_expr_desc fun_body)
@@ -409,35 +414,37 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     return res
   | TypeArrowD ((x1, t1), t2) ->
     (* TODO: Mapping *)
-    let%bind gc_pair_dom = semantic_type_of t1 in
-    let%bind gc_pair_cod = semantic_type_of t2 in
-    let mk_gc_pair_cod arg = 
+    let%bind gc_pair_dom_g = semantic_type_of t1 in
+    let%bind gc_pair_cod_g = semantic_type_of t2 in
+    let mk_gc_pair_cod cod arg = 
       Appl (new_expr_desc @@ 
-        Function ([x1], gc_pair_cod), new_expr_desc @@ Var arg) 
+        Function ([x1], cod), new_expr_desc @@ Var arg) 
     in
     let%bind generator = 
       let%bind arg_assume = fresh_ident "arg_assume" in
       let inner_expr = 
         If (new_expr_desc @@
             Appl (new_expr_desc @@
-              RecordProj (gc_pair_dom, Label "checker"), 
+              RecordProj (gc_pair_dom_g, Label "checker"), 
                 new_expr_desc @@ Var arg_assume), 
             new_expr_desc @@
             Appl (new_expr_desc @@ 
               RecordProj (new_expr_desc @@ 
-                mk_gc_pair_cod arg_assume, Label "generator"), 
+                mk_gc_pair_cod gc_pair_cod_g arg_assume, Label "generator"), 
               new_expr_desc @@ Int 0), 
             new_expr_desc @@ Assert (new_expr_desc @@ Bool false)) in 
       let gen_expr = Function ([arg_assume], new_expr_desc inner_expr) in
       return @@ Function ([Ident "~null"], new_expr_desc gen_expr)
     in
     let%bind codom_check_id = fresh_ident "codom_check" in
+    let%bind gc_pair_dom_c = semantic_type_of t1 in
+    let%bind gc_pair_cod_c = semantic_type_of t2 in
     let%bind checker = 
       let%bind expr_id = fresh_ident "expr" in
       let%bind arg_assert = fresh_ident "arg_assert" in
       let gc_pair_cod' = 
         Appl (new_expr_desc @@
-          Function ([x1], new_expr_desc (mk_gc_pair_cod arg_assert)), 
+          Function ([x1], new_expr_desc (mk_gc_pair_cod gc_pair_cod_c arg_assert)), 
           new_expr_desc @@ Var arg_assert) 
       in
       let codom_check = 
@@ -454,7 +461,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
         Let (arg_assert, 
              new_expr_desc @@
              Appl (new_expr_desc @@
-               RecordProj (gc_pair_dom, Label "generator"), 
+               RecordProj (gc_pair_dom_c, Label "generator"), 
                new_expr_desc @@ Int 0), 
              new_expr_desc codom_check) in
       return @@ Function ([expr_id], new_expr_desc fun_body)

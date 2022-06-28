@@ -121,7 +121,7 @@ module type Error = sig
   }
 
   type error_value = {
-    err_value_aliases : ident list;
+    err_value_aliases : Interpreter_types.symbol list;
     err_value_val : value;
   }
 
@@ -170,7 +170,7 @@ module Make
   [@@ deriving eq, to_yojson]
 
   type error_value = {
-    err_value_aliases : Ident.t list;
+    err_value_aliases : Interpreter_types.symbol list;
     err_value_val : Value.t;
   }
   [@@ deriving eq, to_yojson]
@@ -190,6 +190,15 @@ module Make
       formatter
       (List.enum aliases)
   ;;
+
+  let pp_ident_list formatter aliases =
+    Pp_utils.pp_concat_sep
+      " ="
+      (fun formatter x -> Ast_pp.pp_ident formatter x)
+      formatter
+      (List.enum aliases)
+  ;;
+
 
   let pp_error_binop formatter err =
     let pp_left_value formatter err =
@@ -259,12 +268,17 @@ module Make
 
   let pp_error_value formatter err =
     let pp_value formatter err =
-      let aliases = err.err_value_aliases in
+      let symbols = err.err_value_aliases in
+      let aliases = 
+        symbols
+        |> List.map (fun (Interpreter_types.Symbol (x, _)) -> x)
+        |> List.unique
+      in
       let value = err.err_value_val in
       if not @@ List.is_empty aliases then
         Format.fprintf formatter 
           "@[* Value : @[%a@ =@ %a@]@]"
-          pp_alias_list aliases
+          pp_ident_list aliases
           Value.pp value
       else
         Format.fprintf formatter 

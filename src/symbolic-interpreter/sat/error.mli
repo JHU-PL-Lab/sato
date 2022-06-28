@@ -98,7 +98,7 @@ module type Error = sig
   (** Type of an error caused by a singular false value (e.g. in an assert) *)
   type error_value = {
     (** The alias chain defining the boolean value. *)
-    err_value_aliases : ident list;
+    err_value_aliases : Interpreter_types.symbol list;
     (** The boolean value (should always be false). *)
     err_value_val : value;
   }

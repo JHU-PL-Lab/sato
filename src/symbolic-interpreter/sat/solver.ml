@@ -138,6 +138,23 @@ let rec _construct_alias_chain solver symbol : ident list =
   | None -> [x]
 ;;
 
+let _alias_chain_from_symbol symbols : ident list = 
+  symbols
+  |> List.map (fun (Symbol (x, _)) -> x)
+  |> List.unique
+;;
+
+let rec _construct_symbol_chain solver symbol : symbol list =
+  let alias_opt =
+    Symbol_map.Exceptionless.find symbol solver.alias_constraints_by_symbol
+  in
+  match alias_opt with
+  | Some symbol' ->
+    (* We want the alias chain to only record chains of distinct symbols *)
+    symbol :: _construct_symbol_chain solver symbol'
+  | None -> [symbol]
+;;
+
 let _get_symbol_type solver symbol : symbol_type option =
   Symbol_map.Exceptionless.find symbol solver.type_constraints_by_symbol
 ;;
@@ -1011,7 +1028,7 @@ let rec find_errors solver symbol =
       match v with
       | Bool b ->
         if b then [] else
-          let alias_chain = _construct_alias_chain solver symbol in
+          let alias_chain = _construct_symbol_chain solver symbol in
           let value_error = Odefa_error.Error_value {
             err_value_aliases = alias_chain;
             err_value_val = Value_body (Value_bool b);

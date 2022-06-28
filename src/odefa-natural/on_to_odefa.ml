@@ -806,8 +806,8 @@ and flatten_pattern_match
     (subj_var : Ast.var)
     (pat_e_list : (On_ast.pattern * On_ast.core_natodefa_edesc) list)
   : (Ast.clause list * Ast.var) m =
-  let tag = expr_desc.tag in
-  let%bind () = 
+  (* let tag = expr_desc.tag in *)
+  (* let%bind () = 
     if Ton_to_on_maps.Int_map.mem tag ton_on_maps.match_tag_to_error_id
       then 
         let false_id = 
@@ -816,7 +816,7 @@ and flatten_pattern_match
         add_false_id_subj_var_mapping false_id subj_var 
       else
         return ()
-  in
+  in *)
   let rec convert_match
       ((pat, e) : On_ast.pattern * On_ast.core_natodefa_edesc)
       (accum : Ast.expr * Ast.clause list)
