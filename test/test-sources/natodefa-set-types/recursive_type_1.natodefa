@@ -1,2 +1,2 @@
-let (x : Mu tt. {a = bool, b = tt} || int) = { a = false, b = 1 }
+let (x : Mu tt. ({: a : bool, b : tt :} || int)) = { a = false, b = 1 }
 in x

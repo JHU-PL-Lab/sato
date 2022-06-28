@@ -297,8 +297,8 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind test_list_id = fresh_ident "test_list" in
     let%bind elm_check_id = fresh_ident "elm_check" in
     let%bind expr_id = fresh_ident "expr" in
-    let%bind elm_check_fail = fresh_ident "elm_fail" in
     let%bind lst_check_fail = fresh_ident "lst_fail" in
+    let%bind elm_check_let = fresh_ident "lst_check" in
     let%bind gc_pair_c = semantic_type_of l in
     let%bind checker = 
     let test_fun = 
@@ -316,34 +316,29 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
                 RecordProj (gc_pair_c, Label "checker"), 
                 new_expr_desc @@ Var (Ident "hd")), 
               new_expr_desc @@
-              (* TODO: Use the elm_check_id's value (it's the boolean value
-                 returned by the element type-checking match) as the return
-                 boolean and we should be able to trace back from there. *)
               If (new_expr_desc @@ Var elm_check_id, 
                 new_expr_desc @@ 
                 Appl (new_expr_desc @@ Var test_fun_id, 
                       new_expr_desc @@ Var (Ident "tl")), 
-                new_expr_desc @@ Bool false))))
+                new_expr_desc @@ Var elm_check_id))))
         ]) in
     let check_fun = 
       Funsig (test_fun_id, [test_list_id], new_expr_desc test_fun) 
     in
-    let fail_cond = 
-      If (new_expr_desc @@ 
-            Appl (new_expr_desc @@ Var test_fun_id, new_expr_desc @@ Var expr_id), 
-          new_expr_desc @@ Bool true, 
-          new_expr_desc @@ Var elm_check_fail) 
+    let check_cls = 
+      Let (elm_check_let, 
+           new_expr_desc @@ 
+             Appl (new_expr_desc @@ Var test_fun_id, 
+                   new_expr_desc @@ Var expr_id), 
+           new_expr_desc @@ Var elm_check_let)
     in
-    let fun_body = LetRecFun ([check_fun], new_expr_desc fail_cond) in
-    let elm_fail = 
-      Let (elm_check_fail, new_expr_desc @@ Bool false, new_expr_desc fun_body) 
-    in
+    let fun_body = LetRecFun ([check_fun], new_expr_desc check_cls) in
     let match_body = 
       Match (new_expr_desc @@ Var expr_id, 
              [(EmptyLstPat, new_expr_desc @@ Bool true); 
               (LstDestructPat 
                 (Ident "~underscore", Ident "~underscore2"), 
-                new_expr_desc @@ elm_fail);
+                new_expr_desc @@ fun_body);
               (AnyPat, new_expr_desc @@ Var lst_check_fail)
              ]) 
     in
@@ -502,6 +497,8 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind t_check_id = fresh_ident "t_check" in
     let%bind checker = 
       let%bind expr_id = fresh_ident "expr" in
+      (* TODO: Need a false signifier here to link the predicate check failure
+         to its corresponding program point. *)
       let check_pred = 
         Let (pred_check_id, 
              new_expr_desc @@ 
