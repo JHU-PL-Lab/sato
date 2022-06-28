@@ -307,13 +307,13 @@ module Natodefa_type_errors : Answer = struct
                 (On_to_odefa_maps.get_odefa_subj_var_from_natodefa_expr odefa_on_maps)
                 core_eds
               in
-              let () = print_endline "----------" in
+              (* let () = print_endline "----------" in
               let () =
                 List.iter 
                 (fun s -> print_endline @@ Interpreter_types.show_symbol s) 
                 odefa_symbols 
               in
-              let () = print_endline "----------" in
+              let () = print_endline "----------" in *)
               let relstacks = 
                 odefa_symbols 
                 |> List.map (fun (Interpreter_types.Symbol (_, relstack)) -> relstack)
@@ -328,12 +328,13 @@ module Natodefa_type_errors : Answer = struct
                   )
                 |> List.concat
               in
-              res
+              (* res *)
               (* |> List.filter_map  *)
                 (* (Generator_utils.answer_from_solution solution x result) *)
-              (* let () = print_endline @@ string_of_bool @@ List.is_empty odefa_subj_var in
-              let () = print_endline @@ Ast_pp.show_var @@ List.hd odefa_subj_var in
-              failwith "TBI!" *)
+              let () = print_endline @@ "???" in
+              let () = print_endline @@ string_of_bool @@ List.is_empty odefa_subj_var in
+              (* let () = print_endline @@ Ast_pp.show_var @@ List.hd odefa_subj_var in *)
+              res
           in
           let err_vals_lst_opt = 
             List.map 

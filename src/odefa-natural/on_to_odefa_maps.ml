@@ -418,8 +418,8 @@ let get_false_id_to_subj_var_mapping mappings =
 let get_odefa_subj_var_from_natodefa_expr mappings (expr : On_ast.core_natodefa_edesc) =
   (* Getting the desugared version of core nat expression *)
   let desugared_core = 
-    (* let () = print_endline @@ "This is the transformed expr" in *)
-    (* let () = print_endline @@ show_expr_desc expr in *)
+    let () = print_endline @@ "This is the transformed expr" in
+    let () = print_endline @@ show_expr_desc expr in
     let find_key_by_value v = 
       Expr_desc_map.fold
       (fun desugared sugared acc -> 

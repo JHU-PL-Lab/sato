@@ -437,7 +437,10 @@ let get_core_match_expr_from_err_ident ton_on_maps (eds : On_ast.sem_natodefa_ed
   in *)
   let find_match_tag x =
     Int_map.fold 
-    (fun tag fail_expr acc -> if (fail_expr = x) then Some tag else acc) 
+    (fun tag fail_expr acc -> 
+      let () = print_endline @@ "This is the value in the dictionary: " in
+      let () = print_endline @@ show_expr_desc fail_expr in
+      if (fail_expr = x) then Some tag else acc) 
     ton_on_maps.match_tag_to_error_expr None  
   in
   let match_tags = 

@@ -316,6 +316,9 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
                 RecordProj (gc_pair_c, Label "checker"), 
                 new_expr_desc @@ Var (Ident "hd")), 
               new_expr_desc @@
+              (* TODO: Use the elm_check_id's value (it's the boolean value
+                 returned by the element type-checking match) as the return
+                 boolean and we should be able to trace back from there. *)
               If (new_expr_desc @@ Var elm_check_id, 
                 new_expr_desc @@ 
                 Appl (new_expr_desc @@ Var test_fun_id, 
@@ -1265,7 +1268,7 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
     let res = new_expr_desc @@ List expr_lst' in
     let%bind () = add_core_to_sem_mapping res e_desc in
     return res
-    | ListCons (e1, e2) -> 
+  | ListCons (e1, e2) -> 
     let%bind e1' = typed_non_to_on e1 in
     let%bind e2' = typed_non_to_on e2 in
     let res = new_expr_desc @@ ListCons (e1', e2') in

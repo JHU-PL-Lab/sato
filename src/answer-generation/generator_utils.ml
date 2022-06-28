@@ -6,7 +6,6 @@ open Odefa_symbolic_interpreter;;
 open Interpreter_types;;
 
 open Ast;;
-open Odefa_natural;;
 
 let lazy_logger = Logger_utils.make_lazy_logger "Generator_utils";;
 
@@ -234,7 +233,7 @@ let answer_from_solution
   get_value symbol
 ;;
 
-let input_sequence_from_result_natodefa
+(* let input_sequence_from_result_natodefa
     (e : expr)
     (x : Ident.t)
     (result : Interpreter.evaluation_result)
@@ -376,4 +375,4 @@ let input_sequence_from_result_natodefa
       On_ast.Ident_map.empty fid_vars_lst
     in
     (input_seq_ints, abort_var_to_errors !abort_opt_ref, err_vals_map)
-;;
+;; *)
