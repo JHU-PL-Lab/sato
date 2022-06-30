@@ -418,8 +418,8 @@ let get_false_id_to_subj_var_mapping mappings =
 let get_odefa_subj_var_from_natodefa_expr mappings (expr : On_ast.core_natodefa_edesc) =
   (* Getting the desugared version of core nat expression *)
   let desugared_core = 
-    let () = print_endline @@ "This is the transformed expr" in
-    let () = print_endline @@ show_expr_desc expr in
+    (* let () = print_endline @@ "This is the transformed expr" in
+    let () = print_endline @@ show_expr_desc expr in *)
     let find_key_by_value v = 
       Expr_desc_map.fold
       (fun desugared sugared acc -> 
@@ -526,8 +526,8 @@ let get_odefa_subj_var_from_natodefa_expr mappings (expr : On_ast.core_natodefa_
     let () = print_endline @@ show_expr_desc alphatized in *)
     Ast.Ident_map.fold
     (fun odefa_var core_expr acc -> 
-      let () = print_endline @@ "This is the value in the dictionary: " in
-      let () = print_endline @@ show_expr_desc core_expr in
+      (* let () = print_endline @@ "This is the value in the dictionary: " in
+      let () = print_endline @@ show_expr_desc core_expr in *)
       if (core_expr = alphatized) then Some odefa_var else acc) 
     mappings.odefa_var_to_natodefa_expr None
   in

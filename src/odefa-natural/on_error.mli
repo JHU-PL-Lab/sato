@@ -96,11 +96,18 @@ module type Error = sig
     err_type_actual : natodefa_type;
   }
 
+  type error_type_simple = {
+    (* err_type_val : value; *)
+    err_simple_type_expected : natodefa_type;
+    (* err_set_type_actual : natodefa_type option; *)
+  }
+
   type t =
     | Error_binop of error_binop
     | Error_match of error_match
     | Error_value of error_value
     | Error_natodefa_type of error_type
+    | Error_natodefa_type_simple of error_type_simple
 
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;

@@ -141,11 +141,18 @@ module type Error = sig
     err_type_actual : natodefa_type;
   }
 
+  type error_type_simple = {
+    (* err_type_val : value; *)
+    err_simple_type_expected : natodefa_type;
+    (* err_set_type_actual : natodefa_type option; *)
+  }
+
   type t =
     | Error_binop of error_binop
     | Error_match of error_match
     | Error_value of error_value
     | Error_natodefa_type of error_type
+    | Error_natodefa_type_simple of error_type_simple
 
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
@@ -202,12 +209,19 @@ module Make
   } 
   [@@ deriving eq, to_yojson]
 
+  type error_type_simple = {
+    (* err_type_val : Value.t; *)
+    err_simple_type_expected : NatodefaType.t;
+    (* err_set_type_actual : NatodefaType.t option; *)
+  } 
+  [@@ deriving eq, to_yojson]
 
   type t =
     | Error_binop of error_binop
     | Error_match of error_match
     | Error_value of error_value
     | Error_natodefa_type of error_type
+    | Error_natodefa_type_simple of error_type_simple
   [@@ deriving eq, to_yojson]
 
   let equal = equal;;
@@ -329,12 +343,34 @@ module Make
       pp_actual err
   ;;
 
+  let pp_error_type_simple formatter err =
+    let pp_expected formatter err =
+      Format.fprintf formatter
+        "@[* Expected : @[%a@]@]@,"
+        NatodefaType.pp err.err_simple_type_expected
+    in
+    (* let pp_actual formatter err =
+      match err.err_set_type_actual with
+      | Some t ->
+        Format.fprintf formatter
+          "@[* Actual   : @[%a@]@]"
+          NatodefaType.pp t
+      | None -> 
+        Format.pp_print_string formatter
+          "@[* Actual   : @[Predicate is not met!@]@]"
+    in *)
+    Format.fprintf formatter
+      "@[<v 0>%a@]"
+      pp_expected err
+  ;;
+
   let pp formatter error =
     match error with
     | Error_binop err -> pp_error_binop formatter err
     | Error_match err -> pp_error_match formatter err
     | Error_value err -> pp_error_value formatter err
     | Error_natodefa_type err -> pp_error_type formatter err
+    | Error_natodefa_type_simple err -> pp_error_type_simple formatter err
   ;;
 
   let show = Pp_utils.pp_to_string pp;;
@@ -759,46 +795,50 @@ let odefa_to_natodefa_error
           | LetRecFunWithType (_, _, ts) -> List.hd ts
           | _ -> failwith "Shouldn't be here!"
         in
-        let t_val = 
-          if List.is_empty err_val_lst then failwith "Scream!!" else
-          List.hd err_val_lst
-        in
-        let new_t = 
-          match t_val with
-          | Value_int _ -> new_expr_desc @@ TypeInt
-          | Value_bool _ -> new_expr_desc @@ TypeBool
-          | _ -> 
-            failwith "Houston we have a problem!"
-        in
-        let sem_nat_aliases = 
-          odefa_aliases
-          |> (On_to_odefa_maps.odefa_to_on_aliases odefa_on_maps)
-          |> List.map @@ Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps
-        in
-        let find_tag =
-          sem_nat_aliases
-          (* |> List.filter_map 
-            (fun e -> 
-              match e.body with
-              | On_ast.Var x -> Some x
-              | _ -> None
-              ) *)
-          |> List.filter_map 
-            (fun alias -> Ton_to_on_maps.Intermediate_expr_desc_map.find_opt alias ton_on_maps.error_to_expr_tag)
-        in
-        let tag = 
-          if List.is_empty find_tag then failwith "Scream!"
-          else 
-            (print_endline @@ "Tag: " ^ string_of_int @@ List.hd find_tag);
-            List.hd find_tag
-        in
-        let actual_type = 
-          replace_type expected_type new_t tag
-        in
-        Error_natodefa_type {
-          err_type_val = (odefa_to_on_value odefa_aliases).body;
-          err_type_expected = expected_type.body;
-          err_type_actual = actual_type.body;
-        }
+        if List.is_empty err_val_lst 
+        then
+          Error_natodefa_type_simple
+            { err_simple_type_expected = expected_type.body }
+        else
+          let t_val = 
+            List.hd err_val_lst
+          in
+          let new_t = 
+            match t_val with
+            | Value_int _ -> new_expr_desc @@ TypeInt
+            | Value_bool _ -> new_expr_desc @@ TypeBool
+            | _ -> 
+              failwith "Houston we have a problem!"
+          in
+          let sem_nat_aliases = 
+            odefa_aliases
+            |> (On_to_odefa_maps.odefa_to_on_aliases odefa_on_maps)
+            |> List.map @@ Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps
+          in
+          let find_tag =
+            sem_nat_aliases
+            (* |> List.filter_map 
+              (fun e -> 
+                match e.body with
+                | On_ast.Var x -> Some x
+                | _ -> None
+                ) *)
+            |> List.filter_map 
+              (fun alias -> Ton_to_on_maps.Intermediate_expr_desc_map.find_opt alias ton_on_maps.error_to_expr_tag)
+          in
+          let tag = 
+            if List.is_empty find_tag then failwith "Scream!"
+            else 
+              (print_endline @@ "Tag: " ^ string_of_int @@ List.hd find_tag);
+              List.hd find_tag
+          in
+          let actual_type = 
+            replace_type expected_type new_t tag
+          in
+          Error_natodefa_type {
+            err_type_val = (odefa_to_on_value odefa_aliases).body;
+            err_type_expected = expected_type.body;
+            err_type_actual = actual_type.body;
+          }
     end
 ;;

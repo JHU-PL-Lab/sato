@@ -1,3 +1,5 @@
+# Hasn't tested this one
+
 let set_type base_type pred = 
     let gen = fun x ->
         let base_value = (base_type.generator) 0 in

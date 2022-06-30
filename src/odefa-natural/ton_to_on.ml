@@ -499,11 +499,16 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       let%bind expr_id = fresh_ident "expr" in
       (* TODO: Need a false signifier here to link the predicate check failure
          to its corresponding program point. *)
+      let check_pred_inner = 
+        If (new_expr_desc @@ 
+          Appl (p', new_expr_desc @@ Var expr_id),
+          new_expr_desc @@ Bool true,
+          new_expr_desc @@ Var pred_check_id)
+      in
       let check_pred = 
         Let (pred_check_id, 
-             new_expr_desc @@ 
-             Appl (p', new_expr_desc @@ Var expr_id),
-             new_expr_desc @@ Var pred_check_id)
+             new_expr_desc @@ Bool false,
+             new_expr_desc @@ check_pred_inner)
       in
       let check_type_body = 
         If (new_expr_desc @@ 

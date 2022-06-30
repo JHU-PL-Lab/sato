@@ -1,3 +1,5 @@
+# Is not standard syntax
+
 let (B : int -> *) x = 
     if x > 0 then int else bool
 in

@@ -292,16 +292,16 @@ module Natodefa_type_errors : Answer = struct
                 |> (On_to_odefa_maps.odefa_to_on_aliases odefa_on_maps)
                 |> List.map (Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps)
               in
-              let () =
+              (* let () =
                 List.iter (fun ed -> print_endline @@ On_to_odefa.show_expr_desc ed) sem_nat_aliases
-              in
+              in *)
               let core_eds = 
                 Ton_to_on_maps.get_core_match_expr_from_err_ident ton_on_maps sem_nat_aliases
               in
-              let () = print_endline @@ string_of_bool @@ List.is_empty core_eds in
+              (* let () = print_endline @@ string_of_bool @@ List.is_empty core_eds in
               let () =
                 List.iter (fun ed -> print_endline @@ On_to_odefa.show_expr_desc ed) core_eds
-              in
+              in *)
               let odefa_subj_var = 
                 List.map
                 (On_to_odefa_maps.get_odefa_subj_var_from_natodefa_expr odefa_on_maps)
@@ -331,8 +331,8 @@ module Natodefa_type_errors : Answer = struct
               (* res *)
               (* |> List.filter_map  *)
                 (* (Generator_utils.answer_from_solution solution x result) *)
-              let () = print_endline @@ "???" in
-              let () = print_endline @@ string_of_bool @@ List.is_empty odefa_subj_var in
+              (* let () = print_endline @@ "???" in
+              let () = print_endline @@ string_of_bool @@ List.is_empty odefa_subj_var in *)
               (* let () = print_endline @@ Ast_pp.show_var @@ List.hd odefa_subj_var in *)
               res
           in
