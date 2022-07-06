@@ -282,6 +282,13 @@ module Natodefa_type_errors : Answer = struct
               failwith "This shouldn't happen!"
             | Error.Odefa_error.Error_value err ->
               let odefa_symbols = err.err_value_aliases in
+              (* let () = print_endline "----------" in
+              let () =
+                List.iter 
+                (fun s -> print_endline @@ Interpreter_types.show_symbol s) 
+                odefa_symbols 
+              in
+              let () = print_endline "----------" in *)
               let odefa_aliases = 
                 odefa_symbols
                 |> List.map (fun (Interpreter_types.Symbol (x, _)) -> x)
@@ -307,13 +314,11 @@ module Natodefa_type_errors : Answer = struct
                 (On_to_odefa_maps.get_odefa_subj_var_from_natodefa_expr odefa_on_maps)
                 core_eds
               in
-              (* let () = print_endline "----------" in
+              (* let () = print_endline @@ "Is odefa_subj_var empty?" in
+              let () = print_endline @@ string_of_bool @@ List.is_empty odefa_subj_var in
               let () =
-                List.iter 
-                (fun s -> print_endline @@ Interpreter_types.show_symbol s) 
-                odefa_symbols 
-              in
-              let () = print_endline "----------" in *)
+                List.iter (fun v-> print_endline @@ show_var v) odefa_subj_var
+              in *)
               let relstacks = 
                 odefa_symbols 
                 |> List.map (fun (Interpreter_types.Symbol (_, relstack)) -> relstack)
@@ -344,15 +349,6 @@ module Natodefa_type_errors : Answer = struct
                   let additional_queries = 
                     err
                     |> find_err_ident
-                    (* |> List.map 
-                       (fun v ->
-                        let (Var (x, _), Var (_, stack)) = (v, ab_var)
-                        in 
-                        let res = Var (x, stack) in
-                        let () = print_endline @@ show_var res
-                        in
-                        res
-                       ) *)
                     |> List.filter_map (Generator_utils.answer_from_solution solution)
                   in
                   (err, Some (on_err_loc_nat, additional_queries))

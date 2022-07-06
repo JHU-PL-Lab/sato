@@ -149,7 +149,6 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
           empty_record lbl_to_var 
       in
       let folder' acc (_, lbl_var, cur_t) = 
-        (* TODO: Might want to add an old -> new mapping here *)
         let%bind gc_pair = semantic_type_of cur_t in
         let res = new_expr_desc @@
           Let (lbl_var, 
@@ -178,7 +177,6 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       let%bind expr_id = fresh_ident "expr" in
       let fold_fun expr_a (Ident lbl, t) = 
         let%bind lbl_check_id = fresh_ident "lbl_check" in
-        (* TODO: Might want to add an old -> new mapping here *)
         let%bind cur_gc_pair = semantic_type_of t in
         return @@
         (Let (lbl_check_id, 
@@ -473,13 +471,13 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind () = add_sem_to_syn_mapping res e_desc in
     return res
   | TypeSet (t, p) ->
-    let%bind gc_pair = semantic_type_of t in
-    let%bind p' = semantic_type_of p in
+    let%bind gc_pair_g = semantic_type_of t in
+    let%bind p_g = semantic_type_of p in
     let%bind generator = 
       let%bind candidate = fresh_ident "candidate" in
       let pred_check = 
         If (new_expr_desc @@ 
-          Appl (p', new_expr_desc @@ Var candidate), 
+          Appl (p_g, new_expr_desc @@ Var candidate), 
           new_expr_desc @@ Var candidate, 
           new_expr_desc @@ Assume (new_expr_desc @@ Bool false)) 
       in
@@ -487,7 +485,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
                           new_expr_desc @@ 
                           Appl (new_expr_desc @@ 
                             RecordProj 
-                              (gc_pair, 
+                              (gc_pair_g, 
                                Label "generator"), 
                             new_expr_desc @@ Int 0), 
                           new_expr_desc @@ pred_check) in
@@ -495,35 +493,36 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     in
     let%bind pred_check_id = fresh_ident "pred_check" in
     let%bind t_check_id = fresh_ident "t_check" in
+    let%bind gc_pair_c = semantic_type_of t in
+    let%bind p_c = semantic_type_of p in
     let%bind checker = 
       let%bind expr_id = fresh_ident "expr" in
       (* TODO: Need a false signifier here to link the predicate check failure
          to its corresponding program point. *)
+      let fail_pat_cls = new_expr_desc @@ Var pred_check_id in
       let check_pred_inner = 
         If (new_expr_desc @@ 
-          Appl (p', new_expr_desc @@ Var expr_id),
+          Appl (p_c, new_expr_desc @@ Var expr_id),
           new_expr_desc @@ Bool true,
-          new_expr_desc @@ Var pred_check_id)
+          fail_pat_cls)
       in
+      let%bind () = add_error_to_tag_mapping fail_pat_cls tag in
       let check_pred = 
         Let (pred_check_id, 
              new_expr_desc @@ Bool false,
              new_expr_desc @@ check_pred_inner)
       in
       let check_type_body = 
-        If (new_expr_desc @@ 
-            Appl (new_expr_desc @@
-                  RecordProj (gc_pair, Label "checker"), 
-                  new_expr_desc @@ Var expr_id),
+        If (new_expr_desc @@ Var t_check_id,
             new_expr_desc @@ check_pred,
-            new_expr_desc @@ 
-            Appl (new_expr_desc @@ 
-                  RecordProj (gc_pair, Label "checker"), 
-                  new_expr_desc @@ Var expr_id))
+            new_expr_desc @@ Var t_check_id)
       in
       let check_type = 
         Let (t_check_id, 
-             new_expr_desc @@ Bool false, 
+             new_expr_desc @@ 
+               Appl (new_expr_desc @@
+                 RecordProj (gc_pair_c, Label "checker"), 
+                 new_expr_desc @@ Var expr_id),
              new_expr_desc check_type_body)
       in
       return @@ Function ([expr_id], new_expr_desc check_type)
@@ -787,6 +786,7 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind () = add_sem_to_syn_mapping res e_desc in
     (* let%bind () = add_natodefa_expr_error_structure_mapping (Var x) ? in *)
     return res
+    (* TODO: use bread crumb to find out which rec fun is the issue *)
   | LetRecFunWithType (sig_lst, e, t_lst) ->
     begin
       (* let sig_t_lst = List.combine sig_lst t_lst in *)
@@ -1083,6 +1083,7 @@ and typed_non_to_on (e_desc : semantic_only expr_desc) : core_only expr_desc m =
         let%bind t' = typed_non_to_on t in
         let%bind check_res = fresh_ident "check_res" in
         let%bind () = add_error_to_natodefa_mapping check_res e_desc in
+        let%bind () = add_error_to_rec_fun_mapping check_res t in
         let res_cls = 
           If (new_expr_desc @@ Var check_res, 
               acc, 

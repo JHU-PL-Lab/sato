@@ -44,6 +44,7 @@ type t = {
   core_to_sem : sem_natodefa_edesc Core_expr_desc_map.t;
   error_to_expr_tag : int Intermediate_expr_desc_map.t;
   match_tag_to_error_expr : sem_natodefa_edesc Int_map.t;
+  error_to_rec_fun_type : sem_natodefa_edesc Ident_map.t;
 }
 ;;
 
@@ -53,6 +54,7 @@ let empty = {
   core_to_sem = Core_expr_desc_map.empty;
   error_to_expr_tag = Intermediate_expr_desc_map.empty;
   match_tag_to_error_expr = Int_map.empty;
+  error_to_rec_fun_type = Ident_map.empty;
 }
 ;;
 
@@ -93,6 +95,14 @@ let add_match_tag_error_mapping mappings match_tag err_expr =
   { mappings with 
   match_tag_to_error_expr = 
       Int_map.add match_tag err_expr match_tag_err_mapping;
+  }
+;;
+
+let add_error_rec_fun_type_mapping mappings x e =
+  let error_rec_fun_type_map = mappings.error_to_rec_fun_type in
+  { mappings with 
+  error_to_rec_fun_type = 
+      Ident_map.add x e error_rec_fun_type_map;
   }
 ;;
 

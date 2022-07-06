@@ -381,13 +381,23 @@ let odefa_to_on_aliases on_mappings aliases =
   |> List.filter_map
     (fun alias ->
       let e_desc = odefa_to_on_expr alias in
+      (* let () = print_endline "----" in
+      let () = print_endline @@ show_expr_desc e_desc in
+      let () = print_endline "----" in *)
       match (e_desc.body) with
-      | (On_ast.Var _) -> Some e_desc
+      | (On_ast.Var _) | TypeError _ -> Some e_desc
       | _ -> None
     )
   (* During translation, some odefa vars are assigned to the same natodefa
      vars (namely in var expressions).  The following procedure removes any
      adjacent duplicates from the alias chain. *)
+  (* |> fun l ->
+     let () = print_endline "----" in
+     let () = 
+       List.iter (fun elm -> print_endline @@ show_expr_desc elm) l
+     in 
+     let () = print_endline "----" in
+     l *)
   |> List.unique
 ;;
 
@@ -440,6 +450,7 @@ let get_odefa_subj_var_from_natodefa_expr mappings (expr : On_ast.core_natodefa_
     in
     loop expr
   in
+  (* TODO: Getting the alphatization version is still wrong :( *)
   (* Getting the alphatized version *)
   let on_ident_transform 
     (e_desc : On_ast.core_natodefa_edesc) : On_ast.core_natodefa_edesc =
