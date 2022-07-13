@@ -66,9 +66,10 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind expr_id = fresh_ident "expr" in 
     let%bind fail_id = fresh_ident "fail" in
     let (fail_pat_cls : sem_natodefa_edesc) = new_expr_desc @@ Var fail_id in
+    let matched_expr = new_expr_desc (Var expr_id) in
     let match_edesc = 
       new_expr_desc @@
-      Match (new_expr_desc (Var expr_id), 
+      Match (matched_expr,
             [(IntPat, new_expr_desc @@ Bool true); 
              (AnyPat, fail_pat_cls)])
     in
@@ -81,7 +82,8 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       in
       (* Adding error point to tag mapping *)
       let%bind () = add_error_to_tag_mapping fail_pat_cls tag in
-      let%bind () = add_match_to_error_mapping match_edesc.tag fail_pat_cls in
+      let%bind () = add_error_to_value_expr_mapping fail_pat_cls matched_expr in
+      (* let%bind () = add_match_to_error_mapping match_edesc.tag fail_pat_cls in *)
       return @@ fail_cls
     in
     let rec_map = 
@@ -101,9 +103,10 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind expr_id = fresh_ident "expr" in 
     let%bind fail_id = fresh_ident "fail" in
     let (fail_pat_cls : sem_natodefa_edesc) = new_expr_desc @@ Var fail_id in
+    let matched_expr = new_expr_desc (Var expr_id) in
     let match_edesc = 
       new_expr_desc @@
-      Match (new_expr_desc (Var expr_id), 
+      Match (matched_expr, 
             [(BoolPat, new_expr_desc @@ Bool true); 
              (AnyPat, fail_pat_cls)])
     in
@@ -115,7 +118,8 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
         Let (fail_id, new_expr_desc @@ Bool false, new_expr_desc @@ check_cls) 
       in
       let%bind () = add_error_to_tag_mapping fail_pat_cls tag in
-      let%bind () = add_match_to_error_mapping match_edesc.tag fail_pat_cls in
+      let%bind () = add_error_to_value_expr_mapping fail_pat_cls matched_expr in
+      (* let%bind () = add_match_to_error_mapping match_edesc.tag fail_pat_cls in *)
       return @@ fail_cls
     in
     let rec_map = 
@@ -213,9 +217,11 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       in
       let%bind rec_check_id = fresh_ident "rec_check" in
       let%bind rec_fail_id = fresh_ident "rec_fail" in
-      let match_body = Match (new_expr_desc @@ Var expr_id, 
+      let fail_pat_cls = new_expr_desc @@ Var rec_fail_id in
+      let matched_expr = new_expr_desc @@ Var expr_id in
+      let match_body = Match (matched_expr, 
                               [(StrictRecPat type_dict, new_expr_desc fun_body); 
-                              (AnyPat, new_expr_desc @@ Var rec_fail_id)]) in
+                              (AnyPat, fail_pat_cls)]) in
       let check_cls = 
         Let (rec_check_id, 
              new_expr_desc @@ match_body, 
@@ -230,6 +236,8 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
                since rec_check should be an alias of one of its label
                check in cases of failure.
        *)
+      let%bind () = add_error_to_value_expr_mapping fail_pat_cls matched_expr in
+      let%bind () = add_error_to_tag_mapping fail_pat_cls tag in
       return @@ 
         Function ([expr_id], new_expr_desc fail_cls)
     in
@@ -299,53 +307,58 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind elm_check_let = fresh_ident "lst_check" in
     let%bind gc_pair_c = semantic_type_of l in
     let%bind checker = 
-    let test_fun = 
-      Match (
-        new_expr_desc @@
-        Var test_list_id, 
-        [(EmptyLstPat, new_expr_desc @@ Bool true); 
-         (LstDestructPat 
-           (Ident "hd", Ident "tl"), 
-           new_expr_desc @@
-           (Let (elm_check_id, 
-              new_expr_desc @@
-              Appl (
+      let test_fun = 
+        Match (
+          new_expr_desc @@
+          Var test_list_id, 
+          [(EmptyLstPat, new_expr_desc @@ Bool true); 
+          (LstDestructPat 
+            (Ident "hd", Ident "tl"), 
+            new_expr_desc @@
+            (Let (elm_check_id, 
                 new_expr_desc @@
-                RecordProj (gc_pair_c, Label "checker"), 
-                new_expr_desc @@ Var (Ident "hd")), 
-              new_expr_desc @@
-              If (new_expr_desc @@ Var elm_check_id, 
-                new_expr_desc @@ 
-                Appl (new_expr_desc @@ Var test_fun_id, 
-                      new_expr_desc @@ Var (Ident "tl")), 
-                new_expr_desc @@ Var elm_check_id))))
-        ]) in
-    let check_fun = 
-      Funsig (test_fun_id, [test_list_id], new_expr_desc test_fun) 
-    in
-    let check_cls = 
-      Let (elm_check_let, 
-           new_expr_desc @@ 
-             Appl (new_expr_desc @@ Var test_fun_id, 
-                   new_expr_desc @@ Var expr_id), 
-           new_expr_desc @@ Var elm_check_let)
-    in
-    let fun_body = LetRecFun ([check_fun], new_expr_desc check_cls) in
-    let match_body = 
-      Match (new_expr_desc @@ Var expr_id, 
-             [(EmptyLstPat, new_expr_desc @@ Bool true); 
-              (LstDestructPat 
-                (Ident "~underscore", Ident "~underscore2"), 
-                new_expr_desc @@ fun_body);
-              (AnyPat, new_expr_desc @@ Var lst_check_fail)
-             ]) 
-    in
-    let lst_fail = 
-      Let (lst_check_fail, 
-           new_expr_desc @@ Bool false, 
-           new_expr_desc match_body) 
-    in
-    return @@ Function ([expr_id], new_expr_desc lst_fail)
+                Appl (
+                  new_expr_desc @@
+                  RecordProj (gc_pair_c, Label "checker"), 
+                  new_expr_desc @@ Var (Ident "hd")), 
+                new_expr_desc @@
+                If (new_expr_desc @@ Var elm_check_id, 
+                  new_expr_desc @@ 
+                  Appl (new_expr_desc @@ Var test_fun_id, 
+                        new_expr_desc @@ Var (Ident "tl")), 
+                  new_expr_desc @@ Var elm_check_id))))
+          ]) 
+      in
+      let check_fun = 
+        Funsig (test_fun_id, [test_list_id], new_expr_desc test_fun) 
+      in
+      let fail_pat_cls = new_expr_desc @@ Var lst_check_fail in
+      let matched_expr = new_expr_desc @@ Var expr_id in
+      let check_cls = 
+        Let (elm_check_let, 
+            new_expr_desc @@ 
+              Appl (new_expr_desc @@ Var test_fun_id, 
+                    new_expr_desc @@ Var expr_id), 
+            new_expr_desc @@ Var elm_check_let)
+      in
+      let fun_body = LetRecFun ([check_fun], new_expr_desc check_cls) in
+      let match_body = 
+        Match (matched_expr, 
+              [(EmptyLstPat, new_expr_desc @@ Bool true); 
+                (LstDestructPat 
+                  (Ident "~underscore", Ident "~underscore2"), 
+                  new_expr_desc @@ fun_body);
+                (AnyPat, fail_pat_cls)
+              ]) 
+      in
+      let lst_fail = 
+        Let (lst_check_fail, 
+            new_expr_desc @@ Bool false, 
+            new_expr_desc match_body) 
+      in
+      let%bind () = add_error_to_value_expr_mapping fail_pat_cls matched_expr in
+      let%bind () = add_error_to_tag_mapping fail_pat_cls tag in
+      return @@ Function ([expr_id], new_expr_desc lst_fail)
     in
     let rec_map = 
       Ident_map.empty
@@ -544,8 +557,8 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
     let%bind () = add_sem_to_syn_mapping res e_desc in
     return res
   | TypeUnion (t1, t2) ->
-    let%bind gc_pair1 = semantic_type_of t1 in
-    let%bind gc_pair2 = semantic_type_of t2 in
+    let%bind gc_pair1_g = semantic_type_of t1 in
+    let%bind gc_pair2_g = semantic_type_of t2 in
     let%bind generator = 
       let%bind select_int = fresh_ident "select_int" in
       let branch = If (new_expr_desc @@ 
@@ -554,12 +567,12 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
                             new_expr_desc @@ Int 0), 
                        new_expr_desc @@ 
                        Appl (new_expr_desc @@ 
-                         RecordProj (gc_pair1, Label "generator"), 
+                         RecordProj (gc_pair1_g, Label "generator"), 
                          new_expr_desc @@ Int 0), 
                        new_expr_desc @@ 
                        Appl (new_expr_desc @@ 
                              RecordProj 
-                              (gc_pair2, Label "generator"), 
+                              (gc_pair2_g, Label "generator"), 
                               new_expr_desc @@ Int 0)) in
       let gen_expr = 
         Let (select_int, new_expr_desc Input, new_expr_desc branch) 
@@ -567,21 +580,29 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       return @@ Function ([Ident "~null"], new_expr_desc gen_expr)
     in
     let%bind fail_id = fresh_ident "fail" in
+    let%bind gc_pair1_c = semantic_type_of t1 in
+    let%bind gc_pair2_c = semantic_type_of t2 in
+    let%bind gc_pair1_c' = semantic_type_of t1 in
+    let%bind gc_pair2_c' = semantic_type_of t2 in    
     let%bind checker = 
       let%bind expr_id = fresh_ident "expr" in
       let%bind select_int = fresh_ident "select_int" in
+      let fail_pat_cls_1 = new_expr_desc @@ Var fail_id in
+      let fail_pat_cls_2 = new_expr_desc @@ Var fail_id in
+      let tested_expr_1 = new_expr_desc @@ Var expr_id in
+      let tested_expr_2 = new_expr_desc @@ Var expr_id in
       let checker1_inner = 
         If (new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-                  RecordProj (gc_pair2, Label "checker"), 
-                  new_expr_desc @@ Var expr_id),
+                  RecordProj (gc_pair2_c, Label "checker"), 
+                  tested_expr_1),
             new_expr_desc @@ Bool true,
-            new_expr_desc @@ Var fail_id)
+            fail_pat_cls_1)
       in
       let checker1 = 
         If (new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-                  RecordProj (gc_pair1, Label "checker"), 
+                  RecordProj (gc_pair1_c, Label "checker"), 
                   new_expr_desc @@ Var expr_id), 
             new_expr_desc @@ Bool true, 
             new_expr_desc @@ checker1_inner) 
@@ -589,15 +610,15 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       let checker2_inner = 
         If (new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-              RecordProj (gc_pair1, Label "checker"), 
-              new_expr_desc @@ Var expr_id),
+              RecordProj (gc_pair1_c', Label "checker"), 
+              tested_expr_2),
             new_expr_desc @@ Bool true,
-            new_expr_desc @@ Var fail_id)
+            fail_pat_cls_2)
       in
       let checker2 = 
         If (new_expr_desc @@ 
             Appl (new_expr_desc @@ 
-                  RecordProj (gc_pair2, Label "checker"), 
+                  RecordProj (gc_pair2_c', Label "checker"), 
                   new_expr_desc @@ Var expr_id), 
             new_expr_desc @@ Bool true, 
             new_expr_desc @@ checker2_inner) 
@@ -613,6 +634,10 @@ let rec semantic_type_of (e_desc : syntactic_only expr_desc) : semantic_only exp
       let fun_body = 
         Let (select_int, new_expr_desc Input, new_expr_desc fail_def) 
       in
+      let%bind () = add_error_to_value_expr_mapping fail_pat_cls_1 tested_expr_1 in
+      let%bind () = add_error_to_value_expr_mapping fail_pat_cls_2 tested_expr_2 in
+      let%bind () = add_error_to_tag_mapping fail_pat_cls_1 tag in
+      let%bind () = add_error_to_tag_mapping fail_pat_cls_2 tag in
       return @@ Function ([expr_id], new_expr_desc fun_body)
     in
     let rec_map = 

@@ -43,8 +43,9 @@ type t = {
   sem_to_syn : syn_natodefa_edesc Intermediate_expr_desc_map.t;
   core_to_sem : sem_natodefa_edesc Core_expr_desc_map.t;
   error_to_expr_tag : int Intermediate_expr_desc_map.t;
-  match_tag_to_error_expr : sem_natodefa_edesc Int_map.t;
+  (* match_tag_to_error_expr : sem_natodefa_edesc Int_map.t; *)
   error_to_rec_fun_type : sem_natodefa_edesc Ident_map.t;
+  error_to_value_expr : sem_natodefa_edesc Intermediate_expr_desc_map.t;
 }
 ;;
 
@@ -53,8 +54,9 @@ let empty = {
   sem_to_syn = Intermediate_expr_desc_map.empty;
   core_to_sem = Core_expr_desc_map.empty;
   error_to_expr_tag = Intermediate_expr_desc_map.empty;
-  match_tag_to_error_expr = Int_map.empty;
+  (* match_tag_to_error_expr = Int_map.empty; *)
   error_to_rec_fun_type = Ident_map.empty;
+  error_to_value_expr = Intermediate_expr_desc_map.empty;
 }
 ;;
 
@@ -90,19 +92,27 @@ let add_error_expr_tag_mapping mappings err_expr expr_tag =
   }
 ;;
 
-let add_match_tag_error_mapping mappings match_tag err_expr =
+(* let add_match_tag_error_mapping mappings match_tag err_expr =
   let match_tag_err_mapping = mappings.match_tag_to_error_expr in
   { mappings with 
   match_tag_to_error_expr = 
       Int_map.add match_tag err_expr match_tag_err_mapping;
   }
-;;
+;; *)
 
 let add_error_rec_fun_type_mapping mappings x e =
   let error_rec_fun_type_map = mappings.error_to_rec_fun_type in
   { mappings with 
   error_to_rec_fun_type = 
       Ident_map.add x e error_rec_fun_type_map;
+  }
+;;
+
+let add_error_value_expr_mapping mappings err_e v_e =
+  let error_to_value_expr_map = mappings.error_to_value_expr in
+  { mappings with 
+  error_to_value_expr = 
+      Intermediate_expr_desc_map.add err_e v_e error_to_value_expr_map;
   }
 ;;
 
@@ -425,12 +435,22 @@ let get_syn_nat_equivalent_expr ton_on_maps (expr : On_ast.core_natodefa_edesc) 
   |> syn_natodefa_from_sem_natodefa ton_on_maps
 ;;
 
+let get_core_expr_from_sem_expr ton_on_maps sem_expr = 
+  Core_expr_desc_map.fold 
+  (fun core_ed sem_ed acc -> if (sem_expr.tag = sem_ed.tag) then Some core_ed else acc) 
+  ton_on_maps.core_to_sem None
+;;
+
+let get_value_expr_from_sem_expr ton_on_maps sem_expr =
+  Intermediate_expr_desc_map.find_opt sem_expr ton_on_maps.error_to_value_expr
+;;
+
 let show_expr_desc :
   type a. a On_ast.expr_desc -> string = 
   fun e -> 
   Pp_utils.pp_to_string On_ast_pp.pp_expr_desc e;;
 
-let get_core_match_expr_from_err_ident ton_on_maps (eds : On_ast.sem_natodefa_edesc list) : On_ast.core_natodefa_edesc list = 
+(* let get_core_match_expr_from_err_ident ton_on_maps (eds : On_ast.sem_natodefa_edesc list) : On_ast.core_natodefa_edesc list = 
   (* let idents = 
     let () =
     List.iter 
@@ -469,14 +489,14 @@ let get_core_match_expr_from_err_ident ton_on_maps (eds : On_ast.sem_natodefa_ed
     List.filter_map get_sem_expr_from_syn_tag match_tags
   in *)
   (* let () = print_endline @@ string_of_bool @@ List.is_empty sem_expr in *)
-  let get_core_expr_from_sem_expr tag = 
+  let get_core_expr_from_sem_tag tag = 
     Core_expr_desc_map.fold 
     (fun core_ed sem_ed acc -> if (tag = sem_ed.tag) then Some core_ed else acc) 
     ton_on_maps.core_to_sem None
   in
   let core_expr = 
-    List.filter_map get_core_expr_from_sem_expr match_tags
+    List.filter_map get_core_expr_from_sem_tag match_tags
   in
   core_expr
   (* failwith "TBI!" *)
-;;
+;; *)

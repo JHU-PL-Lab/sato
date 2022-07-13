@@ -73,3 +73,5 @@ val on_expr_transformer : (On_ast.core_natodefa_edesc -> On_ast.core_natodefa_ed
     On_ast.core_natodefa_edesc -> On_ast.core_natodefa_edesc;;
 
 val get_odefa_subj_var_from_natodefa_expr : t -> On_ast.core_natodefa_edesc -> Ast.var;;
+
+val get_odefa_var_opt_from_natodefa_expr : t -> On_ast.core_natodefa_edesc -> Ast.var option;;

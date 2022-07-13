@@ -141,18 +141,11 @@ module type Error = sig
     err_type_actual : natodefa_type;
   }
 
-  (* type error_type_simple = {
-    (* err_type_val : value; *)
-    err_simple_type_expected : natodefa_type;
-    (* err_set_type_actual : natodefa_type option; *)
-  } *)
-
   type t =
     | Error_binop of error_binop
     | Error_match of error_match
     | Error_value of error_value
     | Error_natodefa_type of error_type
-    (* | Error_natodefa_type_simple of error_type_simple *)
 
   val equal : t -> t -> bool;;
   val pp : t Pp_utils.pretty_printer;;
@@ -209,19 +202,11 @@ module Make
   } 
   [@@ deriving eq, to_yojson]
 
-  (* type error_type_simple = {
-    (* err_type_val : Value.t; *)
-    err_simple_type_expected : NatodefaType.t;
-    (* err_set_type_actual : NatodefaType.t option; *)
-  } 
-  [@@ deriving eq, to_yojson] *)
-
   type t =
     | Error_binop of error_binop
     | Error_match of error_match
     | Error_value of error_value
     | Error_natodefa_type of error_type
-    (* | Error_natodefa_type_simple of error_type_simple *)
   [@@ deriving eq, to_yojson]
 
   let equal = equal;;
@@ -342,27 +327,6 @@ module Make
       pp_expected err
       pp_actual err
   ;;
-
-  (* let pp_error_type_simple formatter err =
-    let pp_expected formatter err =
-      Format.fprintf formatter
-        "@[* Expected : @[%a@]@]@,"
-        NatodefaType.pp err.err_simple_type_expected
-    in
-    (* let pp_actual formatter err =
-      match err.err_set_type_actual with
-      | Some t ->
-        Format.fprintf formatter
-          "@[* Actual   : @[%a@]@]"
-          NatodefaType.pp t
-      | None -> 
-        Format.pp_print_string formatter
-          "@[* Actual   : @[Predicate is not met!@]@]"
-    in *)
-    Format.fprintf formatter
-      "@[<v 0>%a@]"
-      pp_expected err
-  ;; *)
 
   let pp formatter error =
     match error with

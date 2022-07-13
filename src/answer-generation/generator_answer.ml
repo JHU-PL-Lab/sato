@@ -299,21 +299,33 @@ module Natodefa_type_errors : Answer = struct
                 |> (On_to_odefa_maps.odefa_to_on_aliases odefa_on_maps)
                 |> List.map (Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps)
               in
+              let sem_val_exprs = 
+                sem_nat_aliases
+                |> List.filter_map @@ Ton_to_on_maps.get_value_expr_from_sem_expr ton_on_maps
+              in
+              let odefa_vars = 
+                sem_val_exprs
+                |> List.filter_map @@ Ton_to_on_maps.get_core_expr_from_sem_expr ton_on_maps
+                |> List.filter_map @@ On_to_odefa_maps.get_odefa_var_opt_from_natodefa_expr odefa_on_maps
+              in
+              (* let () =
+                List.iter (fun v-> print_endline @@ show_var v) odefa_vars
+              in  *)
               (* let () =
                 List.iter (fun ed -> print_endline @@ On_to_odefa.show_expr_desc ed) sem_nat_aliases
               in *)
-              let core_eds = 
+              (* let core_eds = 
                 Ton_to_on_maps.get_core_match_expr_from_err_ident ton_on_maps sem_nat_aliases
-              in
+              in *)
               (* let () = print_endline @@ string_of_bool @@ List.is_empty core_eds in
               let () =
                 List.iter (fun ed -> print_endline @@ On_to_odefa.show_expr_desc ed) core_eds
               in *)
-              let odefa_subj_var = 
+              (* let odefa_subj_var = 
                 List.map
                 (On_to_odefa_maps.get_odefa_subj_var_from_natodefa_expr odefa_on_maps)
                 core_eds
-              in
+              in *)
               (* let () = print_endline @@ "Is odefa_subj_var empty?" in
               let () = print_endline @@ string_of_bool @@ List.is_empty odefa_subj_var in
               let () =
@@ -324,7 +336,8 @@ module Natodefa_type_errors : Answer = struct
                 |> List.map (fun (Interpreter_types.Symbol (_, relstack)) -> relstack)
               in
               let res = 
-                odefa_subj_var
+                (* odefa_subj_var *)
+                odefa_vars
                 |> List.map (fun (Var (x, _)) -> x)
                 |> List.map 
                   (fun x -> 

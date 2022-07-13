@@ -643,7 +643,7 @@ let z3_expr_of_symbol
   | Some IntSymbol -> Some(Z3.Arithmetic.Integer.mk_const ctx z3symbol)
   | Some BoolSymbol -> Some(Z3.Boolean.mk_const ctx z3symbol)
   | Some FunctionSymbol -> None
-  | Some RecordSymbol -> None
+  | Some RecordSymbol -> None (* failwith "In here!" *)
   | Some BottomSymbol -> None
   (* 
      TODO: This is temporary; I'm assuming all the logic related to type checking
@@ -767,7 +767,8 @@ let solve (solver : t) : solution option =
       | Some model ->
         let get_value symbol =
           match z3_expr_of_symbol ctx symbol_cache solver symbol with
-          | None -> None
+          | None ->
+            None
           | Some expr ->
             begin
               match _get_symbol_type solver symbol with

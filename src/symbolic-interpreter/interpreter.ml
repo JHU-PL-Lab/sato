@@ -712,11 +712,28 @@ struct
         [%guard equal_ident x x'];
         (* Report Record Projection Ends rule lookup *)
         trace_rule "Record Projection Ends" x;
+        (* let () = print_endline @@ show_annotated_clause acl1 in *)
         let%orzero (Clause (_, Value_body(v))) =
         (* DEBUG: Not this *)
           Ident_map.find x env.le_clause_mapping
         in
-        match v with
+        let%orzero Value_record (Record_value m) = v in
+        [%guard Ident_map.mem lbl m];
+        let (Var (lbl_var, _)) = Ident_map.find lbl m in
+        let%bind var_symbol_list = recurse (LookupVar lbl_var :: lookup_stack') acl1 relstack in
+        let field_symbol = Symbol (lbl_var, relstack) in
+        let record_symbol = Symbol (x, relstack) in
+        lazy_logger `trace (fun () ->
+          Printf.sprintf "Record Projection Ends rule finds projection: %s.%s = %s"
+            (show_symbol record_symbol)
+            (show_ident lbl)
+            (show_symbol field_symbol)
+            );
+        let%bind () = record_constraint @@
+        Constraint_projection (field_symbol, record_symbol, lbl)
+        in
+        return (record_symbol :: var_symbol_list)
+        (* match v with
         | Value_record (Record_value m) ->
           (* DEBUG: Problem seems to be that if we're projecting from a non-existent lable,
                     the contradiction was only discovered in the formula solving phase by Z3.
@@ -739,7 +756,11 @@ struct
           in
           return (record_symbol :: var_symbol_list)
         (* TODO: Error handling code needs to be replaced here *)
-        | _ -> failwith "Replace with correct error handling code here!" 
+        | _ -> 
+          let () = print_endline @@ show_ident x in
+          let () = print_endline @@ show_ident lbl in
+          let () = print_endline @@ show_value v in
+          failwith "Replace with correct error handling code here!"  *)
       end;
 
       (* Record Projection Starts *)
