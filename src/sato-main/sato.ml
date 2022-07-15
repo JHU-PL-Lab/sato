@@ -16,7 +16,6 @@ exception CommandLineParseFailure of string;;
 exception NoOperationsInProgram;;
 exception TypeCheckComplete;;
 
-(* TODO (Earl): This function should probably also return the ton_to_on_maps. *)
 let parse_program
     (args: Sato_args.type_checker_args) 
   : (Ast.expr * On_to_odefa_maps.t * Ton_to_on_maps.t option) =
@@ -25,17 +24,28 @@ let parse_program
     match Filename.extension filename with
     | ".natodefa" ->
       begin
-        let natodefa_ast = File.with_file_in filename On_parse.parse_program in
-        let (desugared_typed, ton_on_maps) = transform_natodefa natodefa_ast in
-        (* let () = print_endline @@ On_to_odefa.show_expr_desc desugared_typed in *)
-        let (odefa_ast, on_odefa_maps) =
-          On_to_odefa.translate ton_on_maps desugared_typed 
+        (* 
+          The workflow:
+          - Typed natodefa -> Untyped natodefa 
+          - Untyped natodefa -> Odefa
+          - Wellformedness check
+        *)
+        let typed_ast = File.with_file_in filename On_parse.parse_program in
+        let (untyped, ton_on_maps) =
+          (* Typed -> Untyped *)
+          transform_natodefa typed_ast 
         in
+        let (odefa_ast, on_odefa_maps) =
+          (* Untyped -> Odefa *)
+          On_to_odefa.translate ton_on_maps untyped 
+        in
+        (* Wellformedness *)
         Ast_wellformedness.check_wellformed_expr odefa_ast;
         (odefa_ast, on_odefa_maps, Some ton_on_maps)
       end
     | ".odefa" ->
       begin
+        (* When it's already odefa code, we only need to perform instrumentation *)
         let pre_inst_ast = File.with_file_in filename Parser.parse_program in
         let (odefa_ast, on_odefa_maps) =
           Odefa_instrumentation.instrument_odefa pre_inst_ast

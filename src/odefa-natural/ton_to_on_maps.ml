@@ -3,11 +3,6 @@ open Jhupllib;;
 
 open On_ast;;
 
-(* module User_expr_desc = struct
-  include On_ast.Typed_expr_desc;;
-  let pp = On_ast_pp.pp_expr_desc;;
-end;; *)
-
 module Intermediate_expr_desc = struct
   include On_ast.Semantic_typed_expr_desc;;
   let pp = On_ast_pp.pp_expr_desc;;
@@ -17,12 +12,6 @@ module Core_expr_desc = struct
   include On_ast.Core_expr_desc;;
   let pp = On_ast_pp.pp_expr_desc;;
 end;;
-
-(* module User_expr_desc_map = struct
-  module M = Map.Make(User_expr_desc);;
-  include M;;
-  include Pp_utils.Map_pp(M)(User_expr_desc);;
-end;; *)
 
 module Intermediate_expr_desc_map = struct
   module M = Map.Make(Intermediate_expr_desc);;
@@ -43,7 +32,6 @@ type t = {
   sem_to_syn : syn_natodefa_edesc Intermediate_expr_desc_map.t;
   core_to_sem : sem_natodefa_edesc Core_expr_desc_map.t;
   error_to_expr_tag : int Intermediate_expr_desc_map.t;
-  (* match_tag_to_error_expr : sem_natodefa_edesc Int_map.t; *)
   error_to_rec_fun_type : sem_natodefa_edesc Ident_map.t;
   error_to_value_expr : sem_natodefa_edesc Intermediate_expr_desc_map.t;
 }
@@ -54,7 +42,6 @@ let empty = {
   sem_to_syn = Intermediate_expr_desc_map.empty;
   core_to_sem = Core_expr_desc_map.empty;
   error_to_expr_tag = Intermediate_expr_desc_map.empty;
-  (* match_tag_to_error_expr = Int_map.empty; *)
   error_to_rec_fun_type = Ident_map.empty;
   error_to_value_expr = Intermediate_expr_desc_map.empty;
 }
@@ -92,14 +79,6 @@ let add_error_expr_tag_mapping mappings err_expr expr_tag =
   }
 ;;
 
-(* let add_match_tag_error_mapping mappings match_tag err_expr =
-  let match_tag_err_mapping = mappings.match_tag_to_error_expr in
-  { mappings with 
-  match_tag_to_error_expr = 
-      Int_map.add match_tag err_expr match_tag_err_mapping;
-  }
-;; *)
-
 let add_error_rec_fun_type_mapping mappings x e =
   let error_rec_fun_type_map = mappings.error_to_rec_fun_type in
   { mappings with 
@@ -128,7 +107,10 @@ let transform_funsig
 let rec syn_natodefa_from_sem_natodefa 
   ton_on_maps (sem_edesc : sem_natodefa_edesc)
   : syn_natodefa_edesc =
-  match Intermediate_expr_desc_map.Exceptionless.find sem_edesc ton_on_maps.sem_to_syn with
+  let entry_opt = 
+    Intermediate_expr_desc_map.find_opt sem_edesc ton_on_maps.sem_to_syn
+  in
+  match entry_opt with
   | Some expr' -> 
     expr'
   | None -> 
@@ -140,7 +122,6 @@ let rec syn_natodefa_from_sem_natodefa
     | Var x -> {tag = og_tag; body = Var x}
     | Input ->  {tag = og_tag; body = Input}
     | Untouched s -> {tag = og_tag; body = Untouched s}
-    (* TODO (Earl): Come back to here to add mappings to dictionary *)
     | TypeError x -> {tag = og_tag; body = TypeError x}
     | Function (id_lst, e) -> 
       let e' = syn_natodefa_from_sem_natodefa ton_on_maps e in
@@ -166,26 +147,13 @@ let rec syn_natodefa_from_sem_natodefa
       in
       let e' = syn_natodefa_from_sem_natodefa ton_on_maps e in
       {tag = og_tag; body = LetFun (fun_sig', e')}
-    (* NOTE: In the ton_to_on transformation, we should have mapping for all exprs
-      of the form:
-      1. LetWithType ..
-      2. LetFunWithType ..
-      3. LetRecFunWithType ..
-    *)
+    (* NOTE: In the syn -> sem transformation, we should have mapping for all 
+       exprs of the form:
+       1. LetWithType ..
+       2. LetFunWithType ..
+       3. LetRecFunWithType .. *)
     | LetWithType _ | LetRecFunWithType _ | LetFunWithType _ ->
-      begin
-        let syn_edesc_opt = 
-          Intermediate_expr_desc_map.find_opt sem_edesc ton_on_maps.sem_to_syn 
-        in
-        match syn_edesc_opt with
-        | None -> 
-          failwith "Should have a mapping!"
-          (* let e1' = syn_natodefa_from_sem_natodefa ton_on_maps e1 in
-          let e2' = syn_natodefa_from_sem_natodefa ton_on_maps e2 in
-          let type_decl' = syn_natodefa_from_sem_natodefa ton_on_maps type_decl in
-          {tag = og_tag; body = LetWithType (x, e1', e2', type_decl')} *)
-        | Some ed -> ed
-      end
+      failwith "Should have a mapping!"
     | Plus (e1, e2) -> 
       let e1' = syn_natodefa_from_sem_natodefa ton_on_maps e1 in
       let e2' = syn_natodefa_from_sem_natodefa ton_on_maps e2 in
@@ -284,7 +252,7 @@ let rec syn_natodefa_from_sem_natodefa
       {tag = og_tag; body = Assume e'}
 ;;
 
-let rec sem_natodefa_from_on_err ton_on_maps (on_err_desc : core_natodefa_edesc) : sem_natodefa_edesc = 
+let rec sem_natodefa_from_core_natodefa ton_on_maps (on_err_desc : core_natodefa_edesc) : sem_natodefa_edesc = 
   match Core_expr_desc_map.Exceptionless.find on_err_desc ton_on_maps.core_to_sem with
   | Some expr' -> 
     expr'
@@ -300,130 +268,130 @@ let rec sem_natodefa_from_on_err ton_on_maps (on_err_desc : core_natodefa_edesc)
       | Some err_expr -> 
         err_expr
       | None -> 
-        failwith "sem_natodefa_from_on_err: unknown TypeError")
+        failwith "sem_natodefa_from_core_natodefa: unknown TypeError")
     | Int n -> {tag = og_tag; body = Int n} 
     | Bool b -> {tag = og_tag ; body = Bool b}
     | Var x -> {tag = og_tag; body = Var x}
     | Function (id_lst, f_expr) -> 
-      {tag = og_tag; body = Function (id_lst, sem_natodefa_from_on_err ton_on_maps f_expr)}
+      {tag = og_tag; body = Function (id_lst, sem_natodefa_from_core_natodefa ton_on_maps f_expr)}
     | Input -> {tag = og_tag; body = Input}
     | Appl (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Appl (e1', e2')}
     | Let (x, e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Let (x, e1', e2')}
     | LetRecFun (funsig_lst, e) -> 
       let funsig_lst' = 
         funsig_lst  
-        |> List.map (transform_funsig (sem_natodefa_from_on_err ton_on_maps))
+        |> List.map (transform_funsig (sem_natodefa_from_core_natodefa ton_on_maps))
       in
-      let e' = sem_natodefa_from_on_err ton_on_maps e in
+      let e' = sem_natodefa_from_core_natodefa ton_on_maps e in
       {tag = og_tag; body = LetRecFun (funsig_lst', e')}
     | LetFun (funsig, e) -> 
       let funsig' = funsig
-        |> transform_funsig (sem_natodefa_from_on_err ton_on_maps)
+        |> transform_funsig (sem_natodefa_from_core_natodefa ton_on_maps)
       in
-      let e' = sem_natodefa_from_on_err ton_on_maps e in
+      let e' = sem_natodefa_from_core_natodefa ton_on_maps e in
       {tag = og_tag; body = LetFun (funsig', e')}
     | Plus (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Plus (e1', e2')}
     | Minus (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Minus (e1', e2')}
     | Times (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Times (e1', e2')}
     | Divide (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Divide (e1', e2')}
     | Modulus (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Modulus (e1', e2')}
     | Equal (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Equal (e1', e2')}
     | Neq (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Neq (e1', e2')}
     | LessThan (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = LessThan (e1', e2')}
     | Leq (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Leq (e1', e2')}
     | GreaterThan (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = GreaterThan (e1', e2')}
     | Geq (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Geq (e1', e2')}
     | And (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = And (e1', e2')}
     | Or (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = Or (e1', e2')}
     | Not e -> 
-      let e' = sem_natodefa_from_on_err ton_on_maps e in
+      let e' = sem_natodefa_from_core_natodefa ton_on_maps e in
       {tag = og_tag; body = Not (e')}
     | If (e1, e2, e3) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
-      let e3' = sem_natodefa_from_on_err ton_on_maps e3 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
+      let e3' = sem_natodefa_from_core_natodefa ton_on_maps e3 in
       {tag = og_tag; body = If (e1', e2', e3')}
     | Record r -> 
       let r' = r
-        |> Ident_map.map (sem_natodefa_from_on_err ton_on_maps)
+        |> Ident_map.map (sem_natodefa_from_core_natodefa ton_on_maps)
         |> Ident_map.map (fun e -> e)
       in
       {tag = og_tag; body = Record r'}
     | RecordProj (e, l) -> 
-      let e' = sem_natodefa_from_on_err ton_on_maps e in
+      let e' = sem_natodefa_from_core_natodefa ton_on_maps e in
       {tag = og_tag; body = RecordProj (e', l)}
     | Match (match_e, pat_expr_lst) -> 
-      let match_e' = sem_natodefa_from_on_err ton_on_maps match_e in
+      let match_e' = sem_natodefa_from_core_natodefa ton_on_maps match_e in
       let pat_expr_lst' = 
         pat_expr_lst
         |> List.map 
           (fun (p, e) -> 
-              let e' = sem_natodefa_from_on_err ton_on_maps e in 
+              let e' = sem_natodefa_from_core_natodefa ton_on_maps e in 
               (p, e'))
       in 
       {tag = og_tag; body = Match (match_e', pat_expr_lst')}
     | VariantExpr (l, e)-> 
-      let e' = sem_natodefa_from_on_err ton_on_maps e in
+      let e' = sem_natodefa_from_core_natodefa ton_on_maps e in
       {tag = og_tag; body = VariantExpr (l, e')}
     | List es ->
       let es' = es
-      |> List.map (sem_natodefa_from_on_err ton_on_maps)
+      |> List.map (sem_natodefa_from_core_natodefa ton_on_maps)
       in
       {tag = og_tag; body = List es'}
     | ListCons (e1, e2) -> 
-      let e1' = sem_natodefa_from_on_err ton_on_maps e1 in
-      let e2' = sem_natodefa_from_on_err ton_on_maps e2 in
+      let e1' = sem_natodefa_from_core_natodefa ton_on_maps e1 in
+      let e2' = sem_natodefa_from_core_natodefa ton_on_maps e2 in
       {tag = og_tag; body = ListCons (e1', e2')}
     | Assert e -> 
-      let e' = sem_natodefa_from_on_err ton_on_maps e in
+      let e' = sem_natodefa_from_core_natodefa ton_on_maps e in
       {tag = og_tag; body = Assert (e')}  
     | Assume e -> 
-      let e' = sem_natodefa_from_on_err ton_on_maps e in
+      let e' = sem_natodefa_from_core_natodefa ton_on_maps e in
       {tag = og_tag; body = Assume (e')}
     | Untouched s -> {tag = og_tag; body = Untouched s}
 ;;
@@ -431,7 +399,7 @@ let rec sem_natodefa_from_on_err ton_on_maps (on_err_desc : core_natodefa_edesc)
 
 let get_syn_nat_equivalent_expr ton_on_maps (expr : On_ast.core_natodefa_edesc) =
   expr
-  |> sem_natodefa_from_on_err ton_on_maps
+  |> sem_natodefa_from_core_natodefa ton_on_maps
   |> syn_natodefa_from_sem_natodefa ton_on_maps
 ;;
 
@@ -444,59 +412,3 @@ let get_core_expr_from_sem_expr ton_on_maps sem_expr =
 let get_value_expr_from_sem_expr ton_on_maps sem_expr =
   Intermediate_expr_desc_map.find_opt sem_expr ton_on_maps.error_to_value_expr
 ;;
-
-let show_expr_desc :
-  type a. a On_ast.expr_desc -> string = 
-  fun e -> 
-  Pp_utils.pp_to_string On_ast_pp.pp_expr_desc e;;
-
-(* let get_core_match_expr_from_err_ident ton_on_maps (eds : On_ast.sem_natodefa_edesc list) : On_ast.core_natodefa_edesc list = 
-  (* let idents = 
-    let () =
-    List.iter 
-    (fun e -> print_endline 
-      @@ "This is the error expr: " ^ (show_expr_desc e)) eds
-    in
-    eds
-    |> List.filter_map 
-    (fun ed -> 
-      match ed.body with
-      | On_ast.Var _ -> Some ed
-      | _ -> None
-    )
-  in *)
-  let find_match_tag x =
-    Int_map.fold 
-    (fun tag fail_expr acc -> 
-      (* let () = print_endline @@ "This is the value in the dictionary: " in
-      let () = print_endline @@ show_expr_desc fail_expr in *)
-      if (fail_expr = x) then Some tag else acc) 
-    ton_on_maps.match_tag_to_error_expr None  
-  in
-  let match_tags = 
-    List.filter_map find_match_tag eds
-  in
-  (* let () = print_endline @@ string_of_bool @@ List.is_empty match_tags in
-  let () =
-    List.iter (fun t -> print_endline @@ string_of_int t) match_tags
-  in *)
-  (* let get_sem_expr_from_syn_tag tag = 
-    Intermediate_expr_desc_map.fold 
-    (fun sem_ed _syn_ed acc -> if (sem_ed.tag == tag) then Some sem_ed else acc) 
-    ton_on_maps.sem_to_syn None
-  in
-  let sem_expr = 
-    List.filter_map get_sem_expr_from_syn_tag match_tags
-  in *)
-  (* let () = print_endline @@ string_of_bool @@ List.is_empty sem_expr in *)
-  let get_core_expr_from_sem_tag tag = 
-    Core_expr_desc_map.fold 
-    (fun core_ed sem_ed acc -> if (tag = sem_ed.tag) then Some core_ed else acc) 
-    ton_on_maps.core_to_sem None
-  in
-  let core_expr = 
-    List.filter_map get_core_expr_from_sem_tag match_tags
-  in
-  core_expr
-  (* failwith "TBI!" *)
-;; *)

@@ -65,7 +65,7 @@ let pp_variant_label formatter (Variant_label label) =
 
 let rec pp_funsig : type a. Format.formatter -> a funsig -> unit =
  fun formatter (Funsig (x, ident_list, e)) ->
-  Format.fprintf formatter "%a@ %a =@ @[%a@]"
+  Format.fprintf formatter "%a %a = @[%a@]"
     pp_ident x pp_ident_list ident_list pp_expr_desc e
 
 and pp_funsig_list : type a. Format.formatter -> (a funsig) list -> unit =
@@ -79,7 +79,7 @@ and pp_funsig_list : type a. Format.formatter -> (a funsig) list -> unit =
 and pp_funsig_with_type 
   : type a. Format.formatter -> a funsig * a expr_desc -> unit = 
   fun formatter (Funsig (x, ident_list, e), t) ->
-  Format.fprintf formatter "(%a@ : %a) %a =@ @[%a@]"
+  Format.fprintf formatter "(%a : %a) %a = @[%a@]"
     pp_ident x pp_expr_desc t pp_ident_list ident_list pp_expr_desc e
 
 and pp_funsig_with_type_list 
@@ -117,21 +117,21 @@ and pp_binop : type a. Format.formatter -> a expr -> unit =
   fun formatter expr ->
   let pp_symb formatter expr =
     match expr with
-    | Appl _ -> Format.pp_print_string formatter "" (* FIXME: Outputs two spaces! *)
-    | Plus _ -> Format.pp_print_string formatter "+"
-    | Minus _ -> Format.pp_print_string formatter "-"
-    | Times _ -> Format.pp_print_string formatter "*"
-    | Divide _ -> Format.pp_print_string formatter "/"
-    | Modulus _ -> Format.pp_print_string formatter "%"
-    | Equal _ -> Format.pp_print_string formatter "=="
-    | Neq _ -> Format.pp_print_string formatter "<>"
-    | LessThan _ -> Format.pp_print_string formatter "<"
-    | Leq _ -> Format.pp_print_string formatter "<="
-    | GreaterThan _ -> Format.pp_print_string formatter ">"
-    | Geq _ -> Format.pp_print_string formatter ">="
-    | And _ -> Format.pp_print_string formatter "and"
-    | Or _ -> Format.pp_print_string formatter "or"
-    | ListCons _ -> Format.pp_print_string formatter "::"
+    | Appl _ -> Format.pp_print_string formatter " " (* FIXME: Outputs two spaces! *)
+    | Plus _ -> Format.pp_print_string formatter " + "
+    | Minus _ -> Format.pp_print_string formatter " - "
+    | Times _ -> Format.pp_print_string formatter " * "
+    | Divide _ -> Format.pp_print_string formatter " / "
+    | Modulus _ -> Format.pp_print_string formatter " % "
+    | Equal _ -> Format.pp_print_string formatter " == "
+    | Neq _ -> Format.pp_print_string formatter " <> "
+    | LessThan _ -> Format.pp_print_string formatter " < "
+    | Leq _ -> Format.pp_print_string formatter " <= "
+    | GreaterThan _ -> Format.pp_print_string formatter " > "
+    | Geq _ -> Format.pp_print_string formatter " >= "
+    | And _ -> Format.pp_print_string formatter " and "
+    | Or _ -> Format.pp_print_string formatter " or "
+    | ListCons _ -> Format.pp_print_string formatter " :: "
     | _ -> raise @@ Utils.Invariant_failure "Not a binary operator!"
   in
   match expr with
@@ -142,13 +142,13 @@ and pp_binop : type a. Format.formatter -> a expr -> unit =
     let l_cmp = expr_precedence_cmp e1.body expr in
     let r_cmp = expr_precedence_cmp e2.body expr in
     if l_cmp < 0 && r_cmp <= 0 then 
-      Format.fprintf formatter "(%a) %a (%a)" pp_expr_desc e1 pp_symb expr pp_expr_desc e2
+      Format.fprintf formatter "(%a)%a(%a)" pp_expr_desc e1 pp_symb expr pp_expr_desc e2
     else if l_cmp >= 0 && r_cmp <= 0 then
-      Format.fprintf formatter "%a %a (%a)" pp_expr_desc e1 pp_symb expr pp_expr_desc e2
+      Format.fprintf formatter "%a%a(%a)" pp_expr_desc e1 pp_symb expr pp_expr_desc e2
     else if l_cmp < 0 && r_cmp > 0 then
-      Format.fprintf formatter "(%a) %a %a" pp_expr_desc e1 pp_symb expr pp_expr_desc e2
+      Format.fprintf formatter "(%a)%a%a" pp_expr_desc e1 pp_symb expr pp_expr_desc e2
     else if l_cmp >= 0 && r_cmp > 0 then
-      Format.fprintf formatter "%a %a %a" pp_expr_desc e1 pp_symb expr pp_expr_desc e2
+      Format.fprintf formatter "%a%a%a" pp_expr_desc e1 pp_symb expr pp_expr_desc e2
     else
       raise @@ Utils.Invariant_failure "Invalid precedence comparison!"
   | _ -> raise @@ Utils.Invariant_failure "Not a binary operator!"
@@ -181,7 +181,7 @@ and pp_expr :
   | Bool b -> Format.pp_print_bool formatter b
   | Var x -> pp_ident formatter x
   | Function (x_list, e) ->
-    Format.fprintf formatter "fun %a ->@ @[<2>%a@]"
+    Format.fprintf formatter "fun %a -> @[<2>%a@]"
       pp_ident_list x_list pp_expr_desc e
   | Input -> Format.pp_print_string formatter "input"
   | Record record ->
@@ -196,29 +196,29 @@ and pp_expr :
   | Appl _ ->
     pp_binop formatter expr
   | Let (ident, e1, e2) -> 
-    Format.fprintf formatter "let@ %a =@ %a@ in@ @[%a@]"
+    Format.fprintf formatter "let %a = %a in @[%a@]"
       pp_ident ident pp_expr_desc e1 pp_expr_desc e2
   | LetWithType (ident, e1, e2, type_decl) ->
-    Format.fprintf formatter "let@ (%a : %a) =@ %a@ in@ @[%a@]"
+    Format.fprintf formatter "let (%a : %a) = %a in @[%a@]"
       pp_ident ident pp_expr_desc type_decl pp_expr_desc e1 pp_expr_desc e2
   | LetRecFun (funsig_lst, e) ->
-    Format.fprintf formatter "let rec@ %a@ in@ @[%a@]"
+    Format.fprintf formatter "let rec %a in @[%a@]"
       pp_funsig_list funsig_lst pp_expr_desc e
   | LetRecFunWithType (funsig_lst, e, type_decl_lst) ->
-    Format.fprintf formatter "let rec@ %a@ in@ @[%a@]"
+    Format.fprintf formatter "let rec %a in @[%a@]"
     pp_funsig_with_type_list (List.combine funsig_lst type_decl_lst) pp_expr_desc e
   | LetFun (funsig, e) ->
-    Format.fprintf formatter "let@ %a@ in@ @[%a@]"
+    Format.fprintf formatter "let %a in @[%a@]"
       pp_funsig funsig pp_expr_desc e
   | LetFunWithType (funsig, e, type_decl) -> 
-    Format.fprintf formatter "let@ %a@ in@ @[%a@]"
+    Format.fprintf formatter "let %a in @[%a@]"
       pp_funsig_with_type (funsig, type_decl) pp_expr_desc e
   | If (pred, e1, e2) ->
-    Format.fprintf formatter "if@ %a@ then@ @[<2>%a@]@ else @[<2>%a@]"
+    Format.fprintf formatter "if %a then @[<2>%a@] else @[<2>%a@]"
     pp_expr_desc pred pp_expr_desc e1 pp_expr_desc e2
   | Match (e, pattern_expr_list) ->
     let pp_pattern_expr formatter (pattern, expr) =
-      Format.fprintf formatter "@[| %a ->@ @[<2>%a@]@]"
+      Format.fprintf formatter "@[| %a -> @[<2>%a@]@]"
         pp_pattern pattern pp_expr_desc expr
     in
     let pp_pattern_expr_lst formatter pat_expr_list =
@@ -228,7 +228,7 @@ and pp_expr :
         formatter
         (List.enum pat_expr_list)
     in
-    Format.fprintf formatter "match@ %a@ with@ @[%a@]@ end"
+    Format.fprintf formatter "match %a with @[%a@] end"
     pp_expr_desc e pp_pattern_expr_lst pattern_expr_list
   (* Binary operations *)
   | Plus _ | Minus _ | Times _ | Divide _ | Modulus _

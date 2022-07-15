@@ -334,7 +334,6 @@ module Make
     | Error_match err -> pp_error_match formatter err
     | Error_value err -> pp_error_value formatter err
     | Error_natodefa_type err -> pp_error_type formatter err
-    (* | Error_natodefa_type_simple err -> pp_error_type_simple formatter err *)
   ;;
 
   let show = Pp_utils.pp_to_string pp;;
@@ -408,45 +407,6 @@ let odefa_error_remove_instrument_vars
 ;;
 
 (* **** Odefa to natodefa error translation **** *)
-
-(* Helper function to remove adjacent duplicate entries in a list (note that
-   this does not remove non-adjacent dupes). *)
-(* let deduplicate_list list =
-  let res = 
-  List.fold_right
-    (fun x deduped_list ->
-      match List.Exceptionless.hd deduped_list with
-      | Some next ->
-        let is_next = On_ast.equal_ident next x in
-        if is_next then deduped_list else x :: deduped_list
-      | None ->
-        x :: deduped_list
-    )
-    list
-    []
-  in
-  res
-;; *)
-
-(* Helper function that returns a natodefa binop, depending on the odefa
-   binary operator. *)
-(* let odefa_to_on_binop 
-  (odefa_binop : Ast.binary_operator) : (On_ast.core_natodefa -> On_ast.core_natodefa -> On_ast.core_natodefa) =
-  match odefa_binop with
-  | Ast.Binary_operator_plus -> (fun e1 e2 -> On_ast.Plus (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_minus -> (fun e1 e2 -> On_ast.Minus (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_times -> (fun e1 e2 -> On_ast.Times (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_divide -> (fun e1 e2 -> On_ast.Divide (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_modulus -> (fun e1 e2 -> On_ast.Modulus (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_equal_to -> (fun e1 e2 -> On_ast.Equal (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_not_equal_to -> (fun e1 e2 -> On_ast.Neq (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_less_than -> (fun e1 e2 -> On_ast.LessThan (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_less_than_or_equal_to -> (fun e1 e2 -> On_ast.Leq (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_and -> (fun e1 e2 -> On_ast.And (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_or -> (fun e1 e2 -> On_ast.Or (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_xor -> (fun e1 e2 -> On_ast.Neq (new_expr_desc e1, new_expr_desc e2))
-  | Ast.Binary_operator_xnor -> (fun e1 e2 -> On_ast.Equal (new_expr_desc e1, new_expr_desc e2))
-;; *)
 
 let odefa_to_on_binop 
   (odefa_binop : Ast.binary_operator) : (On_ast.syn_natodefa_edesc -> On_ast.syn_natodefa_edesc -> On_ast.syn_type_natodefa) =
@@ -802,7 +762,7 @@ let odefa_to_natodefa_error
           (* |> fun ls -> 
              let () = List.iter (fun a -> print_endline @@ On_to_odefa.show_expr_desc a) ls in
              ls *)
-          |> List.map @@ Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps
+          |> List.map @@ Ton_to_on_maps.sem_natodefa_from_core_natodefa ton_on_maps
         in
         (* let () = 
           List.iter (fun ed -> print_endline @@ On_to_odefa.show_expr_desc ed) sem_nat_aliases 

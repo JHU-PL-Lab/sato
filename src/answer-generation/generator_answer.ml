@@ -297,7 +297,7 @@ module Natodefa_type_errors : Answer = struct
               let sem_nat_aliases = 
                 odefa_aliases
                 |> (On_to_odefa_maps.odefa_to_on_aliases odefa_on_maps)
-                |> List.map (Ton_to_on_maps.sem_natodefa_from_on_err ton_on_maps)
+                |> List.map (Ton_to_on_maps.sem_natodefa_from_core_natodefa ton_on_maps)
               in
               let sem_val_exprs = 
                 sem_nat_aliases

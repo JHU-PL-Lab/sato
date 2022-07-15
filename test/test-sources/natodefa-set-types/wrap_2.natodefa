@@ -1,0 +1,4 @@
+let test (f : int -> int) : int = 
+    f true
+in
+test

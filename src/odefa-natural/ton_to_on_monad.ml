@@ -45,11 +45,11 @@ module TonTranslationMonad : sig
   (** Map a semantic natodefa expression to the syntactic natodefa type it has **)
   val add_error_to_tag_mapping : sem_natodefa_edesc -> int -> unit m
 
-  (** Map a semantic natodefa expression to the syntactic natodefa type it has **)
-  (* val add_match_to_error_mapping : int -> sem_natodefa_edesc -> unit m *)
-
+  (** Map to specifically keep track of which type in the let recs that it
+      was connected with **)
   val add_error_to_rec_fun_mapping : ident -> sem_natodefa_edesc -> unit m
 
+  (** Map an error to the specific value expression it was checking **)
   val add_error_to_value_expr_mapping : sem_natodefa_edesc -> sem_natodefa_edesc -> unit m
 
   (** Retrieve the typed natodefa to natodefa maps from the monad *)
@@ -114,11 +114,6 @@ end = struct
     let ton_on_maps = ctx.tc_ton_to_on_mappings in
     ctx.tc_ton_to_on_mappings
       <- Ton_to_on_maps.add_error_expr_tag_mapping ton_on_maps err_expr expr_tag
-
-  (* let add_match_to_error_mapping match_tag err_expr ctx = 
-    let ton_on_maps = ctx.tc_ton_to_on_mappings in
-    ctx.tc_ton_to_on_mappings
-      <- Ton_to_on_maps.add_match_tag_error_mapping ton_on_maps match_tag err_expr *)
     
   let add_error_to_rec_fun_mapping error_id n_expr ctx =
     let ton_on_maps = ctx.tc_ton_to_on_mappings in
