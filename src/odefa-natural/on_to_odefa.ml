@@ -806,17 +806,6 @@ and flatten_pattern_match
     (subj_var : Ast.var)
     (pat_e_list : (On_ast.pattern * On_ast.core_natodefa_edesc) list)
   : (Ast.clause list * Ast.var) m =
-  (* let tag = expr_desc.tag in *)
-  (* let%bind () = 
-    if Ton_to_on_maps.Int_map.mem tag ton_on_maps.match_tag_to_error_id
-      then 
-        let false_id = 
-          Ton_to_on_maps.Int_map.find tag ton_on_maps.match_tag_to_error_id
-        in
-        add_false_id_subj_var_mapping false_id subj_var 
-      else
-        return ()
-  in *)
   let rec convert_match
       ((pat, e) : On_ast.pattern * On_ast.core_natodefa_edesc)
       (accum : Ast.expr * Ast.clause list)
@@ -879,8 +868,6 @@ and flatten_pattern_match
   in
   let%bind cond_var = new_odefa_inst_var expr_desc "match" in
   let%bind abort_expr = add_abort_expr expr_desc [cond_var] in
-  let (Ast.Var (x, _)) = cond_var in
-  let%bind () = add_match_id_subj_var_mapping x subj_var in
   let cond_cls =
     Ast.Clause(cond_var, Conditional_body (match_pred, cond_expr, abort_expr))
   in

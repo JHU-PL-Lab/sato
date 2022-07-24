@@ -2,3 +2,9 @@ let test (f : int -> int) : int =
     f true
 in
 test
+
+let id (x : int) : int = 
+  x 
+in
+id true
+

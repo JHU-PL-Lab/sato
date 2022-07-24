@@ -67,11 +67,6 @@ type t = {
       determine if a record was originally a list, variant, or record, depending
       on its labels. *)
   natodefa_idents_to_types : On_ast.type_sig On_labels_map.t;
-
-  match_ident_to_subj_var : Ast.var Ast.Ident_map.t;
-
-  false_id_to_subj_var : Ast.var On_ast.Ident_map.t;
-  
 }
 
 [@@ deriving show]
@@ -96,9 +91,6 @@ let empty is_natodefa = {
   natodefa_expr_to_expr = Expr_desc_map.empty;
   natodefa_var_to_var = On_ast.Ident_map.empty;
   natodefa_idents_to_types = On_labels_map.empty;
-  match_ident_to_subj_var = Ast.Ident_map.empty;
-  false_id_to_subj_var = On_ast.Ident_map.empty;
-  (* abort_mapping = Ast.Ident_map.empty; *)
 }
 ;;
 
@@ -176,25 +168,6 @@ let get_pre_inst_equivalent_clause mappings odefa_ident =
         (Ast.show_ident odefa_ident))
 ;;
 
-let add_match_id_to_subj_var_mapping mappings m_id subj_var = 
-  let match_id_subj_map = mappings.match_ident_to_subj_var in
-  { mappings with
-  match_ident_to_subj_var =
-      Ast.Ident_map.add m_id subj_var match_id_subj_map
-  }
-
-let add_false_id_to_subj_var_mapping mappings f_id subj_var = 
-  let false_subj_map = mappings.false_id_to_subj_var in
-  { mappings with
-    false_id_to_subj_var =
-      On_ast.Ident_map.add f_id subj_var false_subj_map
-  }
-
-(* Note (Earl): The problem is with this function. It is trying to reconstruct 
-   the original AST, but we have a match in a let rec that's transformed 
-   separately, and we can only reconstruct one at a time. This causes us to
-   chase our tail around like a stupid dog.
- *)
 (** Helper function to recursively map natodefa expressions according to
     the expression-to-expression mapping (eg. records to lists or variants).
     We need a custom transformer function, rather than the one in utils, 
@@ -381,23 +354,10 @@ let odefa_to_on_aliases on_mappings aliases =
   |> List.filter_map
     (fun alias ->
       let e_desc = odefa_to_on_expr alias in
-      (* let () = print_endline "----" in
-      let () = print_endline @@ show_expr_desc e_desc in
-      let () = print_endline "----" in *)
       match (e_desc.body) with
       | (On_ast.Var _) | TypeError _ -> Some e_desc
       | _ -> None
     )
-  (* During translation, some odefa vars are assigned to the same natodefa
-     vars (namely in var expressions).  The following procedure removes any
-     adjacent duplicates from the alias chain. *)
-  (* |> fun l ->
-     let () = print_endline "----" in
-     let () = 
-       List.iter (fun elm -> print_endline @@ show_expr_desc elm) l
-     in 
-     let () = print_endline "----" in
-     l *)
   |> List.unique
 ;;
 
@@ -419,138 +379,6 @@ let is_natodefa mappings = mappings.is_natodefa;;
 let is_var_instrumenting mappings odefa_ident =
   let inst_map = mappings.odefa_instrument_vars_map in
   Ast.Ident_map.mem odefa_ident inst_map
-;;
-
-let get_false_id_to_subj_var_mapping mappings = 
-  mappings.false_id_to_subj_var
-;;
-
-let get_odefa_subj_var_from_natodefa_expr mappings (expr : On_ast.core_natodefa_edesc) =
-  (* Getting the desugared version of core nat expression *)
-  let desugared_core = 
-    (* let () = print_endline @@ "This is the transformed expr" in
-    let () = print_endline @@ show_expr_desc expr in *)
-    let find_key_by_value v = 
-      Expr_desc_map.fold
-      (fun desugared sugared acc -> 
-        (* let () = print_endline "----------------------" in *)
-        (* let () = print_endline @@ "This is the value in the dictionary: " in *)
-        (* let () = print_endline @@ show_expr_desc sugared in *)
-        (* let () = print_endline @@ "This is the key in the dictionary: " in *)
-        (* let () = print_endline @@ show_expr_desc desugared in *)
-        (* let () = print_endline "----------------------" in *)
-        if (sugared = v) then Some desugared else acc)
-      mappings.natodefa_expr_to_expr None 
-    in
-    let rec loop edesc = 
-      let edesc_opt' = find_key_by_value edesc in
-      match edesc_opt' with
-      | None -> edesc
-      | Some edesc' -> loop edesc'
-    in
-    loop expr
-  in
-  (* TODO: Getting the alphatization version is still wrong :( *)
-  (* Getting the alphatized version *)
-  let on_ident_transform 
-    (e_desc : On_ast.core_natodefa_edesc) : On_ast.core_natodefa_edesc =
-  let open On_ast in
-  let find_ident ident =
-    Ident_map.fold 
-    (fun renamed og_name acc ->
-      if (og_name = ident) then renamed else acc  
-    ) mappings.natodefa_var_to_var ident
-  in
-  let transform_funsig funsig =
-    let (Funsig (fun_ident, arg_ident_list, body)) = funsig in
-    let fun_ident' = find_ident fun_ident in
-    let arg_ident_list' = List.map find_ident arg_ident_list in
-    Funsig (fun_ident', arg_ident_list', body)
-  in
-  let expr = e_desc.body in
-  let og_tag = e_desc.tag in
-  let expr' = 
-    match expr with
-    | Var ident -> Var (find_ident ident)
-    | Function (ident_list, body) ->
-      Function (List.map find_ident ident_list, body)
-    | Let (ident, e1, e2) ->
-      Let (find_ident ident, e1, e2)
-    | LetFun (funsig, e) ->
-      LetFun (transform_funsig funsig, e)
-    | LetRecFun (funsig_list, e) ->
-      LetRecFun (List.map transform_funsig funsig_list, e)
-    | Match (e, pat_e_list) ->
-      let transform_pattern pat =
-        match pat with
-        | RecPat record ->
-          let record' =
-            record
-            |> Ident_map.enum
-            |> Enum.map
-              (fun (lbl, x_opt) ->
-                match x_opt with
-                | Some x -> (lbl, Some (find_ident x))
-                | None -> (lbl, None)
-              )
-            |> Ident_map.of_enum
-          in
-          RecPat record'
-        | StrictRecPat record ->
-          let record' =
-            record
-            |> Ident_map.enum
-            |> Enum.map
-              (fun (lbl, x_opt) ->
-                match x_opt with
-                | Some x -> (lbl, Some (find_ident x))
-                | None -> (lbl, None)
-              )
-            |> Ident_map.of_enum
-          in
-          StrictRecPat record'
-        | VariantPat (vlbl, x) ->
-          VariantPat (vlbl, find_ident x)
-        | VarPat x ->
-          VarPat (find_ident x)
-        | LstDestructPat (x1, x2) ->
-          LstDestructPat (find_ident x1, find_ident x2)
-        | AnyPat | IntPat | BoolPat | FunPat | EmptyLstPat | UntouchedPat _ -> pat
-      in
-      let pat_e_list' =
-        List.map
-          (fun (pat, match_expr) -> 
-            (transform_pattern pat, match_expr))
-          pat_e_list
-      in
-      Match (e, pat_e_list')
-    | _ -> expr
-  in
-  {tag = og_tag; body = expr'}
-  in
-  let alphatized = 
-    on_expr_transformer on_ident_transform desugared_core
-    (* actual_expr *)
-  in
-  let odefa_var_opt = 
-    (* let () = print_endline @@ "This is the original expr" in
-    let () = print_endline @@ show_expr_desc alphatized in *)
-    Ast.Ident_map.fold
-    (fun odefa_var core_expr acc -> 
-      (* let () = print_endline @@ "This is the value in the dictionary: " in
-      let () = print_endline @@ show_expr_desc core_expr in *)
-      if (core_expr = alphatized) then Some odefa_var else acc) 
-    mappings.odefa_var_to_natodefa_expr None
-  in
-  match odefa_var_opt with
-  | None -> failwith "Should have found an answer here!"
-  | Some x ->
-    (* let () = print_endline @@ "This is the original ident" in *)
-    (* let () = print_endline @@ Ast_pp.show_ident x in *)
-    let subj_var = 
-      Ast.Ident_map.find x mappings.match_ident_to_subj_var
-    in
-    subj_var
 ;;
 
 let get_odefa_var_opt_from_natodefa_expr mappings (expr : On_ast.core_natodefa_edesc) =
@@ -578,7 +406,6 @@ let get_odefa_var_opt_from_natodefa_expr mappings (expr : On_ast.core_natodefa_e
     in
     loop expr
   in
-  (* TODO: Getting the alphatization version is still wrong :( *)
   (* Getting the alphatized version *)
   let on_ident_transform 
     (e_desc : On_ast.core_natodefa_edesc) : On_ast.core_natodefa_edesc =

@@ -154,7 +154,7 @@ module Type_errors : Answer = struct
     | Some odefa_on_maps ->
       begin
         match error_opt with
-        | Some (error_loc, error_list, _, _solution) ->
+        | Some (error_loc, error_list, _solution) ->
           let rm_inst_fn =
             On_error.odefa_error_remove_instrument_vars odefa_on_maps
           in
@@ -242,7 +242,7 @@ module Natodefa_type_errors : Answer = struct
           Generator_utils.input_sequence_from_result e x result
         in
         match error_opt with
-        | Some (error_loc, error_lst, _ab_var, solution) ->
+        | Some (error_loc, error_lst, solution) ->
           (* TODO (Earl): This probably should be the place to trace all the way
               back to the original, user-written Natodefa code.
               The current issue with how mappings are kept is that the abort vars

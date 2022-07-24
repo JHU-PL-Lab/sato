@@ -1,0 +1,6 @@
+zero = 0;
+
+f = fun s -> 
+    (res = s and s;)
+;
+f_appl = f zero;

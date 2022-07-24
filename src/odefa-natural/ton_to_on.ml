@@ -2,7 +2,6 @@ open Batteries;;
 open Jhupllib;;
 
 open On_ast;;
-(* open Ton_to_on_maps;; *)
 open Ton_to_on_monad;;
 
 open TonTranslationMonad;;
