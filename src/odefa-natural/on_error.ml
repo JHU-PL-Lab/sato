@@ -689,6 +689,9 @@ let odefa_to_natodefa_error
   | Error.Odefa_error.Error_match err ->
     begin
       let aliases = err.err_match_aliases in
+      let () = print_endline "Printing aliases" in
+      let () = List.iter (fun a -> print_endline @@ Ast.show_ident a) aliases in
+      let () = print_endline @@ On_to_odefa.show_expr_desc (odefa_to_on_value aliases) in
       Error_match {
         err_match_aliases = 
           get_idents_from_aliases @@ odefa_to_syn_aliases aliases;

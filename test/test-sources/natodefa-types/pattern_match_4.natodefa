@@ -1,0 +1,13 @@
+# EXPECT-WELL-FORMED
+# EXPECT-TYPE-ERROR-COUNT 2
+# EXPECT-TYPE-ERROR ~result [] "match {} with | hd :: tl -> tl | [] -> [] end" "" "{}" "list" "{}"
+# EXPECT-TYPE-ERROR ~result [] "match {} with | hd :: tl -> tl | [] -> [] end" "" "{}" "list" "{}"
+
+let x = {} in
+let y = 
+    match x with
+    | hd :: tl -> tl
+    | [] -> []
+    end
+in
+y

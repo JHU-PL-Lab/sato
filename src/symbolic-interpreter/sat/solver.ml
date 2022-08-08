@@ -1033,6 +1033,7 @@ let rec find_errors solver symbol =
           (* let () = print_endline "----------" in
           let () = List.iter (fun s -> print_endline @@ show_symbol s) alias_chain in 
           let () = print_endline "----------" in *)
+          let () = print_endline @@ "making a value error!" in
           let value_error = Odefa_error.Error_value {
             err_value_aliases = alias_chain;
             err_value_val = Value_body (Value_bool b);
