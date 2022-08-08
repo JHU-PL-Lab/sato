@@ -37,7 +37,7 @@ let parse_program
         in
         let (odefa_ast, on_odefa_maps) =
           (* Untyped -> Odefa *)
-          On_to_odefa.translate ton_on_maps untyped 
+          On_to_odefa.translate untyped 
         in
         (* Wellformedness *)
         Ast_wellformedness.check_wellformed_expr odefa_ast;

@@ -715,14 +715,13 @@ let flatten_fun
 
 (** Flatten a binary operation *)
 let rec flatten_binop
-    (ton_on_maps : Ton_to_on_maps.t)
     (expr_desc : On_ast.core_natodefa_edesc)
     (e1_desc : On_ast.core_natodefa_edesc)
     (e2_desc : On_ast.core_natodefa_edesc)
     (binop : Ast.binary_operator)
   : (Ast.clause list * Ast.var) m =
-  let%bind (e1_clist, e1_var) = flatten_expr ton_on_maps e1_desc in
-  let%bind (e2_clist, e2_var) = flatten_expr ton_on_maps e2_desc in
+  let%bind (e1_clist, e1_var) = flatten_expr e1_desc in
+  let%bind (e2_clist, e2_var) = flatten_expr e2_desc in
   let%bind binop_var = fresh_var "binop" in
   let%bind () = add_odefa_natodefa_mapping binop_var expr_desc in
   let binop_body = Ast.Binary_operation_body (e1_var, binop, e2_var) in
@@ -732,7 +731,6 @@ let rec flatten_binop
 (** Flatten either the equal or not equal binary operation.
     This involves instrumenting both operations in nested conditionals. *)
 and flatten_eq_binop
-    (ton_on_maps : Ton_to_on_maps.t)
     (expr_desc : On_ast.core_natodefa_edesc)
     (e1_desc : On_ast.core_natodefa_edesc)
     (e2_desc : On_ast.core_natodefa_edesc)
@@ -740,8 +738,8 @@ and flatten_eq_binop
     (binop_bool : Ast.binary_operator)
   : (Ast.clause list * Ast.var) m =
     (* e1 and e2 *)
-    let%bind (e1_clist, e1_var) = flatten_expr ton_on_maps e1_desc in
-    let%bind (e2_clist, e2_var) = flatten_expr ton_on_maps e2_desc in
+    let%bind (e1_clist, e1_var) = flatten_expr e1_desc in
+    let%bind (e2_clist, e2_var) = flatten_expr e2_desc in
     (* Helper functions *)
     let add_var = new_odefa_inst_var expr_desc in
     let create_match_clause pat pat_name =
@@ -801,7 +799,6 @@ and flatten_eq_binop
          in the future. In the spec this is supposed to be part of the instrumentation 
          step. *)
 and flatten_pattern_match
-    (ton_on_maps : Ton_to_on_maps.t)
     (expr_desc : On_ast.core_natodefa_edesc)
     (subj_var : Ast.var)
     (pat_e_list : (On_ast.pattern * On_ast.core_natodefa_edesc) list)
@@ -827,7 +824,7 @@ and flatten_pattern_match
       let%bind (flat_pat, new_clauses) =
         flatten_pattern expr_desc subj_var pat
       in
-      let%bind (c_list, _) = flatten_expr ton_on_maps e in
+      let%bind (c_list, _) = flatten_expr e in
       let c_list' = new_clauses @ c_list in
       let match_clause =
         Ast.Clause (bool_var, Match_body(subj_var, flat_pat))
@@ -908,11 +905,10 @@ and flatten_pattern_match
 
 (** Flatten an entire expression (i.e. convert natodefa into odefa code) *)
 and flatten_expr
-    (ton_on_maps : Ton_to_on_maps.t)
     (expr_desc : On_ast.core_natodefa_edesc)
   : (Ast.clause list * Ast.var) m =
   (* let%bind () = update_natodefa_expr exp in *)
-  let recurse = flatten_expr ton_on_maps in
+  let recurse = flatten_expr in
   let exp = expr_desc.body in
   (* let og_tag = expr_desc.tag in *)
   match exp with
@@ -969,35 +965,35 @@ and flatten_expr
     raise @@
       Utils.Invariant_failure "LetRecFun should not have been passed to flatten_expr"
   | Plus (e1, e2) ->
-    flatten_binop ton_on_maps expr_desc e1 e2 Ast.Binary_operator_plus
+    flatten_binop expr_desc e1 e2 Ast.Binary_operator_plus
   | Minus (e1, e2) ->
-    flatten_binop ton_on_maps expr_desc e1 e2 Ast.Binary_operator_minus
+    flatten_binop expr_desc e1 e2 Ast.Binary_operator_minus
   | Times (e1, e2) ->
-    flatten_binop ton_on_maps expr_desc e1 e2 Ast.Binary_operator_times
+    flatten_binop expr_desc e1 e2 Ast.Binary_operator_times
   | Divide (e1, e2) ->
-    flatten_binop ton_on_maps expr_desc e1 e2 Ast.Binary_operator_divide
+    flatten_binop expr_desc e1 e2 Ast.Binary_operator_divide
   | Modulus (e1, e2) ->
-    flatten_binop ton_on_maps expr_desc e1 e2 Ast.Binary_operator_modulus
+    flatten_binop expr_desc e1 e2 Ast.Binary_operator_modulus
   | Equal (e1, e2) ->
-    flatten_eq_binop ton_on_maps expr_desc e1 e2
+    flatten_eq_binop expr_desc e1 e2
       Ast.Binary_operator_equal_to
       Ast.Binary_operator_xnor
   | Neq (e1, e2) ->
-    flatten_eq_binop ton_on_maps expr_desc e1 e2
+    flatten_eq_binop expr_desc e1 e2
       Ast.Binary_operator_not_equal_to
       Ast.Binary_operator_xor
   | LessThan (e1, e2) ->
-    flatten_binop ton_on_maps expr_desc e1 e2 Ast.Binary_operator_less_than
+    flatten_binop expr_desc e1 e2 Ast.Binary_operator_less_than
   | Leq (e1, e2) ->
-    flatten_binop ton_on_maps expr_desc e1 e2 Ast.Binary_operator_less_than_or_equal_to
+    flatten_binop expr_desc e1 e2 Ast.Binary_operator_less_than_or_equal_to
   | GreaterThan (e1, e2) -> (* Reverse e1 and e2 *)
-    flatten_binop ton_on_maps expr_desc e2 e1 Ast.Binary_operator_less_than
+    flatten_binop expr_desc e2 e1 Ast.Binary_operator_less_than
   | Geq (e1, e2) -> (* Reverse e1 and e2 *)
-    flatten_binop ton_on_maps expr_desc e2 e1 Ast.Binary_operator_less_than_or_equal_to
+    flatten_binop expr_desc e2 e1 Ast.Binary_operator_less_than_or_equal_to
   | And (e1, e2) ->
-    flatten_binop ton_on_maps expr_desc e1 e2 Ast.Binary_operator_and
+    flatten_binop expr_desc e1 e2 Ast.Binary_operator_and
   | Or (e1, e2) ->
-    flatten_binop ton_on_maps expr_desc e1 e2 Ast.Binary_operator_or
+    flatten_binop expr_desc e1 e2 Ast.Binary_operator_or
   | Not (e) ->
     let%bind (e_clist, e_var) = recurse e in
     let%bind true_var = fresh_var "true" in
@@ -1112,7 +1108,7 @@ and flatten_expr
     let%bind (subject_clause_list, subj_var) = recurse subject in
     (* Flatten the pattern-expr list *)
     let%bind (match_clause_list, cond_var) =
-      flatten_pattern_match ton_on_maps expr_desc subj_var pat_e_list
+      flatten_pattern_match expr_desc subj_var pat_e_list
     in
     return (subject_clause_list @ match_clause_list, cond_var)
   | VariantExpr (_, _) ->
@@ -1185,13 +1181,12 @@ let debug_transform_odefa
 let translate
     ?translation_context:(translation_context=None)
     ?is_instrumented:(is_instrumented=true)
-    (ton_on_maps : Ton_to_on_maps.t)
     (e : On_ast.core_natodefa_edesc)
   : (Ast.expr * On_to_odefa_maps.t) =
   let (e_m_with_info : (Ast.expr * On_to_odefa_maps.t) m) =
     (* Odefa transformations *)
     let flatten e : Ast.clause list m =
-      let%bind (c_list, _) = flatten_expr ton_on_maps e in
+      let%bind (c_list, _) = flatten_expr e in
       return c_list
     in
     let instrument c_list : Ast.clause list m =
