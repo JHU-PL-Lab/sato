@@ -1,0 +1,16 @@
+let res = [1,2,3,4,5] in
+let hd l = 
+    match l with
+    | h :: t -> h
+    | [] -> (0 0)
+    end
+in
+let tl l =
+    match l with
+    | h :: t -> t
+    | [] -> (0 0)
+    end
+in
+let cond = hd (tl (tl (tl res))) in
+let test = input in 
+if cond == input then assert false else 0

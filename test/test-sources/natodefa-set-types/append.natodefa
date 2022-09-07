@@ -1,0 +1,26 @@
+let rec append l1 l2 = 
+    match l1 with
+    | hd :: tl -> 
+        let new_tl = append tl l2 in
+        hd :: new_tl
+    | [] -> l2
+    end
+in
+let l1 = [1,2] in
+let l2 = [2] in
+let res = append l1 l2 in
+let hd l = 
+    match l with
+    | h :: t -> h
+    | [] -> (0 0)
+    end
+in
+let tl l =
+    match l with
+    | h :: t -> t
+    | [] -> (0 0)
+    end
+in
+let cond = hd (tl (tl res)) in
+let test = input in 
+if cond == input then let target = 1 in target else 0
