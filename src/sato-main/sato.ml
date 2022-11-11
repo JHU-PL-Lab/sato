@@ -31,16 +31,24 @@ let parse_program
           - Wellformedness check
         *)
         let typed_ast = File.with_file_in filename On_parse.parse_program in
+        let () = print_endline @@ "*************************************" in
+        let () = print_endline @@ "Original program: " in
+        let () = print_endline @@ On_to_odefa.show_expr_desc (On_ast.new_expr_desc typed_ast) in
         let (untyped, ton_on_maps) =
           (* Typed -> Untyped *)
           transform_natodefa typed_ast 
         in
+        let () = print_endline @@ "*************************************" in
+        let () = print_endline @@ "Jay program after type elimination: " in
+        let () = print_endline @@ On_to_odefa.show_expr_desc untyped in
         let (odefa_ast, on_odefa_maps) =
           (* Untyped -> Odefa *)
           On_to_odefa.translate untyped 
         in
         (* Wellformedness *)
         Ast_wellformedness.check_wellformed_expr odefa_ast;
+        let () = print_endline @@ "Jayil program after instrumentation: " in
+        let () = print_endline @@ Ast_pp.show_expr odefa_ast in
         (odefa_ast, on_odefa_maps, Some ton_on_maps)
       end
     | ".odefa" ->
@@ -136,6 +144,8 @@ let run_generation
   try
     (* Prepare and create generator *)
     let target_vars = get_target_vars args expr in
+    let () = print_endline @@ "These are the target variables: " in
+    let () = List.iter (fun x -> print_endline @@ Ast_pp.show_ident x) target_vars in
     let gen_params =
       Generator.create
         ~exploration_policy:args.args_exploration_policy
