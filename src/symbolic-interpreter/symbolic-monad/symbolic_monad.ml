@@ -106,7 +106,7 @@ module type S = sig
     Relative_stack.t -> Ident.t -> clause -> Ident.t -> unit m;;
   val record_constraint : Constraint.t -> unit m;;
   val record_abort_point : symbol -> abort_value -> unit m;;
-  val record_visited_clause : ident -> unit m;;
+  val record_visited_clause : ident -> bool option -> unit m;;
   val check_constraints : 'a m -> 'a m;;
 
   type 'a evaluation;;
@@ -115,7 +115,7 @@ module type S = sig
     { er_value : 'a;
       er_solver : Solver.t;
       er_abort_points : abort_value Symbol_map.t;
-      er_visited_clauses : Ident_set.t;
+      er_visited_clauses : bool list Ident_map.t;
       er_evaluation_steps : int;
       er_result_steps : int;
     };;
@@ -148,7 +148,7 @@ struct
     log_solver : Solver.t;
     log_decisions : decision_map;
     log_abort_points : abort_value Symbol_map.t;
-    log_visited_clauses : Ident_set.t;
+    log_visited_clauses : bool list Ident_map.t;
     log_steps : int;
   }
   [@@deriving show];;
@@ -198,7 +198,7 @@ struct
     log_solver = Solver.empty;
     log_decisions = Relative_stack.Map.empty;
     log_abort_points = Symbol_map.empty;
-    log_visited_clauses = Ident_set.empty;
+    log_visited_clauses = Ident_map.empty;
     log_steps = 0;
   }
   ;;
@@ -344,7 +344,9 @@ struct
     let%bind merged_visited_clauses =
       let vc1 = log1.log_visited_clauses in
       let vc2 = log2.log_visited_clauses in
-      Some(Ident_set.union vc1 vc2)
+      Some(Ident_map.union 
+        (fun _ v1 v2 -> Some (v1 @ v2) )
+      vc1 vc2)
     in
     let new_log =
       { log_solver = merged_solver;
@@ -488,7 +490,7 @@ struct
     { log_solver = Solver.empty;
       log_decisions = Relative_stack.Map.singleton s (x,c,x');
       log_abort_points = Symbol_map.empty;
-      log_visited_clauses = Ident_set.empty;
+      log_visited_clauses = Ident_map.empty;
       log_steps = 0;
     }
   ;;
@@ -500,7 +502,7 @@ struct
     { log_solver = Solver.singleton c;
       log_decisions = Relative_stack.Map.empty;
       log_abort_points = Symbol_map.empty;
-      log_visited_clauses = Ident_set.empty;
+      log_visited_clauses = Ident_map.empty;
       log_steps = 0;
     }
   ;;
@@ -512,17 +514,22 @@ struct
     { log_solver = Solver.empty;
       log_decisions = Relative_stack.Map.empty;
       log_abort_points = Symbol_map.singleton ab_symbol ab_info;
-      log_visited_clauses = Ident_set.empty;
+      log_visited_clauses = Ident_map.empty;
       log_steps = 0;
     }
   ;;
 
-  let record_visited_clause (ident: ident) : unit m =
+  let record_visited_clause (ident: ident) (cond: bool option) : unit m =
+    let map =  
+      match cond with
+      | None -> Ident_map.singleton ident []
+      | Some b -> Ident_map.singleton ident [b]
+    in 
     _record_log @@
     { log_solver = Solver.empty;
       log_decisions = Relative_stack.Map.empty;
       log_abort_points = Symbol_map.empty;
-      log_visited_clauses = Ident_set.singleton ident;
+      log_visited_clauses = map;
       log_steps = 0;
     }
   ;;
@@ -579,7 +586,7 @@ struct
     { er_value : 'out;
       er_solver : Solver.t;
       er_abort_points : abort_value Symbol_map.t;
-      er_visited_clauses : Ident_set.t;
+      er_visited_clauses : bool list Ident_map.t;
       er_evaluation_steps : int;
       er_result_steps : int;
     };;

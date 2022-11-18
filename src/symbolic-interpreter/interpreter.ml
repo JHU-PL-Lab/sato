@@ -121,7 +121,7 @@ type evaluation_result = {
   er_stack : Relative_stack.concrete_stack;
   er_solution : (symbol -> value option);
   er_aborts : abort_value Symbol_map.t;
-  er_visited : Ident_set.t;
+  er_visited : bool list Ident_map.t;
 };;
 
 exception Invalid_query of string;;
@@ -265,7 +265,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Value Discovery rule lookup *)
         trace_rule "Value Discovery" x;
-        let%bind () = record_visited_clause x in
+        let%bind () = record_visited_clause x None in
         (* Get the value v assigned here. *)
         let%orzero (Clause (_, Value_body(v))) =
           Ident_map.find x env.le_clause_mapping
@@ -321,7 +321,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Input rule lookup *)
         trace_rule "Input" x;
-        let%bind () = record_visited_clause x in
+        let%bind () = record_visited_clause x None in
         (* Induce the resulting formula *)
         let lookup_symbol = Symbol (lookup_var, relstack) in
         let%bind () = record_constraint @@
@@ -351,7 +351,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Binop rule lookup *)
         trace_rule "Binop" x;
-        let%bind () = record_visited_clause x in
+        let%bind () = record_visited_clause x None in
         (* Look up operand variables *)
         let%bind symbol_list_1 = recurse [LookupVar x'] acl1 relstack in
         let%bind symbol_list_2 = recurse [LookupVar x''] acl1 relstack in
@@ -382,7 +382,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Pattern Match rule lookup *)
         trace_rule "Pattern Match" x;
-        let%bind () = record_visited_clause x in
+        let%bind () = record_visited_clause x None in
         (* Look up the symbol that is being matched upon *)
         let%bind symbol_list = recurse (LookupVar x' :: lookup_stack') acl1 relstack in
         let%orzero pat_symbol :: symbol_list' = symbol_list in
@@ -415,7 +415,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Value Discard rule lookup *)
         trace_rule "Value Discard" x;
-        let%bind () = record_visited_clause x in
+        let%bind () = record_visited_clause x None in
         (* We found the variable, so toss it and keep going. *)
         let%bind symbol_list = recurse (LookupVar query_element :: lookup_stack') acl1 relstack in
         let lookup_symbol = Symbol(lookup_var, relstack) in
@@ -437,7 +437,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Alias rule lookup *)
         trace_rule "Alias" x;
-        let%bind () = record_visited_clause x in
+        let%bind () = record_visited_clause x None in
         (* Look for the alias now. *)
         let%bind symbol_list = recurse (LookupVar x' :: lookup_stack') acl1 relstack in
         let%orzero alias_symbol :: symbol_list' = symbol_list in
@@ -465,7 +465,7 @@ struct
         trace_rule "Function Enter Parameter" x;
         (* Build the popped relative stack. *)
         let%orzero Abs_clause (Abs_var xr, Abs_appl_body (Abs_var xf,_)) = c in
-        let%bind () = record_visited_clause xr in
+        let%bind () = record_visited_clause xr None in
         let%orzero Some relstack' = Relative_stack.pop relstack xr in
         (* Record this wiring decision. *)
         let cc = Ident_map.find xr env.le_clause_mapping in
@@ -504,7 +504,7 @@ struct
         trace_rule "Function Enter Non-Local" lookup_var;
         (* Build the popped relative stack. *)
         let%orzero Abs_clause(Abs_var xr, Abs_appl_body (Abs_var xf, _)) = c in
-        let%bind () = record_visited_clause xr in
+        let%bind () = record_visited_clause xr None in
         let%orzero Some relstack' = Relative_stack.pop relstack xr in
         (* Record this wiring decision. *)
         let cc = Ident_map.find xr env.le_clause_mapping in
@@ -546,7 +546,7 @@ struct
         trace_rule "Function Exit" x;
         (* Look up the definition point of the function. *)
         let%orzero Abs_clause (Abs_var xr, Abs_appl_body(Abs_var xf, _)) = c in
-        let%bind () = record_visited_clause xr in
+        let%bind () = record_visited_clause xr None in
         let%bind fun_symbol_list =
           recurse [LookupVar xf] (Unannotated_clause(c)) relstack
         in
@@ -601,7 +601,6 @@ struct
         in
         (* Report Conditional Top rule lookup *)
         trace_rule "Conditional Top" (* lookup_var *) xc;
-        let%bind () = record_visited_clause xc in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
           recurse [LookupVar x1] (Unannotated_clause c) relstack
@@ -609,6 +608,7 @@ struct
         let%orzero [subject_symbol] = subject_symbol_list in
         (* Require that it has the same value as the wiring node. *)
         let%orzero Abs_value_bool b = av in
+        let%bind () = record_visited_clause xc (Some b) in
         let%bind () = record_constraint @@
           Constraint.Constraint_value(subject_symbol, Constraint.Bool b)
         in
@@ -636,7 +636,7 @@ struct
         [%guard equal_ident x' e1ret];
         (* Report Conditional Bottom - True rule lookup *)
         trace_rule "Conditional Bottom - True" lookup_var;
-        let%bind () = record_visited_clause xc in
+        let%bind () = record_visited_clause xc (Some true) in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
           recurse [LookupVar x1] (Unannotated_clause c) relstack
@@ -676,7 +676,7 @@ struct
         [%guard equal_ident x' e2ret];
         (* Report Conditional Bottom - False rule lookup *)
         trace_rule "Conditional Bottom - False" lookup_var;
-        let%bind () = record_visited_clause xc in
+        let%bind () = record_visited_clause xc (Some false) in
         (* Look up the subject symbol. *)
         let%bind subject_symbol_list =
           recurse [LookupVar x1] (Unannotated_clause c) relstack
@@ -777,7 +777,7 @@ struct
         [%guard equal_ident x lookup_var];
         (* Report Record Projection rule lookup *)
         trace_rule "Record Projection Starts" lookup_var;
-        let%bind () = record_visited_clause x in
+        let%bind () = record_visited_clause x None in
         (* Look up the record itself and identify the symbol it uses. *)
         let%bind return_symbol_list = recurse (LookupVar x' :: LookupLabel lbl :: lookup_stack') acl1 relstack in
         let%orzero _ :: ret_symbol :: symbol_list' = return_symbol_list in
@@ -807,7 +807,7 @@ struct
         in
         (* Report Abort rule lookup *)
         trace_rule "Abort" x;
-        let%bind () = record_visited_clause x in
+        let%bind () = record_visited_clause x None in
         let abort_symbol = Symbol(x, relstack) in
         (* Look up the first variable of the program *)
         let abort_value = Ident_map.find x env.le_abort_mapping in
@@ -835,7 +835,7 @@ struct
         in
         [%guard equal_ident x lookup_var];
         trace_rule "Assume" x;
-        let%bind () = record_visited_clause x in
+        let%bind () = record_visited_clause x None in
         (* Look up actual variable *)
         let%bind symbol_list = recurse [LookupVar x'] acl1 relstack in
         let%orzero [symbol_1] = symbol_list in
@@ -946,7 +946,7 @@ struct
         lazy_logger `debug (fun () ->
             Printf.sprintf
               "Visited clauses:\n%s"
-              (Ident_set.show visited_clauses)
+              (Ident_map.show (fun _formatter bs -> List.iter (fun x -> print_endline @@ string_of_bool x) bs) visited_clauses)
         )
       end;
       Some {

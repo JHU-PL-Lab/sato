@@ -34,7 +34,7 @@ type evaluation_result = {
   er_aborts : abort_value Symbol_map.t;
   (** A mapping of abort symbols to abort information *)
 
-  er_visited : Ident_set.t;
+  er_visited : bool list Ident_map.t;
   (** A set of visited clauses, represented by their identifiers *)
 };;
 

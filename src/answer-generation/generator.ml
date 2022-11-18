@@ -101,17 +101,17 @@ module Make(Answer : Answer) = struct
       let visited =
         List.fold_left
           (fun accum res ->
-            Ident_set.union accum res.Interpreter.er_visited
+            Ident_map.union (fun _ v1 v2 -> Some (v1 @ v2)) accum res.Interpreter.er_visited
           )
-          Ident_set.empty
+          Ident_map.empty
           results
       in
       let x_list_filtered =
         List.filter
           (fun cls_id ->
-            match Ident_set.Exceptionless.find cls_id visited with
+            match Ident_map.Exceptionless.find cls_id visited with
             | None -> true
-            | Some _ -> false
+            | Some v -> List.mem false v && List.mem true v
           )
         x_list_tl
       in

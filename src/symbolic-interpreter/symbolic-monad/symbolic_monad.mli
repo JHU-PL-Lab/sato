@@ -120,7 +120,7 @@ module type S = sig
     Interpreter_types.symbol -> Interpreter_types.abort_value -> unit m;;
 
   (** Records a visited clause, represented by its binding symbol. *)
-  val record_visited_clause : ident -> unit m;;
+  val record_visited_clause : ident -> bool option -> unit m;;
 
   (** Checks that a monadic value's constraints are solvable.  For each
       non-deterministic path in the provided monadic value, a solution is
@@ -142,7 +142,7 @@ module type S = sig
     { er_value : 'a;
       er_solver : Solver.t;
       er_abort_points : abort_value Symbol_map.t;
-      er_visited_clauses : Ident_set.t;
+      er_visited_clauses : bool list Ident_map.t;
       er_evaluation_steps : int;
       er_result_steps : int;
     };;
