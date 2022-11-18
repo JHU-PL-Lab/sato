@@ -1,0 +1,5 @@
+n = input;
+n2 = 100;
+c = n2 < n;
+r = c ? (re = true) : (ab2 = abort;) ;
+res = r ? (ret = 0) : (ab = abort;) ;

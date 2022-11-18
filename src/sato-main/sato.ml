@@ -58,6 +58,8 @@ let parse_program
         let (odefa_ast, on_odefa_maps) =
           Odefa_instrumentation.instrument_odefa pre_inst_ast
         in
+        let () = print_endline @@ "Jayil program after instrumentation: " in
+        let () = print_endline @@ Ast_pp.show_expr odefa_ast in
         Ast_wellformedness.check_wellformed_expr odefa_ast;
         (odefa_ast, on_odefa_maps, None)
       end

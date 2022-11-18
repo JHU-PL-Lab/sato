@@ -344,9 +344,18 @@ struct
     let%bind merged_visited_clauses =
       let vc1 = log1.log_visited_clauses in
       let vc2 = log2.log_visited_clauses in
-      Some(Ident_map.union 
-        (fun _ v1 v2 -> Some (v1 @ v2) )
-      vc1 vc2)
+      let vc_union = Ident_map.union 
+        (fun _ v1 v2 -> 
+          (* let () = print_endline @@ "*******" in
+          let () = print_endline @@ string_of_int @@ List.length v1 in
+          let () = print_endline @@ string_of_int @@ List.length v2 in 
+          let () = print_endline @@ "*******" in
+          let () = flush stdout in *)
+          Some (List.rev_append v1 v2) )
+          (* Some v1) *)
+      vc1 vc2
+      in
+      Some vc_union
     in
     let new_log =
       { log_solver = merged_solver;
